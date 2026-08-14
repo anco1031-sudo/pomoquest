@@ -27,7 +27,8 @@ export default function AchievementList() {
   if (!data) return <p className="hint">กำลังโหลดตรา…</p>;
 
   const unlockedList = data.list.filter((a) => a.unlocked);
-  const lockedList = data.list.filter((a) => !a.unlocked);
+  const secretLocked = data.list.filter((a) => a.secret && !a.unlocked);
+  const normalLocked = data.list.filter((a) => !a.secret && !a.unlocked);
 
   return (
     <>
@@ -42,7 +43,10 @@ export default function AchievementList() {
               <div className="achieve-card unlocked" key={a.id}>
                 <div className="achieve-icon">{a.icon}</div>
                 <div className="achieve-body">
-                  <div className="achieve-name">{a.name}</div>
+                  <div className="achieve-name">
+                    {a.name}
+                    {a.secret && <span className="achieve-secret-tag">ลับ</span>}
+                  </div>
                   <div className="achieve-desc">{a.desc}</div>
                   <div className="achieve-date">ปลดล็อก {fmtAchieveDate(a.unlockedAt)}</div>
                 </div>
@@ -52,12 +56,29 @@ export default function AchievementList() {
         </Panel>
       )}
 
-      <Panel title="🔒 ตราที่ยังไม่ได้ปลดล็อก">
-        {lockedList.length === 0 ? (
-          <p className="hint">ปลดล็อกครบทุกตราแล้ว — สุดยอด!</p>
-        ) : (
+      {secretLocked.length > 0 && (
+        <Panel title="❓ ตราลับ (เงื่อนไขซ่อน)">
+          <p className="hint" style={{ textAlign: 'left', marginTop: 0, marginBottom: 10 }}>
+            ตราเหล่านี้มีเงื่อนไขลับ — ค้นหาด้วยตัวเอง!
+          </p>
           <div className="achieve-grid">
-            {lockedList.map((a) => {
+            {secretLocked.map((a) => (
+              <div className="achieve-card secret" key={a.id}>
+                <div className="achieve-icon dim">{a.icon}</div>
+                <div className="achieve-body">
+                  <div className="achieve-name">???</div>
+                  <div className="achieve-desc">“{a.hint}”</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      {normalLocked.length > 0 && (
+        <Panel title="🔒 ตราที่ยังไม่ได้ปลดล็อก">
+          <div className="achieve-grid">
+            {normalLocked.map((a) => {
               const pct = Math.min(100, (a.progress / a.target) * 100);
               return (
                 <div className="achieve-card" key={a.id}>
@@ -74,8 +95,8 @@ export default function AchievementList() {
               );
             })}
           </div>
-        )}
-      </Panel>
+        </Panel>
+      )}
     </>
   );
 }

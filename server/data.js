@@ -154,3 +154,25 @@ export const ACHIEVEMENTS = [
   { id: 'focus_100',   name: 'ตำนานแห่งโฟกัส', icon: '👑', stat: 'sessions',  target: 100,  reward: { gold: 500 }, desc: 'ทำโฟกัสครบ 100 session' },
   { id: 'level_20',    name: 'ตำนานมีชีวิต',    icon: '🌟', stat: 'level',     target: 20,   reward: { gold: 400 }, desc: 'อัพเป็นเลเวล 20' },
 ];
+
+// ----- ตราลับ: เงื่อนไขซ่อน (check(ctx) คืน true เมื่อผ่าน) ctx ดูใน achievements.js -----
+export const SECRET_ACHIEVEMENTS = [
+  { id: 'owl',            name: 'นกฮูกกลางคืน',   icon: '🌙', hint: 'มีบางอย่างพิเศษในยามวิกาล…',                     reward: { gold: 150 }, check: (ctx) => ctx.hour >= 0 && ctx.hour < 4 },
+  { id: 'early_bird',     name: 'นกเช้า',          icon: '🌅', hint: 'รุ่งอรุณมอบพลังให้ผู้ตื่นก่อนใคร',                 reward: { gold: 150 }, check: (ctx) => ctx.hour >= 5 && ctx.hour < 7 },
+  { id: 'seven_days',     name: 'เจ็ดวันมหัศจรรย์', icon: '📅', hint: 'ทุกวันคือวันผจญภัย',                             reward: { gold: 500 }, check: (ctx) => ctx.dailyStreak >= 7 },
+  { id: 'fenix',          name: 'ฟีนิกซ์',         icon: '🔥', hint: 'ก้าวข้ามขีดจำกัดของมนุษย์',                       reward: { gold: 300 }, check: (ctx) => ctx.streak >= 10 },
+
+  { id: 'legend_treasure', name: 'สมบัติในตำนาน',  icon: '💎', hint: 'สมบัติบางอย่างอยู่ในเงามืดมานาน',                 reward: { gold: 200 }, check: (ctx) => ctx.eventItemLvl >= 4 },
+  { id: 'merchant_friend', name: 'เพื่อนพ่อค้า',   icon: '🤝', hint: 'ของขวัญมักมาในหน้ากากของคนแปลกหน้า',              reward: { gold: 100 }, check: (ctx) => ctx.merchantGifts >= 3 },
+  { id: 'devotee',        name: 'ผู้ศรัทธา',       icon: '⛩️', hint: 'เทพเจ้าเฝ้ามองผู้ที่เดินทางซ้ำ ๆ',                  reward: { gold: 150 }, check: (ctx) => ctx.shrines >= 5 },
+  { id: 'expensive_lesson', name: 'บทเรียนราคาแพง', icon: '🧨', hint: 'ความเจ็บปวดคือครูที่ดีที่สุด',                   reward: { gold: 100 }, check: (ctx) => ctx.traps >= 10 },
+
+  { id: 'abyss',          name: 'ขอบเหว',         icon: '💀', hint: 'ความตายจ้องหน้าคุณ… แล้วคุณก็ยิ้มกลับ',             reward: { gold: 400 }, check: (ctx) => ctx.bossPlayerHp === 1 },
+  { id: 'bloodthirst',    name: 'นักสู้เลือดเดือด', icon: '🩸', hint: 'ยิ่งเลือดน้อย ยิ่งโกรธเกรี้ยว',                    reward: { gold: 250 }, check: (ctx) => ctx.bossHpPct >= 0 && ctx.bossHpPct < 15 },
+  { id: 'saint',          name: 'นักบุญ',          icon: '🗿', hint: 'แค่สองมือเปล่า ๆ ก็พอ',                           reward: { gold: 350 }, check: (ctx) => ctx.bossNoEquip === true },
+  { id: 'alchemist',      name: 'นักเล่นแร่แปรธาตุ', icon: '🧪', hint: 'ผู้ที่เตรียมพร้อม ย่อมชนะเสมอ',                  reward: { gold: 150 }, check: (ctx) => ctx.bossPotions >= 10 },
+
+  { id: 'explorer',       name: 'นักสำรวจ',        icon: '🗺️', hint: 'ขอบโลกมีจริงหรือ?',                              reward: { gold: 600 }, check: (ctx) => ctx.cycles >= 8 },
+  { id: 'asgard_slayer',  name: 'ผู้พิชิตแอสการ์ด', icon: '👹', hint: 'ตำนานเล่าถึงจอมมารเงา…',                         reward: { gold: 800 }, check: (ctx) => ctx.bossCityIndex === 7 },
+  { id: 'master',         name: 'จ้าวแห่งการโฟกัส', icon: '🏆', hint: 'เมื่อความสำเร็จทั้งหมดมารวมกัน…',                  reward: { gold: 1000 }, check: (ctx) => ctx.normalUnlocked >= ACHIEVEMENTS.length },
+];

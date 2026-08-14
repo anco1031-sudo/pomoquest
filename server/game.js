@@ -168,7 +168,7 @@ export function rollEvent(c) {
     base.detail = `เปิดกล่องสมบัติ: ได้ทอง ${gold} และประสบการณ์ ${xp}`;
     if (Math.random() < 0.12) {
       const item = pick(Object.values(ITEM_BY_ID).filter((i) => i.type === 'consumable' || (i.lvl || 1) <= c.level + 1));
-      base.item = { id: item.id, name: item.name, icon: item.icon };
+      base.item = { id: item.id, name: item.name, icon: item.icon, lvl: item.lvl || 1 };
       base.detail += ` — และพบ ${item.icon} ${item.name}!`;
     }
     base.logType = 'treasure';

@@ -8,7 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-export const db = new Database(path.join(dataDir, 'pomoquest.db'));
+// รองรับการทดสอบด้วย DB แยก (POMOQUEST_DB=/path/to.db)
+export const db = new Database(process.env.POMOQUEST_DB || path.join(dataDir, 'pomoquest.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -111,6 +112,12 @@ function ensureColumn(table, column, def) {
   if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
 }
 ensureColumn('progress', 'quests_completed', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'daily_streak', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'last_focus_date', 'TEXT');
+ensureColumn('progress', 'boss_potions', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'shrines', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'traps', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'merchant_gifts', 'INTEGER DEFAULT 0');
 
 // seed items
 const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, price, lvl)

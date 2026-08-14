@@ -94,14 +94,15 @@ router.post('/adventure/event', (req, res) => {
   updateCharacter(c);
   addLog(c.id, { type: ev.logType || ev.key, title: ev.title, detail: ev.detail, xp: ev.xp, gold: ev.gold });
   if (ev.item) addItem(c.id, ev.item.id);
-  // อัปเดต counter สถิติ
+  // อัปเดต counter สถิติ (รวมตัวที่ใช้ตรวจตราลับ)
   const prog = getProgress(c.id);
-  let patch = null;
-  if (ev.key === 'monster' && ev.monster?.win) patch = { monsters_slain: prog.monsters_slain + 1 };
-  if (ev.key === 'treasure') patch = { treasures_found: prog.treasures_found + 1 };
-  if (patch) db.prepare('UPDATE progress SET monsters_slain=?, treasures_found=? WHERE id=?').run(
-    patch.monsters_slain ?? prog.monsters_slain, patch.treasures_found ?? prog.treasures_found, prog.id);
-  const ach = checkAchievements(c, prog);
+  const up = (col, val) => db.prepare(`UPDATE progress SET ${col}=? WHERE id=?`).run(val, prog.id);
+  if (ev.key === 'monster' && ev.monster?.win) { prog.monsters_slain += 1; up('monsters_slain', prog.monsters_slain); }
+  if (ev.key === 'treasure') { prog.treasures_found += 1; up('treasures_found', prog.treasures_found); }
+  if (ev.key === 'shrine') { prog.shrines += 1; up('shrines', prog.shrines); }
+  if (ev.key === 'trap') { prog.traps += 1; up('traps', prog.traps); }
+  if (ev.key === 'merchant' && ev.item) { prog.merchant_gifts += 1; up('merchant_gifts', prog.merchant_gifts); }
+  const ach = checkAchievements(c, prog, { event: ev });
   res.json({
     ...serialize(c),
     event: ev,
@@ -128,16 +129,25 @@ router.post('/adventure/complete', (req, res) => {
   c.gold += gold;
   prog.gold_earned += gold;
 
+  // นับ streak รายวัน (สำหรับตราลับ "เจ็ดวันมหัศจรรย์")
+  const timeRow = db.prepare("SELECT strftime('%H','now','localtime') AS h, date('now','localtime') AS d").get();
+  const today = timeRow.d;
+  if (prog.last_focus_date !== today) {
+    const yesterday = db.prepare("SELECT date('now','localtime','-1 day') AS d").get().d;
+    prog.daily_streak = prog.last_focus_date === yesterday ? prog.daily_streak + 1 : 1;
+    prog.last_focus_date = today;
+  }
+
   updateCharacter(c);
   db.prepare(`UPDATE progress SET streak=@streak, best_streak=@best_streak, sessions_completed=@sessions_completed,
-    total_focus_sec=@total_focus_sec, gold_earned=@gold_earned WHERE id=@id`).run(prog);
+    total_focus_sec=@total_focus_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
 
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
   addLog(c.id, {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
     xp, gold,
   });
-  const ach = checkAchievements(c, prog);
+  const ach = checkAchievements(c, prog, { hour: parseInt(timeRow.h, 10) });
   res.json({
     ...serialize(c),
     progress: getProgress(c.id),
@@ -289,9 +299,16 @@ router.post('/boss/act', (req, res) => {
 
   updateCharacter(c);
 
+  const prog = getProgress(c.id);
+  if (action === 'potion' && !result.error) {
+    prog.boss_potions += 1;
+    db.prepare('UPDATE progress SET boss_potions=? WHERE id=?').run(prog.boss_potions, prog.id);
+  }
+
   let ach = { fresh: [], ups: 0 };
   if (result.outcome === 'win') {
-    const prog = getProgress(c.id);
+    const foughtCity = c.city_index;
+    const stats = computeStats(c);
     prog.cycles_completed += 1;
     prog.bosses_defeated += 1;
     prog.gold_earned += result.gold || 0;
@@ -301,7 +318,14 @@ router.post('/boss/act', (req, res) => {
     updateCharacter(c);
     fights.delete(c.id);
     addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} และเดินทางสู่ ${CITIES[c.city_index].name}!`, xp: result.xp, gold: result.gold });
-    ach = checkAchievements(c, prog);
+    ach = checkAchievements(c, prog, {
+      bossWin: {
+        hp: c.hp,
+        pct: (c.hp / stats.maxHp) * 100,
+        noEquip: !c.weapon_id && !c.armor_id && !c.accessory_id,
+        cityIndex: foughtCity,
+      },
+    });
   }
   res.json({
     ...serialize(c),
