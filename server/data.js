@@ -1,0 +1,125 @@
+// ---- ข้อมูลเกมทั้งหมด (items, classes, monsters, events, quests, cities, bosses) ----
+
+export const CLASSES = {
+  warrior: {
+    name: 'นักรบ', en: 'Warrior', icon: '⚔️',
+    desc: 'เลือดหนา พลังโจมตีสูง เหมาะกับสายบุก',
+    base: { hp: 120, mp: 20, atk: 14, def: 10, spd: 8, crit: 5 },
+  },
+  mage: {
+    name: 'นักเวทย์', en: 'Mage', icon: '🔮',
+    desc: 'เวทมนตร์รุนแรงที่สุด แต่ร่างกายบอบบาง',
+    base: { hp: 80, mp: 60, atk: 16, def: 6, spd: 10, crit: 8 },
+  },
+  rogue: {
+    name: 'โจร', en: 'Rogue', icon: '🗡️',
+    desc: 'ว่องไว โจมตีคริติคอลถี่ หลบเก่ง',
+    base: { hp: 95, mp: 30, atk: 12, def: 7, spd: 14, crit: 15 },
+  },
+  cleric: {
+    name: 'นักบวช', en: 'Cleric', icon: '✨',
+    desc: 'สายสมดุล มนามาก ฟื้นพลังได้เรื่อย ๆ',
+    base: { hp: 100, mp: 50, atk: 10, def: 9, spd: 9, crit: 6 },
+  },
+};
+
+// item.type: 'consumable' | 'weapon' | 'armor' | 'accessory'
+export const ITEMS = [
+  { id: 1,  name: 'ยาบำบัดน้อย', icon: '🧪', type: 'consumable', heal_pct: 0.3,  mana_pct: 0,   price: 25,  desc: 'ฟื้น HP 30% ของพลังสูงสุด' },
+  { id: 2,  name: 'ยาบำบัดใหญ่', icon: '⚗️', type: 'consumable', heal_pct: 0.6,  mana_pct: 0,   price: 60,  desc: 'ฟื้น HP 60% ของพลังสูงสุด' },
+  { id: 3,  name: 'น้ำอมฤต',     icon: '💧', type: 'consumable', heal_pct: 0,    mana_pct: 0.4, price: 30,  desc: 'ฟื้น MP 40% ของพลังสูงสุด' },
+  { id: 4,  name: 'ยาฟื้นฟูเต็ม', icon: '✨', type: 'consumable', heal_pct: 1,    mana_pct: 1,   price: 120, desc: 'ฟื้น HP และ MP 100%' },
+
+  { id: 10, name: 'มีดสั้นเก่า',   icon: '🔪', type: 'weapon', atk_bonus: 3,  price: 40,  desc: 'มีดเก่า ๆ แต่ยังคม', lvl: 1 },
+  { id: 11, name: 'ดาบเหล็ก',     icon: '⚔️', type: 'weapon', atk_bonus: 6,  price: 90,  desc: 'ดาบเหล็กมาตรฐานทหาร', lvl: 2 },
+  { id: 12, name: 'ขวานสงคราม',   icon: '🪓', type: 'weapon', atk_bonus: 10, price: 180, desc: 'ขวานหนัก ทุบได้ทั้งเกราะ', lvl: 3 },
+  { id: 13, name: 'ดาบเพชรนิล',   icon: '💎', type: 'weapon', atk_bonus: 15, price: 320, desc: 'ดาบในตำนาน ส่องแสงสีม่วง', lvl: 5 },
+
+  { id: 20, name: 'เกราะหนัง',   icon: '🛡️', type: 'armor', def_bonus: 3,  hp_bonus: 10, price: 50,  desc: 'เกราะหนังสัตว์ เหนียวพอตัว', lvl: 1 },
+  { id: 21, name: 'เกราะโซ่',    icon: '⛓️', type: 'armor', def_bonus: 6,  hp_bonus: 25, price: 120, desc: 'เกราะโซ่เหล็ก ทนทาน', lvl: 2 },
+  { id: 22, name: 'เกราะเหล็ก',  icon: '🛡️', type: 'armor', def_bonus: 10, hp_bonus: 45, price: 240, desc: 'เกราะเต็มยศของอัศวิน', lvl: 3 },
+  { id: 23, name: 'เกราะมังกร',  icon: '🐲', type: 'armor', def_bonus: 16, hp_bonus: 80, price: 420, desc: 'ทำจากเกล็ดมังกร กันเวทได้', lvl: 5 },
+
+  { id: 30, name: 'แหวนเงิน',     icon: '💍', type: 'accessory', spd_bonus: 2, crit_bonus: 2, price: 60,  desc: 'แหวนเงินเรืองแสง', lvl: 1 },
+  { id: 31, name: 'สร้อยเวท',     icon: '📿', type: 'accessory', mp_bonus: 20, price: 100, desc: 'สร้อยที่อัดแน่นด้วยมานา', lvl: 2 },
+  { id: 32, name: 'รองเท้าเงา',   icon: '👟', type: 'accessory', spd_bonus: 5, price: 150, desc: 'เดินเบาเหมือนเงา', lvl: 3 },
+  { id: 33, name: 'ต่างหูมรกต',   icon: '💚', type: 'accessory', crit_bonus: 8, price: 260, desc: 'มรกตเขียวขจี เพิ่มดวง', lvl: 4 },
+];
+
+export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
+
+// เมืองตามรอบการเดินทาง (index = city_index)
+export const CITIES = [
+  { name: 'หมู่บ้านอีสตาร์', icon: '🌾', terrain: 'ทุ่งหญ้ากว้าง' },
+  { name: 'เมืองมิราเคิล',   icon: '🏘️', terrain: 'ตลาดค้าขาย' },
+  { name: 'นครธารา',       icon: '🌊', terrain: 'ท่าเรือกลางทะเล' },
+  { name: 'ป่าอาร์คานา',    icon: '🌲', terrain: 'ป่าลึกมีมนต์ขลัง' },
+  { name: 'เทือกเขาอัคนี',   icon: '🌋', terrain: 'ภูเขาไฟร้อนระอุ' },
+  { name: 'เมืองคริสตัล',    icon: '💎', terrain: 'หุบเขาคริสตัล' },
+  { name: 'ดินแดนน้ำแข็ง',   icon: '🧊', terrain: 'ทุ่งหิมะนิรันดร์' },
+  { name: 'แอสการ์ด',       icon: '🏰', terrain: 'เมืองหลวงในตำนาน' },
+];
+
+export const BOSSES = [
+  { name: 'หัวหน้าโจรป่า', icon: '🐗' },
+  { name: 'กัปตันทหารรับจ้าง', icon: '⚔️' },
+  { name: 'แม่ทัพเงาแห่งท่าเรือ', icon: '🗡️' },
+  { name: 'ราชินีแม่มด', icon: '🧙' },
+  { name: 'โกลเลมไฟ', icon: '🔥' },
+  { name: 'คริสตัลการ์เดี้ยน', icon: '🔮' },
+  { name: 'มังกรน้ำแข็ง', icon: '🐉' },
+  { name: 'จอมมารเงา', icon: '👹' },
+];
+
+// มอนสเตอร์ที่เจอระหว่างผจญภัย (power_mult คูณพลังมอนสเตอร์ตามเลเวล)
+export const MONSTERS = [
+  { name: 'หนูยักษ์',     icon: '🐀', power: 0.7, xp: 14, gold: 8 },
+  { name: 'ค้างคาวปีศาจ', icon: '🦇', power: 0.85, xp: 18, gold: 10 },
+  { name: 'หมาป่าเถื่อน', icon: '🐺', power: 1.0, xp: 24, gold: 14 },
+  { name: 'สไลม์พิษ',    icon: '🟢', power: 0.9, xp: 20, gold: 12 },
+  { name: 'โกเลมดิน',    icon: '🗿', power: 1.15, xp: 30, gold: 18 },
+  { name: 'แม่มดน้อย',   icon: '🧙‍♀️', power: 1.25, xp: 36, gold: 22 },
+  { name: 'อสูรเงา',     icon: '👤', power: 1.35, xp: 42, gold: 26 },
+  { name: 'มังกรน้อย',   icon: '🐲', power: 1.5, xp: 55, gold: 35 },
+];
+
+// เหตุการณ์สุ่มระหว่าง session ผจญภัย (weight = โอกาส)
+export const EVENT_POOL = [
+  {
+    key: 'monster', weight: 40,
+    title: '🐺 เจอมอนสเตอร์!',
+    flavor: 'เสียงคำรามดังมาจากพุ่มไม้… {monster} ขวางเส้นทางอยู่!',
+  },
+  {
+    key: 'treasure', weight: 34,
+    title: '🎁 เจอสมบัติ!',
+    flavor: 'แสงวาววับใต้โคนต้นไม้ — กล่องสมบัติโบราณ!',
+  },
+  {
+    key: 'shrine', weight: 10,
+    title: '⛩️ ศาลเจ้าลึกลับ',
+    flavor: 'ศาลเจ้าที่ถูกลืมกลางป่า… มีพลังบางอย่างลอยอบอวล',
+  },
+  {
+    key: 'merchant', weight: 9,
+    title: '🧙 พ่อค้าเร่ร่อน',
+    flavor: 'พ่อค้าแปลกหน้าโบกมือทัก — “ดูเหมือนนักผจญภัยอย่างนายต้องการของดี ๆ นะ!”',
+  },
+  {
+    key: 'trap', weight: 7,
+    title: '⚠️ กับดัก!',
+    flavor: 'พื้นทรุดลง — กับดักเก่าของนักล่าสมบัติ!',
+  },
+];
+
+// ภารกิจย่อยช่วงพักสั้น (success = โอกาสสำเร็จ 0-1)
+export const QUESTS = [
+  { id: 'q1', title: 'เก็บสมุนไพรให้หมอแคมป์', icon: '🌿', detail: 'หมอประจำแคมป์ขอสมุนไพรหายากกลางป่า', xp: 30, gold: 15, success: 0.9, fail: 'เจอแต่ต้นมีพิษ เดินผิดทางกลับแคมป์', win: 'หมอดีใจมาก มอบรางวัลให้!' },
+  { id: 'q2', title: 'ลาดตระเวนรอบค่าย', icon: '🔥', detail: 'ช่วยทหารยามลาดตระเวนรอบค่ายตอนกลางคืน', xp: 20, gold: 10, success: 0.95, fail: 'โดนตำหนิที่เผลอหลับระหว่างเวร', win: 'ปลอดภัยดี ได้ค่าจ้างจากหัวหน้าทหาร' },
+  { id: 'q3', title: 'สำรวจถ้ำมืด', icon: '🕳️', detail: 'ถ้ำลึกหลังน้ำตก มีเสียงลึกลับดังออกมา', xp: 50, gold: 25, success: 0.65, fail: 'เจอกับดักหนาม เจ็บตัวหน่อย', win: 'เจอหีบสมบัติของโจรเก่า!' },
+  { id: 'q4', title: 'ช่วยชาวบ้านเก็บฟืน', icon: '🪵', detail: 'ชาวบ้านขอแรงช่วยเก็บฟืนหน้าหนาว', xp: 15, gold: 8, success: 0.95, fail: 'ฟืนทับนิ้ว เจ็บเล็กน้อย', win: 'ชาวบ้านเลี้ยงข้าวเย็นให้อิ่มหนำ' },
+  { id: 'q5', title: 'ตามหาของหายในตลาด', icon: '🔍', detail: 'แม่ค้าทำแหวนมรดกหายกลางตลาด', xp: 35, gold: 20, success: 0.75, fail: 'หาไม่เจอ โดนแม่ค้าบ่นจนหูชา', win: 'เจอแหวนใต้ร้านขายปลา ได้รางวัล!' },
+  { id: 'q6', title: 'ฝึกซ้อมกับทหารยาม', icon: '🤺', detail: 'ท้าประลองกับทหารยามจอมเก่ง', xp: 45, gold: 0, success: 0.7, fail: 'แพ้ซะยับ แต่ก็ได้ประสบการณ์', win: 'ชนะ! ทหารยามยอมรับฝีมือ' },
+];
+
+export const SHOP_STOCK = ITEMS.filter((i) => i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id));

@@ -1,0 +1,155 @@
+import Database from 'better-sqlite3';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ITEMS } from './data.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+export const db = new Database(path.join(dataDir, 'pomoquest.db'));
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS character (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  class TEXT NOT NULL,
+  level INTEGER DEFAULT 1,
+  xp INTEGER DEFAULT 0,
+  gold INTEGER DEFAULT 50,
+  hp INTEGER DEFAULT 100,
+  max_hp INTEGER DEFAULT 100,
+  mp INTEGER DEFAULT 20,
+  max_mp INTEGER DEFAULT 20,
+  atk INTEGER DEFAULT 10,
+  def INTEGER DEFAULT 5,
+  spd INTEGER DEFAULT 8,
+  crit REAL DEFAULT 5,
+  stat_points INTEGER DEFAULT 0,
+  weapon_id INTEGER,
+  armor_id INTEGER,
+  accessory_id INTEGER,
+  city_index INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS item (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  icon TEXT,
+  type TEXT NOT NULL,
+  desc TEXT,
+  hp_bonus INTEGER DEFAULT 0,
+  mp_bonus INTEGER DEFAULT 0,
+  atk_bonus INTEGER DEFAULT 0,
+  def_bonus INTEGER DEFAULT 0,
+  spd_bonus INTEGER DEFAULT 0,
+  crit_bonus REAL DEFAULT 0,
+  heal_pct REAL DEFAULT 0,
+  mana_pct REAL DEFAULT 0,
+  price INTEGER DEFAULT 0,
+  lvl INTEGER DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS inventory (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  character_id INTEGER NOT NULL,
+  item_id INTEGER NOT NULL,
+  qty INTEGER DEFAULT 1,
+  UNIQUE(character_id, item_id)
+);
+
+CREATE TABLE IF NOT EXISTS progress (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  character_id INTEGER NOT NULL UNIQUE,
+  sessions_completed INTEGER DEFAULT 0,
+  cycles_completed INTEGER DEFAULT 0,
+  total_focus_sec INTEGER DEFAULT 0,
+  monsters_slain INTEGER DEFAULT 0,
+  treasures_found INTEGER DEFAULT 0,
+  bosses_defeated INTEGER DEFAULT 0,
+  gold_earned INTEGER DEFAULT 0,
+  streak INTEGER DEFAULT 0,
+  best_streak INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  work_min INTEGER DEFAULT 25,
+  short_break_min INTEGER DEFAULT 5,
+  long_break_min INTEGER DEFAULT 15,
+  sessions_per_cycle INTEGER DEFAULT 4,
+  event_every_sec INTEGER DEFAULT 90
+);
+
+CREATE TABLE IF NOT EXISTS log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  character_id INTEGER NOT NULL,
+  type TEXT,
+  title TEXT,
+  detail TEXT,
+  xp INTEGER DEFAULT 0,
+  gold INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+`);
+
+// seed items
+const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, price, lvl)
+  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @price, @lvl)`);
+const seedItems = db.transaction(() => {
+  for (const i of ITEMS) {
+    insertItem.run({
+      id: i.id, name: i.name, icon: i.icon, type: i.type, desc: i.desc,
+      hp_bonus: i.hp_bonus || 0, mp_bonus: i.mp_bonus || 0,
+      atk_bonus: i.atk_bonus || 0, def_bonus: i.def_bonus || 0,
+      spd_bonus: i.spd_bonus || 0, crit_bonus: i.crit_bonus || 0,
+      heal_pct: i.heal_pct || 0, mana_pct: i.mana_pct || 0,
+      price: i.price || 0, lvl: i.lvl || 1,
+    });
+  }
+});
+seedItems();
+
+// seed settings
+db.prepare(`INSERT OR IGNORE INTO settings (id, work_min, short_break_min, long_break_min, sessions_per_cycle, event_every_sec)
+  VALUES (1, 25, 5, 15, 4, 90)`).run();
+
+// ----- helpers -----
+export const getCharacter = () => db.prepare('SELECT * FROM character ORDER BY id LIMIT 1').get() || null;
+
+export const getProgress = (charId) =>
+  db.prepare('SELECT * FROM progress WHERE character_id = ?').get(charId) ||
+  db.prepare('INSERT INTO progress (character_id) VALUES (?)').run(charId) && db.prepare('SELECT * FROM progress WHERE character_id = ?').get(charId);
+
+export const getSettings = () => db.prepare('SELECT * FROM settings WHERE id = 1').get();
+
+export const getInventory = (charId) => db.prepare(`
+  SELECT inv.item_id, inv.qty, item.name, item.icon, item.type, item.price, item.heal_pct, item.mana_pct,
+         item.hp_bonus, item.mp_bonus, item.atk_bonus, item.def_bonus, item.spd_bonus, item.crit_bonus, item.desc
+  FROM inventory inv JOIN item ON item.id = inv.item_id
+  WHERE inv.character_id = ? AND inv.qty > 0
+  ORDER BY item.type, item.id`).all(charId);
+
+export const getLog = (charId, limit = 30) =>
+  db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
+
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0 }) {
+  db.prepare('INSERT INTO log (character_id, type, title, detail, xp, gold) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(charId, type, title, detail, xp, gold);
+}
+
+export const addItem = (charId, itemId, qty = 1) => {
+  db.prepare(`INSERT INTO inventory (character_id, item_id, qty) VALUES (?, ?, ?)
+    ON CONFLICT(character_id, item_id) DO UPDATE SET qty = qty + excluded.qty`).run(charId, itemId, qty);
+};
+
+export const updateCharacter = (c) => {
+  db.prepare(`UPDATE character SET level=@level, xp=@xp, gold=@gold, hp=@hp, max_hp=@max_hp, mp=@mp, max_mp=@max_mp,
+    atk=@atk, def=@def, spd=@spd, crit=@crit, stat_points=@stat_points,
+    weapon_id=@weapon_id, armor_id=@armor_id, accessory_id=@accessory_id, city_index=@city_index
+    WHERE id=@id`).run(c);
+};
