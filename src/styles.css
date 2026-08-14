@@ -169,20 +169,21 @@ body {
 .chip.mp { color: #60a5fa; border-color: rgba(59, 130, 246, 0.4); }
 
 /* ---------- tabs ---------- */
-.tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.tabs { display: flex; gap: 5px; margin-bottom: 14px; overflow-x: auto; }
 .tab {
-  flex: 1;
+  flex: 1 0 auto;
   appearance: none;
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--muted);
   border-radius: 10px;
-  padding: 10px 4px;
-  font-size: 13.5px;
+  padding: 10px 6px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   min-height: 44px;
   font-family: inherit;
+  white-space: nowrap;
 }
 .tab.active {
   background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(139, 92, 246, 0.1));
@@ -524,6 +525,93 @@ body {
   max-width: 90vw;
   text-align: center;
 }
+
+/* ---------- character select ---------- */
+.select-screen { max-width: 520px; margin: 0 auto; padding: 20px 16px 40px; }
+.character-select-modal { max-width: 460px; }
+.select-title { font-size: 19px; font-weight: 800; margin-bottom: 14px; }
+.char-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.char-card.active { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3); }
+.char-avatar {
+  font-size: 30px;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 92, 246, 0.12);
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+.char-info { flex: 1; min-width: 0; }
+.char-name { font-weight: 800; font-size: 15px; }
+.char-current {
+  background: var(--green);
+  color: #06130a;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.char-sub { font-size: 12px; color: var(--muted); }
+.char-actions { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- stats ---------- */
+.stats-summary { margin-bottom: 14px; }
+.stats-big {
+  text-align: center;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), var(--panel));
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 10px;
+}
+.stats-big b { display: block; font-size: 26px; color: var(--gold); }
+.stats-big span { color: var(--muted); font-size: 13px; }
+.stats-mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
+.chart { display: flex; gap: 6px; align-items: flex-end; height: 160px; }
+.chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 2px;
+}
+.chart-value { font-size: 10.5px; color: var(--muted); height: 14px; }
+.chart-bar-wrap {
+  width: 100%;
+  max-width: 34px;
+  height: 100px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.chart-bar {
+  width: 100%;
+  background: linear-gradient(180deg, #f5b942, #8b5cf6);
+  border-radius: 6px 6px 2px 2px;
+  min-height: 2px;
+  transition: height 0.4s ease;
+}
+.chart-label { font-size: 11px; color: var(--muted); }
+.chart-sessions { font-size: 10px; color: var(--gold); height: 13px; }
+
+.city-log { display: flex; flex-direction: column; }
+.city-log-item { padding: 5px 0; font-size: 13px; color: var(--text); border-bottom: 1px dashed var(--border); }
 
 /* ---------- achievement ---------- */
 .achieve-summary {

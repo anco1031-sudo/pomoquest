@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useGame } from './context.jsx';
 import { sfx } from './sound.js';
 import CharacterCreation from './components/CharacterCreation.jsx';
+import CharacterSelect from './components/CharacterSelect.jsx';
 import HomeScreen from './components/HomeScreen.jsx';
 import TimerScreen from './components/TimerScreen.jsx';
 import CampScreen from './components/CampScreen.jsx';
@@ -11,11 +12,11 @@ import LevelUpModal from './components/LevelUpModal.jsx';
 import AchievementModal from './components/AchievementModal.jsx';
 import Toast from './components/Toast.jsx';
 
-const STORE_KEY = 'pomoquest-timer';
+const storeKey = (charId) => `pomoquest-timer-${charId}`;
 
-function loadTimer() {
+function loadTimer(charId) {
   try {
-    const t = JSON.parse(localStorage.getItem(STORE_KEY));
+    const t = JSON.parse(localStorage.getItem(storeKey(charId)));
     if (!t || t.phase === 'idle') return null;
     if (t.expiresAt) t.remain = Math.max(0, Math.round((t.expiresAt - Date.now()) / 1000));
     return t;
@@ -25,7 +26,7 @@ function loadTimer() {
 }
 
 export default function Game() {
-  const { loading, hasCharacter, character, settings, post, get, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUp, dismissLevelUp } = useGame();
+  const { loading, hasCharacter, character, characters, settings, refresh, post, get, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUp, dismissLevelUp } = useGame();
 
   const [phase, setPhase] = useState('idle'); // idle | work | short_break | long_break
   const [sessionIdx, setSessionIdx] = useState(1);
@@ -36,6 +37,7 @@ export default function Game() {
   const [expiredWork, setExpiredWork] = useState(false);
   const [bossState, setBossState] = useState(null);
   const [mounted, setMounted] = useState(false);
+  const [showCharSelect, setShowCharSelect] = useState(false);
 
   const eventBusyRef = useRef(false);
   const endedRef = useRef(false);
@@ -51,29 +53,35 @@ export default function Game() {
     if (d && d.boss) setBossState({ boss: d.boss, log: [] });
   }, [get]);
 
-  // ---- กู้คืน timer ตอนโหลดหน้า ----
+  // ---- กู้คืน timer ตอนโหลดหน้า / สลับตัวละคร (timer แยกตามตัวละคร) ----
   useEffect(() => {
-    if (!hasCharacter || loading) return;
-    const t = loadTimer();
+    if (!hasCharacter || loading || !character) return;
+    // รีเซ็ตทุกครั้งที่สลับตัวละคร
+    setPhase('idle');
+    setSessionIdx(1);
+    setRemain(0);
+    setRunning(false);
+    setElapsed(0);
+    setNextEventIn(settings.event_every_sec);
+    setExpiredWork(false);
+    setBossState(null);
+    eventBusyRef.current = false;
+    endedRef.current = false;
+    setMounted(true);
+
+    const t = loadTimer(character.id);
     if (t) {
       setPhase(t.phase);
       setSessionIdx(t.sessionIdx || 1);
       setRemain(t.remain || 0);
       setElapsed(t.elapsed || 0);
-      setNextEventIn(t.nextEventIn ?? 90);
+      setNextEventIn(t.nextEventIn ?? settings.event_every_sec);
       if (t.phase === 'work' && t.expiresAt && t.remain <= 0) {
         setExpiredWork(true); // ถามผู้ใช้ว่าจะจบหรือทิ้ง
         setRunning(false);
-      } else if (t.phase === 'short_break' && t.expiresAt && t.remain <= 0) {
-        // พักหมดแล้ว — เริ่มงานต่อเลย
-        setSessionIdx((i) => i + 1);
-        setRemain(settings.work_min * 60);
-        setElapsed(0);
-        setNextEventIn(settings.event_every_sec);
-        setPhase('work');
-        setRunning(true);
-      } else if (t.phase === 'long_break' && t.expiresAt && t.remain <= 0) {
-        setSessionIdx(1);
+      } else if ((t.phase === 'short_break' || t.phase === 'long_break') && t.expiresAt && t.remain <= 0) {
+        // พักหมดแล้ว — เริ่มงาน session ต่อไปเลย
+        setSessionIdx(t.phase === 'long_break' ? 1 : (t.sessionIdx || 1) + 1);
         setRemain(settings.work_min * 60);
         setElapsed(0);
         setNextEventIn(settings.event_every_sec);
@@ -84,16 +92,15 @@ export default function Game() {
       }
       if (t.phase === 'long_break') fetchBoss();
     }
-    setMounted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCharacter, loading]);
+  }, [hasCharacter, loading, character?.id]);
 
   // ---- บันทึกสถานะ timer ----
   useEffect(() => {
-    if (!mounted || !hasCharacter) return;
+    if (!mounted || !character) return;
     const t = { phase, sessionIdx, remain, running, elapsed, nextEventIn, expiresAt: running ? Date.now() + remain * 1000 : null };
-    localStorage.setItem(STORE_KEY, JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, mounted, hasCharacter]);
+    localStorage.setItem(storeKey(character.id), JSON.stringify(t));
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -204,12 +211,13 @@ export default function Game() {
   }
 
   if (!hasCharacter) {
-    return <CharacterCreation />;
+    // มีตัวละครอื่นอยู่ → หน้าเลือกตัวละคร, ไม่มีเลย → สร้างใหม่
+    return characters.length > 0 ? <CharacterSelect standalone onDone={refresh} /> : <CharacterCreation />;
   }
 
   return (
     <div className="app">
-      {phase === 'idle' && <HomeScreen onStart={() => beginWork(1)} />}
+      {phase === 'idle' && <HomeScreen onStart={() => beginWork(1)} onManageCharacters={() => setShowCharSelect(true)} />}
 
       {phase === 'work' && (
         <TimerScreen
@@ -251,6 +259,13 @@ export default function Game() {
       {achieveQueue.length > 0 && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
 
       {levelUp && <LevelUpModal levelUp={levelUp} onClose={dismissLevelUp} />}
+
+      {showCharSelect && (
+        <CharacterSelect
+          onClose={() => setShowCharSelect(false)}
+          onDone={() => { setShowCharSelect(false); refresh(); }}
+        />
+      )}
 
       {expiredWork && (
         <div className="modal-backdrop">

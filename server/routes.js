@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
-  db, getCharacter, getProgress, getSettings, getInventory, getLog, addLog,
-  addItem, updateCharacter,
+  db, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
+  addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK,
@@ -25,10 +25,20 @@ const requireChar = (res) => {
 
 const serialize = (c) => ({ character: serializeCharacter(c) });
 
+const charBrief = (c) => ({
+  id: c.id, name: c.name, class: c.class,
+  classIcon: CLASSES[c.class]?.icon || '❓', className: CLASSES[c.class]?.name || c.class,
+  level: c.level, xp: c.xp, gold: c.gold,
+  city: CITIES[c.city_index % CITIES.length],
+  createdAt: c.created_at,
+});
+
+const charsPayload = () => ({ characters: getCharacters().map(charBrief), activeCharacterId: getActiveCharacterId() });
+
 // ----- สถานะรวม -----
 router.get('/state', (req, res) => {
   const c = getCharacter();
-  if (!c) return res.json({ hasCharacter: false, settings: getSettings() });
+  if (!c) return res.json({ hasCharacter: false, settings: getSettings(), ...charsPayload() });
   res.json({
     hasCharacter: true,
     ...serialize(c),
@@ -37,7 +47,13 @@ router.get('/state', (req, res) => {
     achievements: getAchievementList(c, getProgress(c.id)),
     log: getLog(c.id),
     settings: getSettings(),
+    ...charsPayload(),
   });
+});
+
+// รายชื่อตัวละครทั้งหมด (หน้าเลือกตัวละคร)
+router.get('/characters', (req, res) => {
+  res.json(charsPayload());
 });
 
 // รายการ achievement ทั้งหมด (สำหรับหน้า "ตรา")
@@ -51,25 +67,56 @@ router.post('/character/create', (req, res) => {
   const { name, class: cls } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'ต้องตั้งชื่อตัวละคร' });
   if (!CLASSES[cls]) return res.status(400).json({ error: 'เลือกคลาสไม่ถูกต้อง' });
-  if (getCharacter()) return res.status(409).json({ error: 'มีตัวละครอยู่แล้ว — กดเริ่มเกมใหม่เพื่อสร้างใหม่' });
 
   const b = CLASSES[cls].base;
   const info = db.prepare(`INSERT INTO character (name, class, hp, max_hp, mp, max_mp, atk, def, spd, crit)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name.trim().slice(0, 20), cls, b.hp, b.hp, b.mp, b.mp, b.atk, b.def, b.spd, b.crit);
   const c = db.prepare('SELECT * FROM character WHERE id = ?').get(info.lastInsertRowid);
+  setActiveCharacter(c.id); // ตัวที่สร้างใหม่ = ตัวที่เล่น
   addLog(c.id, { type: 'system', title: '🎒 เริ่มการผจญภัย', detail: `${c.name} (${CLASSES[cls].name}) ออกเดินทางจาก ${CITIES[0].name}!` });
-  res.json({ ...serialize(c), progress: getProgress(c.id) });
+  res.json({ ...serialize(c), progress: getProgress(c.id), ...charsPayload() });
+});
+
+router.post('/character/select', (req, res) => {
+  const { id } = req.body || {};
+  const target = db.prepare('SELECT id FROM character WHERE id = ?').get(id);
+  if (!target) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
+  setActiveCharacter(id);
+  res.json({ ok: true, activeCharacterId: id, ...charsPayload() });
+});
+
+router.post('/character/rename', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { name } = req.body || {};
+  if (!name || !name.trim()) return res.status(400).json({ error: 'ต้องตั้งชื่อตัวละคร' });
+  const newName = name.trim().slice(0, 20);
+  db.prepare('UPDATE character SET name = ? WHERE id = ?').run(newName, c.id);
+  const updated = db.prepare('SELECT * FROM character WHERE id = ?').get(c.id);
+  addLog(c.id, { type: 'system', title: '📝 เปลี่ยนชื่อ', detail: `เปลี่ยนชื่อเป็น ${newName}` });
+  res.json({ ...serialize(updated), ...charsPayload() });
+});
+
+router.post('/character/delete', (req, res) => {
+  const { id } = req.body || {};
+  const target = db.prepare('SELECT id FROM character WHERE id = ?').get(id);
+  if (!target) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
+  deleteCharacter(id);
+  fights.delete(id);
+  if (getActiveCharacterId() === id) {
+    const next = db.prepare('SELECT id FROM character ORDER BY id LIMIT 1').get();
+    setActiveCharacter(next ? next.id : null);
+  }
+  res.json({ ok: true, ...charsPayload() });
 });
 
 router.post('/character/reset', (req, res) => {
   const c = getCharacter();
   if (!c) return res.json({ ok: true });
-  db.prepare('DELETE FROM inventory WHERE character_id = ?').run(c.id);
-  db.prepare('DELETE FROM progress WHERE character_id = ?').run(c.id);
-  db.prepare('DELETE FROM log WHERE character_id = ?').run(c.id);
-  db.prepare('DELETE FROM character WHERE id = ?').run(c.id);
+  deleteCharacter(c.id);
   fights.delete(c.id);
-  res.json({ ok: true });
+  const next = db.prepare('SELECT id FROM character ORDER BY id LIMIT 1').get();
+  setActiveCharacter(next ? next.id : null);
+  res.json({ ok: true, ...charsPayload() });
 });
 
 router.post('/character/allocate', (req, res) => {
@@ -145,7 +192,7 @@ router.post('/adventure/complete', (req, res) => {
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
   addLog(c.id, {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
-    xp, gold,
+    xp, gold, focusSec,
   });
   const ach = checkAchievements(c, prog, { hour: parseInt(timeRow.h, 10) });
   res.json({
@@ -348,6 +395,38 @@ router.post('/boss/retreat', (req, res) => {
   updateCharacter(c);
   addLog(c.id, { type: 'boss_lose', title: '💨 ถอยทัพ', detail: 'สู้ไม่ไหว ถอยกลับไปพักก่อน…' });
   res.json({ ...serialize(c), message: 'ถอยกลับแคมป์ พลังเสียไปเล็กน้อย' });
+});
+
+// ----- สถิติละเอียด (หน้า Stats) -----
+router.get('/stats', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const prog = getProgress(c.id);
+  const ach = getAchievementList(c, prog);
+
+  // session + เวลาโฟกัสย้อนหลัง 7 วัน
+  const raw = db.prepare(`
+    SELECT date(created_at) AS d, COUNT(*) AS sessions, COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'session_done'
+      AND created_at >= datetime('now', 'localtime', '-6 days')
+    GROUP BY d`).all(c.id);
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = db.prepare(`SELECT date('now','localtime','-${i} day') AS d`).get().d;
+    const row = raw.find((r) => r.d === date);
+    days.push({ date, sessions: row?.sessions || 0, focusSec: row?.focus_sec || 0 });
+  }
+
+  // เมืองที่ชนะบอสมาแล้ว (จาก log boss_win)
+  const cityLogs = db.prepare("SELECT detail FROM log WHERE character_id = ? AND type = 'boss_win' ORDER BY id").all(c.id);
+
+  res.json({
+    character: serializeCharacter(c),
+    progress: prog,
+    days,
+    cityLogs,
+    achievements: { unlocked: ach.unlocked, total: ach.total },
+    settings: getSettings(),
+  });
 });
 
 // ----- ตั้งค่า -----

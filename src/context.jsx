@@ -9,6 +9,8 @@ export function GameProvider({ children }) {
     loading: true,
     hasCharacter: false,
     character: null,
+    characters: [],
+    activeCharacterId: null,
     progress: null,
     settings: null,
     inventory: [],
@@ -37,6 +39,8 @@ export function GameProvider({ children }) {
         inventory: d.inventory ?? s.inventory,
         log: d.log ?? s.log,
         achievements: d.achievements ?? s.achievements,
+        characters: d.characters ?? s.characters,
+        activeCharacterId: d.activeCharacterId ?? s.activeCharacterId,
         hasCharacter: d.character ? true : d.hasCharacter ?? s.hasCharacter,
       }));
       if (d.levelUps && d.levelUps.levels > 0) {

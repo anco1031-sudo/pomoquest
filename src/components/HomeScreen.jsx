@@ -5,16 +5,18 @@ import { Bar, Panel, fmtDuration } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
 import AchievementList from './AchievementList.jsx';
+import StatsScreen from './StatsScreen.jsx';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
   { key: 'sheet', label: 'ตัวละคร', icon: '🛡️' },
   { key: 'log', label: 'บันทึก', icon: '📜' },
   { key: 'achieve', label: 'ตรา', icon: '🏅' },
+  { key: 'stats', label: 'สถิติ', icon: '📊' },
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
-export default function HomeScreen({ onStart }) {
+export default function HomeScreen({ onStart, onManageCharacters }) {
   const { character, progress, settings, achievements, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
@@ -30,11 +32,6 @@ export default function HomeScreen({ onStart }) {
     localStorage.setItem('pomoquest-muted', m ? '1' : '0');
   };
 
-  const resetAll = async () => {
-    if (!window.confirm('ลบตัวละครและข้อมูลทั้งหมด? เริ่มเกมใหม่ทั้งหมด')) return;
-    await post('/character/reset');
-    await refresh();
-  };
 
   const saveSettings = async (patch) => {
     const d = await put('/settings', patch);
@@ -47,6 +44,7 @@ export default function HomeScreen({ onStart }) {
         <div className="logo">🍅⚔️ PomoQuest</div>
         <div className="topbar-right">
           <span className="gold-chip">💰 {character.gold}</span>
+          <button className="icon-btn" onClick={onManageCharacters} title="จัดการตัวละคร">👥</button>
           <button className="icon-btn" onClick={toggleMute} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}>
             {muted ? '🔇' : '🔊'}
           </button>
@@ -120,6 +118,7 @@ export default function HomeScreen({ onStart }) {
         {tab === 'sheet' && <CharacterSheet />}
         {tab === 'log' && <AdventureLog limit={50} />}
         {tab === 'achieve' && <AchievementList />}
+        {tab === 'stats' && <StatsScreen />}
 
         {tab === 'settings' && (
           <div className="panel">
@@ -147,7 +146,7 @@ export default function HomeScreen({ onStart }) {
               <button className="btn" onClick={toggleMute}>{muted ? 'ปิดอยู่' : 'เปิดอยู่'}</button>
             </div>
             <p className="hint">💡 บนมือถือ กด "Add to Home Screen" เพื่อติดตั้ง PomoQuest เป็นแอพ!</p>
-            <button className="btn btn-danger" onClick={resetAll}>🗑️ เริ่มเกมใหม่ (ลบตัวละคร)</button>
+            <button className="btn" onClick={onManageCharacters}>👥 จัดการตัวละคร (เลือก / สร้าง / เปลี่ยนชื่อ / ลบ)</button>
           </div>
         )}
       </main>

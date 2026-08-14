@@ -118,6 +118,8 @@ ensureColumn('progress', 'boss_potions', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'shrines', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'traps', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'merchant_gifts', 'INTEGER DEFAULT 0');
+ensureColumn('settings', 'active_character_id', 'INTEGER');
+ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
 
 // seed items
 const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, price, lvl)
@@ -141,7 +143,33 @@ db.prepare(`INSERT OR IGNORE INTO settings (id, work_min, short_break_min, long_
   VALUES (1, 25, 5, 15, 4, 90)`).run();
 
 // ----- helpers -----
-export const getCharacter = () => db.prepare('SELECT * FROM character ORDER BY id LIMIT 1').get() || null;
+export const getActiveCharacterId = () =>
+  db.prepare('SELECT active_character_id FROM settings WHERE id = 1').get().active_character_id;
+
+export const setActiveCharacter = (id) =>
+  db.prepare('UPDATE settings SET active_character_id = ? WHERE id = 1').run(id);
+
+export const getCharacter = () => {
+  const activeId = getActiveCharacterId();
+  let c = activeId ? db.prepare('SELECT * FROM character WHERE id = ?').get(activeId) : null;
+  if (!c) {
+    // ถ้ายังไม่เคยตั้ง active (DB เก่า) ใช้ตัวแรกแล้วตั้งให้
+    c = db.prepare('SELECT * FROM character ORDER BY id LIMIT 1').get() || null;
+    if (c) setActiveCharacter(c.id);
+  }
+  return c;
+};
+
+export const getCharacters = () =>
+  db.prepare('SELECT id, name, class, level, xp, gold, city_index, created_at FROM character ORDER BY id').all();
+
+export const deleteCharacter = (id) => {
+  db.prepare('DELETE FROM inventory WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM progress WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM log WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM achievement_unlock WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM character WHERE id = ?').run(id);
+};
 
 export const getProgress = (charId) =>
   db.prepare('SELECT * FROM progress WHERE character_id = ?').get(charId) ||
@@ -159,9 +187,10 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0 }) {
-  db.prepare('INSERT INTO log (character_id, type, title, detail, xp, gold) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(charId, type, title, detail, xp, gold);
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0 }) {
+  // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน)
+  db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec);
 }
 
 export const addItem = (charId, itemId, qty = 1) => {

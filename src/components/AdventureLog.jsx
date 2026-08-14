@@ -9,7 +9,8 @@ const TYPE_ICON = {
 };
 
 function fmtLogTime(iso) {
-  const d = new Date(iso + 'Z');
+  // server เก็บเวลาแบบ localtime (ไม่มี Z) — ถ้ามี Z แปลว่า UTC
+  const d = iso.endsWith('Z') ? new Date(iso) : new Date(iso.replace(' ', 'T'));
   const now = Date.now();
   const diff = now - d.getTime();
   if (diff < 60_000) return 'เมื่อกี้';
