@@ -122,23 +122,37 @@ npm start            # รัน server เดียว เสิร์ฟทั
 
 ### วิธีเปิดใช้ (env variables)
 
+เปิดได้ 2 แบบ:
+
 ```bash
-LLM_API_KEY=your_key_here    # key / credits token — จำเป็น
-LLM_BASE_URL=https://g4f.space/v1   # (ไม่บังคับ) base URL ของ API
-LLM_MODEL=default            # (ไม่บังคับ) ชื่อโมเดล — ค่า default คือ "default"
-LLM_TIMEOUT_MS=15000         # (ไม่บังคับ) timeout ต่อ request
+# แบบ 1: มี key / token
+LLM_API_KEY=your_key_here    # key จาก g4f.dev/members.html หรือ provider อื่น
+
+# แบบ 2: ไม่ต้องส่ง key (LLM_ENABLED=1)
+LLM_ENABLED=1                # ใช้เมื่อ credits ผูกกับ IP ของเครื่อง (bake ฟรีที่ g4f.dev/chat)
+                             # หรือใช้กับ Ollama local ที่ไม่ต้อง auth
 ```
 
-ตัวอย่างรันแบบมี LLM:
+ตั้งค่าอื่น (ไม่บังคับ):
 
 ```bash
-LLM_API_KEY=xxxx npm run dev
+LLM_BASE_URL=https://g4f.space/v1   # base URL ของ API (ค่า default นี้ = endpoint เดียวกับ g4f client.js)
+LLM_MODEL=default            # ชื่อโมเดล — ค่า default คือ "default"
+LLM_TIMEOUT_MS=15000         # timeout ต่อ request
+```
+
+ตัวอย่างรัน:
+
+```bash
+LLM_ENABLED=1 npm run dev          # ไม่ต้อง key (credits ผูก IP)
+LLM_API_KEY=xxxx npm run dev       # มี key
 ```
 
 ### ใช้กับ g4f.dev (ฟรี)
 
-- โมดูลใช้ API รูปแบบ **OpenAI-compatible** (`POST {base}/chat/completions` กับ `model: "default"`) — endpoint เดียวกับที่ `g4f.dev/dist/js/client.js` ใช้
-- ตอนนี้ทุก endpoint ของ g4f.space ต้องมี **cake credits** — ไป bake proof-of-work ฟรีที่ `g4f.dev/chat` (หรือสมัครสมาชิกเอา key ที่ `g4f.dev/members.html`) แล้วเอา key นั้นมาใส่ `LLM_API_KEY`
+- โมดูลใช้ API รูปแบบ **OpenAI-compatible** (`POST {base}/chat/completions` กับ `model: "default"`) — endpoint เดียวกับที่ `g4f.dev/dist/js/client.js` ใช้ (แต่รันฝั่ง server ไม่ต้องพึ่ง CDN ใน browser)
+- **g4f.space ตรวจ credits ฝั่ง backend** — ต่อให้ใช้ client.js ใน browser ตรง ๆ ก็เจอ error `402 No cake credits` ถ้าเครื่องยังไม่มี credits (ทดสอบจริงแล้ว)
+- วิธีได้ credits ฟรี: ไป **bake proof-of-work ที่ `g4f.dev/chat`** → credits ผูกกับ IP ของเครื่อง → รันเกมด้วย `LLM_ENABLED=1` ใช้ได้เลย (หรือสมัครที่ `g4f.dev/members.html` เอา key มาใส่ `LLM_API_KEY`)
 - ใช้ provider อื่นที่ OpenAI-compatible ก็ได้ (เช่น Ollama local: `LLM_BASE_URL=http://localhost:11434/v1`) — แค่เปลี่ยน `LLM_BASE_URL` + `LLM_MODEL`
 
 ### จุดที่ LLM ถูกใช้ตอนนี้

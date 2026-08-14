@@ -2,7 +2,8 @@
 // รัน: npm run test:llm
 import http from 'node:http';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -55,13 +56,23 @@ console.log('llm.js — fallback เมื่อ API error');
 const fail = await llmChat({ user: 'FAIL' });
 ok('HTTP 500 → คืน null (fallback เงียบ)', fail === null);
 
-console.log('llm.js — ปิดใช้งาน (ไม่มี key)');
-// รันใน process แยก (llm.js อ่าน env ตอน import) — ไม่มี key → ต้อง disabled
-const child = execFileSync(process.execPath, ['--input-type=module', '-e', `
-  const m = await import('./server/llm.js');
-  process.stdout.write(JSON.stringify({ enabled: m.llmEnabled(), out: await m.llmChat({ user: 'x' }) }));
-`], { cwd: root, env: { ...process.env, LLM_API_KEY: '', LLM_BASE_URL: '' } });
-const childResult = JSON.parse(child.toString());
+// รันใน process แยก (llm.js อ่าน env ตอน import) — ใช้ execFile แบบ async เพื่อไม่บล็อก mock server ใน parent
+const runChild = async (extraEnv) => {
+  const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
+    const m = await import('./server/llm.js');
+    process.stdout.write(JSON.stringify({ enabled: m.llmEnabled(), out: await m.llmChat({ user: 'hello' }) }));
+  `], { cwd: root, env: { ...process.env, ...extraEnv } });
+  return JSON.parse(stdout);
+};
+
+console.log('llm.js — เปิดใช้แบบไม่ต้อง key (LLM_ENABLED=1 — credits ผูก IP / Ollama)');
+const child2Result = await runChild({ LLM_API_KEY: '', LLM_ENABLED: '1', LLM_BASE_URL: `http://127.0.0.1:${port}/v1` });
+ok('llmEnabled() = true เมื่อ LLM_ENABLED=1', child2Result.enabled === true, JSON.stringify(child2Result));
+ok('llmChat ทำงานได้แบบไม่มี key', child2Result.out === 'เรื่องราวจาก LLM (mock) OK', String(child2Result.out));
+ok('ไม่ส่ง Authorization header (ไม่ต้อง auth)', received.auth === null, String(received.auth));
+
+console.log('llm.js — ปิดใช้งาน (ไม่มี key ไม่มี LLM_ENABLED)');
+const childResult = await runChild({ LLM_API_KEY: '', LLM_ENABLED: '', LLM_BASE_URL: '' });
 ok('llmEnabled() = false เมื่อไม่มี key', childResult.enabled === false, JSON.stringify(childResult));
 ok('llmChat คืน null เมื่อปิดใช้งาน', childResult.out === null);
 

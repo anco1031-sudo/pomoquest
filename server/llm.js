@@ -1,19 +1,22 @@
 // server/llm.js — โมดูล LLM แบบ pluggable (OpenAI-compatible chat completions)
 //
 // ตั้งค่าผ่าน env (ดู README):
-//   LLM_API_KEY    = key / credits token (จำเป็นสำหรับ g4f — ต้องมี cake credits หรือ key จาก g4f.dev/members.html)
+//   LLM_API_KEY    = key / credits token (สำหรับ g4f: key จาก g4f.dev/members.html)
+//   LLM_ENABLED    = "1" เปิดใช้โดยไม่ต้องส่ง key — สำหรับกรณี credits ผูกกับ IP
+//                    (bake cake credits ฟรีที่ g4f.dev/chat แล้วเครื่องนั้นใช้ได้) หรือ Ollama local ที่ไม่ต้อง auth
 //   LLM_BASE_URL   = base URL ของ API (default: https://g4f.space/v1 — endpoint เดียวกับที่ g4f client.js ใช้)
 //   LLM_MODEL      = ชื่อโมเดล (default: "default" — ตามที่ตั้งไว้ในเกม)
 //   LLM_TIMEOUT_MS = timeout ของแต่ละ request (default: 15000)
 //
-// หลักการสำคัญ: ไม่มี key / เรียกไม่สำเร็จ / ตอบไม่ครบ → คืน null เสมอ
+// หลักการสำคัญ: ปิดใช้งาน / เรียกไม่สำเร็จ / ตอบไม่ครบ → คืน null เสมอ
 // ฝั่งที่เรียกใช้ fallback กลับไปใช้ข้อความตายตัวเดิม — เกมไม่เคยพังเพราะ LLM
 
 const BASE_URL = (process.env.LLM_BASE_URL || 'https://g4f.space/v1').replace(/\/+$/, '');
 const API_KEY = process.env.LLM_API_KEY || '';
+const FORCE_ENABLED = process.env.LLM_ENABLED === '1' || process.env.LLM_ENABLED === 'true';
 const MODEL = process.env.LLM_MODEL || 'default';
 const TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '15000', 10);
-const ENABLED = !!API_KEY;
+const ENABLED = FORCE_ENABLED || !!API_KEY;
 
 export function llmEnabled() {
   return ENABLED;
