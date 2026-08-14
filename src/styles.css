@@ -526,6 +526,39 @@ body {
   text-align: center;
 }
 
+/* ---------- daily quest ---------- */
+.daily-list { display: flex; flex-direction: column; gap: 8px; }
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.daily-card.complete { border-color: rgba(34, 197, 94, 0.5); }
+.daily-icon { font-size: 26px; width: 36px; text-align: center; }
+.daily-body { flex: 1; min-width: 0; }
+.daily-name { font-size: 13.5px; font-weight: 800; }
+.daily-card.complete .daily-name { color: var(--green); }
+.daily-desc { font-size: 12px; color: var(--muted); }
+.daily-progress { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.daily-progress .bar { flex: 1; height: 8px; }
+.daily-count { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.daily-claimed { color: var(--green); font-size: 12.5px; font-weight: 800; white-space: nowrap; }
+.daily-bonus {
+  margin-top: 12px;
+  background: linear-gradient(135deg, rgba(245, 185, 66, 0.15), var(--panel));
+  border: 1px solid rgba(245, 185, 66, 0.4);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+.daily-bonus.done { border-color: var(--green); background: rgba(34, 197, 94, 0.1); color: var(--green); font-weight: 700; }
+.daily-bonus-text { font-size: 13px; margin-bottom: 10px; }
+.daily-bonus-text b { color: var(--gold); }
+
 /* ---------- character select ---------- */
 .select-screen { max-width: 520px; margin: 0 auto; padding: 20px 16px 40px; }
 .character-select-modal { max-width: 460px; }

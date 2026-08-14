@@ -124,6 +124,19 @@ export const QUESTS = [
 
 export const SHOP_STOCK = ITEMS.filter((i) => i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id));
 
+// ----- ภารกิจประจำวัน (Daily Quest) — สุ่ม 3 อันต่อวันตามเลเวล -----
+// key ตรงกับชื่อ counter ใน daily_counter ตาราง
+export const DAILY_QUESTS = [
+  { id: 'dq_focus_sessions', name: 'นักโฟกัสประจำวัน', icon: '🎯', key: 'sessions', target: (lvl) => 2 + (lvl >= 10 ? 1 : 0), desc: 'โฟกัสครบ {n} session วันนี้', unit: 'count' },
+  { id: 'dq_treasure',      name: 'นักล่าสมบัติ',     icon: '💰', key: 'treasures', target: (lvl) => 2 + (lvl >= 8 ? 1 : 0), desc: 'เจอสมบัติ {n} ครั้งวันนี้', unit: 'count' },
+  { id: 'dq_monster',       name: 'นักล่ามอนสเตอร์',  icon: '🐺', key: 'monsters', target: (lvl) => 5 + (lvl >= 8 ? 2 : 0), desc: 'กำจัดมอนสเตอร์ {n} ตัววันนี้', unit: 'count' },
+  { id: 'dq_camp_quest',    name: 'สายภารกิจแคมป์',   icon: '📜', key: 'camp_quests', target: () => 2, desc: 'ทำภารกิจแคมป์ {n} ครั้งวันนี้', unit: 'count' },
+  { id: 'dq_boss',          name: 'นักล่าบอสรายวัน',  icon: '👹', key: 'boss_wins', target: () => 1, desc: 'ชนะบอส 1 ตัววันนี้', unit: 'count' },
+  { id: 'dq_potion',        name: 'นักเล่นแร่แปรธาตุ', icon: '🧪', key: 'potions', target: (lvl) => 3 + (lvl >= 10 ? 2 : 0), desc: 'ใช้ยา {n} ขวดวันนี้', unit: 'count' },
+  { id: 'dq_shop',          name: 'ลูกค้าประจำ',      icon: '🛒', key: 'items_bought', target: (lvl) => 3 + (lvl >= 8 ? 2 : 0), desc: 'ซื้อของ {n} ชิ้นวันนี้', unit: 'count' },
+  { id: 'dq_focus_min',     name: 'มาราธอนรายวัน',    icon: '⏳', key: 'focus_sec', target: (lvl) => 50 * 60 + (lvl >= 10 ? 10 * 60 : 0), desc: 'โฟกัสครบ {n} นาทีวันนี้', unit: 'min' },
+];
+
 // ----- Achievement (stat = ตัวเลขที่ใช้เปรียบเทียบ ดูใน achievements.js) -----
 export const ACHIEVEMENTS = [
   { id: 'first_step',  name: 'ก้าวแรก',          icon: '🐣', stat: 'sessions',  target: 1,    reward: { gold: 20 }, desc: 'ทำโฟกัสครบ 1 session' },

@@ -6,6 +6,7 @@ import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
 import AchievementList from './AchievementList.jsx';
 import StatsScreen from './StatsScreen.jsx';
+import DailyQuests from './DailyQuests.jsx';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
@@ -87,6 +88,8 @@ export default function HomeScreen({ onStart, onManageCharacters }) {
 
         {tab === 'home' && (
           <>
+            <DailyQuests />
+
             <Panel title={`🗺️ ${city.name} — ${city.terrain}`}>
               <p className="panel-text">
                 เมืองนี้ยังมีเรื่องราวรอคุณอยู่… กดเริ่มผจญภัยเพื่อโฟกัสงาน แล้วตัวละครของคุณจะออกเดินทาง!

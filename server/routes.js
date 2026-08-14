@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
   db, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
-  addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter,
+  addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK,
@@ -11,6 +11,7 @@ import {
   rollQuests, resolveQuest,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
+import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
 
 const router = Router();
 
@@ -35,6 +36,8 @@ const charBrief = (c) => ({
 
 const charsPayload = () => ({ characters: getCharacters().map(charBrief), activeCharacterId: getActiveCharacterId() });
 
+const dailyPayload = (c) => ({ daily: getDailyQuests(c) });
+
 // เช็คชื่อซ้ำ (ไม่แยกตัวพิมพ์เล็ก/ใหญ่)
 const nameTaken = (name, excludeId = null) => {
   const row = excludeId
@@ -56,6 +59,7 @@ router.get('/state', (req, res) => {
     log: getLog(c.id),
     settings: getSettings(),
     ...charsPayload(),
+    ...dailyPayload(c),
   });
 });
 
@@ -161,12 +165,16 @@ router.post('/adventure/event', (req, res) => {
   if (ev.key === 'shrine') { prog.shrines += 1; up('shrines', prog.shrines); }
   if (ev.key === 'trap') { prog.traps += 1; up('traps', prog.traps); }
   if (ev.key === 'merchant' && ev.item) { prog.merchant_gifts += 1; up('merchant_gifts', prog.merchant_gifts); }
+  // ตัวนับรายวัน (Daily Quest)
+  if (ev.key === 'treasure') bumpDaily(c.id, 'treasures');
+  if (ev.key === 'monster' && ev.monster?.win) bumpDaily(c.id, 'monsters');
   const ach = checkAchievements(c, prog, { event: ev });
   res.json({
     ...serialize(c),
     event: ev,
     progress: getProgress(c.id),
     achievements: ach.fresh,
+    ...dailyPayload(c),
     levelUps: { levels: (ev.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
 });
@@ -206,12 +214,16 @@ router.post('/adventure/complete', (req, res) => {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
     xp, gold, focusSec,
   });
+  // ตัวนับรายวัน (Daily Quest)
+  bumpDaily(c.id, 'sessions');
+  bumpDaily(c.id, 'focus_sec', focusSec);
   const ach = checkAchievements(c, prog, { hour: parseInt(timeRow.h, 10) });
   res.json({
     ...serialize(c),
     progress: getProgress(c.id),
     reward: { xp, gold, bonus, streak: prog.streak },
     achievements: ach.fresh,
+    ...dailyPayload(c),
     levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
   });
 });
@@ -249,7 +261,8 @@ router.post('/shop/buy', (req, res) => {
   addItem(c.id, itemId, qty);
   updateCharacter(c);
   addLog(c.id, { type: 'shop', title: '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} x${qty} (-${cost} ทอง)`, gold: -cost });
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ` });
+  bumpDaily(c.id, 'items_bought', qty);
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ`, ...dailyPayload(c) });
 });
 
 router.post('/shop/sell', (req, res) => {
@@ -278,7 +291,8 @@ router.post('/inventory/use', (req, res) => {
   if (!used) return res.status(400).json({ error: 'พลังเต็มอยู่แล้ว' });
   db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
   updateCharacter(c);
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ใช้ ${item.name} เรียบร้อย` });
+  bumpDaily(c.id, 'potions');
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ใช้ ${item.name} เรียบร้อย`, ...dailyPayload(c) });
 });
 
 router.post('/inventory/equip', (req, res) => {
@@ -311,6 +325,39 @@ router.post('/camp/rest', (req, res) => {
   res.json({ ...serialize(c), message: 'พักผ่อนจนพลังเต็มแล้ว!' });
 });
 
+// ----- ภารกิจประจำวัน (Daily Quest) -----
+router.get('/daily', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  res.json(dailyPayload(c));
+});
+
+router.post('/daily/claim', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { questId } = req.body || {};
+  const result = claimDailyQuest(c, questId);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({
+    ...serialize(c),
+    ...dailyPayload(c),
+    reward: { gold: result.gold, xp: result.xp },
+    levelUps: { levels: result.ups, statPoints: c.stat_points },
+    message: `📅 รับรางวัล +${result.gold} ทอง!`,
+  });
+});
+
+router.post('/daily/claim-all', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const result = claimDailyAll(c);
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.json({
+    ...serialize(c),
+    ...dailyPayload(c),
+    reward: { gold: result.gold, xp: result.xp, item: result.item },
+    levelUps: { levels: result.ups, statPoints: c.stat_points },
+    message: `🎁 รับโบนัส +${result.gold} ทอง${result.item ? ` และได้ ${result.item.icon} ${result.item.name}` : ''}!`,
+  });
+});
+
 // ----- ภารกิจ -----
 router.post('/quest/do', (req, res) => {
   const c = requireChar(res); if (!c) return;
@@ -327,11 +374,13 @@ router.post('/quest/do', (req, res) => {
     prog.quests_completed += 1;
     db.prepare('UPDATE progress SET quests_completed = ? WHERE id = ?').run(prog.quests_completed, prog.id);
   }
+  bumpDaily(c.id, 'camp_quests');
   const ach = checkAchievements(c, prog);
   res.json({
     ...serialize(c), result, inventory: getInventory(c.id),
     achievements: ach.fresh,
     progress: getProgress(c.id),
+    ...dailyPayload(c),
     levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
 });
@@ -362,6 +411,7 @@ router.post('/boss/act', (req, res) => {
   if (action === 'potion' && !result.error) {
     prog.boss_potions += 1;
     db.prepare('UPDATE progress SET boss_potions=? WHERE id=?').run(prog.boss_potions, prog.id);
+    bumpDaily(c.id, 'potions');
   }
 
   let ach = { fresh: [], ups: 0 };
@@ -385,6 +435,7 @@ router.post('/boss/act', (req, res) => {
         cityIndex: foughtCity,
       },
     });
+    bumpDaily(c.id, 'boss_wins');
   }
   res.json({
     ...serialize(c),
@@ -395,6 +446,7 @@ router.post('/boss/act', (req, res) => {
     inventory: getInventory(c.id),
     progress: getProgress(c.id),
     achievements: ach.fresh,
+    ...dailyPayload(c),
     levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
 });

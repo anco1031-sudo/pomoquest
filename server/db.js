@@ -104,6 +104,22 @@ CREATE TABLE IF NOT EXISTS achievement_unlock (
   unlocked_at TEXT DEFAULT (datetime('now')),
   UNIQUE(character_id, achievement_id)
 );
+
+CREATE TABLE IF NOT EXISTS daily_counter (
+  character_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value INTEGER DEFAULT 0,
+  PRIMARY KEY (character_id, date, key)
+);
+
+CREATE TABLE IF NOT EXISTS daily_quest_done (
+  character_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  quest_id TEXT NOT NULL,
+  claimed_at TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (character_id, date, quest_id)
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)
@@ -162,6 +178,20 @@ export const getCharacter = () => {
 
 export const getCharacters = () =>
   db.prepare('SELECT id, name, class, level, xp, gold, city_index, created_at FROM character ORDER BY id').all();
+
+// ----- ตัวนับรายวัน (สำหรับ Daily Quest) -----
+export const today = () => db.prepare("SELECT date('now','localtime') AS d").get().d;
+
+export const bumpDaily = (charId, key, amount = 1) => {
+  const d = today();
+  db.prepare(`INSERT INTO daily_counter (character_id, date, key, value) VALUES (?, ?, ?, ?)
+    ON CONFLICT(character_id, date, key) DO UPDATE SET value = value + excluded.value`).run(charId, d, key, amount);
+};
+
+export const getDailyCounters = (charId, date) => {
+  const rows = db.prepare('SELECT key, value FROM daily_counter WHERE character_id = ? AND date = ?').all(charId, date);
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+};
 
 export const deleteCharacter = (id) => {
   db.prepare('DELETE FROM inventory WHERE character_id = ?').run(id);

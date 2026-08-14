@@ -11,7 +11,8 @@
     "build": "vite build",
     "start": "node server/index.js",
     "preview": "vite preview",
-    "test:achievements": "node scripts/test-achievements.mjs"
+    "test:achievements": "node scripts/test-achievements.mjs",
+    "test:daily": "node scripts/test-daily.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

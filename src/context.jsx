@@ -15,6 +15,7 @@ export function GameProvider({ children }) {
     settings: null,
     inventory: [],
     log: [],
+    daily: null,
   });
   const [toast, setToast] = useState(null);
   const [eventQueue, setEventQueue] = useState([]);
@@ -39,6 +40,7 @@ export function GameProvider({ children }) {
         inventory: d.inventory ?? s.inventory,
         log: d.log ?? s.log,
         achievements: d.achievements ?? s.achievements,
+        daily: d.daily ?? s.daily,
         characters: d.characters ?? s.characters,
         activeCharacterId: d.activeCharacterId ?? s.activeCharacterId,
         hasCharacter: d.character ? true : d.hasCharacter ?? s.hasCharacter,
