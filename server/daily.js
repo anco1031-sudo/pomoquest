@@ -24,6 +24,15 @@ function hashStr(s) {
 
 const rewardFor = (c) => ({ gold: 40 + c.level * 6, xp: 30 + c.level * 4 });
 
+const yesterday = () => db.prepare("SELECT date('now','localtime','-1 day') AS d").get().d;
+
+// streak การทำภารกิจครบติดต่อกัน
+const getDailyStreak = (c) =>
+  db.prepare('SELECT streak, last_date FROM daily_streak WHERE character_id = ?').get(c.id) || { streak: 0, last_date: null };
+
+// ตัวคูณโบนัส: ทำครบติดต่อทุกวัน โบนัสเพิ่ม 20% ต่อวัน สูงสุด x2 (วันที่ 6+)
+const bonusMult = (streak) => 1 + Math.min(Math.max(streak - 1, 0), 5) * 0.2;
+
 // สถานะภารกิจประจำวันของตัวละคร (สุ่ม 3 อันตามวันที่ + id ตัวละคร)
 export function getDailyQuests(c) {
   const date = today();
@@ -57,8 +66,15 @@ export function getDailyQuests(c) {
     };
   });
 
+  // ข้อมูล streak (สำหรับ UI): ถ้าอยากให้โบนัสวันนี้ = streak+1 ต้องทำวันต่อเนื่อง
+  const st = getDailyStreak(c);
+  const nextStreak = st.last_date === yesterday() ? st.streak + 1 : 1;
+
   return {
     date,
+    streak: st.streak,
+    nextStreak,
+    bonusMult: bonusMult(nextStreak),
     quests,
     allDone: quests.length > 0 && quests.every((q) => q.complete),
     allClaimed: quests.every((q) => q.claimed) && doneMap.has('ALL_BONUS'),
@@ -91,10 +107,17 @@ export function claimDailyAll(c) {
   const ins = db.prepare('INSERT OR IGNORE INTO daily_quest_done (character_id, date, quest_id) VALUES (?, ?, ?)').run(c.id, date, 'ALL_BONUS');
   if (!ins.changes) return { error: 'รับโบนัสไปแล้ว' };
 
-  const gold = 100 + c.level * 10;
-  const xp = 60 + c.level * 6;
+  // คำนวณ streak: ทำเมื่อวานติดต่อกันไหม?
+  const st = getDailyStreak(c);
+  const nextStreak = st.last_date === yesterday() ? st.streak + 1 : 1;
+  const mult = bonusMult(nextStreak);
+  const gold = Math.round((100 + c.level * 10) * mult);
+  const xp = Math.round((60 + c.level * 6) * mult);
   const ups = gainXp(c, xp);
   c.gold += gold;
+  db.prepare(`INSERT INTO daily_streak (character_id, streak, last_date) VALUES (?, ?, ?)
+    ON CONFLICT(character_id) DO UPDATE SET streak = excluded.streak, last_date = excluded.last_date`)
+    .run(c.id, nextStreak, today());
 
   // ของรางวัลพิเศษ: 40% ได้อุปกรณ์สุ่ม, มิฉะนั้นได้ยาฟื้นฟูเต็ม
   let item = null;
@@ -108,8 +131,8 @@ export function claimDailyAll(c) {
 
   updateCharacter(c);
   addLog(c.id, {
-    type: 'daily_quest', title: '🎁 โบนัสครบทุกภารกิจ', detail: `+${xp} XP, +${gold} ทอง และได้ ${item.icon} ${item.name}!`,
+    type: 'daily_quest', title: '🎁 โบนัสครบทุกภารกิจ', detail: `+${xp} XP, +${gold} ทอง และได้ ${item.icon} ${item.name}! (คอมโบภารกิจ ${nextStreak} วัน)`,
     xp, gold,
   });
-  return { gold, xp, ups, item: { id: item.id, name: item.name, icon: item.icon } };
+  return { gold, xp, ups, item: { id: item.id, name: item.name, icon: item.icon }, streak: nextStreak, mult };
 }

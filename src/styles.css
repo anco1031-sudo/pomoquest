@@ -527,6 +527,27 @@ body {
 }
 
 /* ---------- daily quest ---------- */
+.daily-streak-chip {
+  background: rgba(245, 185, 66, 0.12);
+  border: 1px solid rgba(245, 185, 66, 0.35);
+  color: var(--gold);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+.daily-bonus-mult {
+  background: var(--gold);
+  color: #221a05;
+  font-weight: 900;
+  border-radius: 8px;
+  padding: 1px 8px;
+  margin-left: 6px;
+  font-size: 13px;
+}
+.daily-streak-note { color: var(--green); font-weight: 700; margin-left: 6px; }
 .daily-list { display: flex; flex-direction: column; gap: 8px; }
 .daily-card {
   display: flex;

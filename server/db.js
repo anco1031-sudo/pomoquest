@@ -120,6 +120,12 @@ CREATE TABLE IF NOT EXISTS daily_quest_done (
   claimed_at TEXT DEFAULT (datetime('now','localtime')),
   PRIMARY KEY (character_id, date, quest_id)
 );
+
+CREATE TABLE IF NOT EXISTS daily_streak (
+  character_id INTEGER PRIMARY KEY,
+  streak INTEGER DEFAULT 0,
+  last_date TEXT
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)

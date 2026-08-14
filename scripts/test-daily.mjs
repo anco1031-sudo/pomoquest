@@ -35,11 +35,33 @@ for (const q of after.quests) {
 }
 check('allClaimed ยังเป็น false (ยังไม่ได้โบนัส)', getDailyQuests(c).allClaimed === false);
 
-// รับโบนัสครบทุกภารกิจ
+// รับโบนัสครบทุกภารกิจ (วันแรก → streak 1, คูณ x1.0)
 const bonus = claimDailyAll(c);
-check('โบนัสครบทุกภารกิจ', !bonus.error && bonus.gold > 0 && bonus.item, `(+${bonus.gold} ทอง, ได้ ${bonus.item?.icon} ${bonus.item?.name})`);
+check('โบนัสครบทุกภารกิจ (วันแรก)', !bonus.error && bonus.gold > 0 && bonus.item && bonus.streak === 1 && bonus.mult === 1,
+  `(+${bonus.gold} ทอง, streak ${bonus.streak}, x${bonus.mult.toFixed(1)}, ได้ ${bonus.item?.icon} ${bonus.item?.name})`);
 check('รับโบนัสซ้ำต้อง error', !!claimDailyAll(c).error);
 check('allClaimed = true หลังรับโบนัส', getDailyQuests(c).allClaimed === true);
+
+// จำลองวันถัดไป: ลบแถวโบนัสของวันนี้ แล้วย้าย last_date เป็นเมื่อวาน → ควร streak 2, x1.2
+const clearBonus = () => {
+  db.prepare("DELETE FROM daily_quest_done WHERE character_id = ? AND quest_id = 'ALL_BONUS'").run(c.id);
+};
+clearBonus();
+db.prepare("UPDATE daily_streak SET last_date = date('now','localtime','-1 day') WHERE character_id = ?").run(c.id);
+const bonus2 = claimDailyAll(c);
+check('วันต่อเนื่อง → streak 2 และโบนัสสูงขึ้น', bonus2.streak === 2 && bonus2.mult === 1.2 && bonus2.gold > bonus.gold,
+  `(+${bonus2.gold} ทอง, streak ${bonus2.streak}, x${bonus2.mult.toFixed(1)})`);
+
+// จำลองข้ามวันไป 3 วัน → ควรรีเซ็ต streak เป็น 1, x1.0
+clearBonus();
+db.prepare("UPDATE daily_streak SET last_date = date('now','localtime','-3 day') WHERE character_id = ?").run(c.id);
+const bonus3 = claimDailyAll(c);
+check('ข้ามวัน → streak รีเซ็ตเป็น 1 และโบนัสลดลง', bonus3.streak === 1 && bonus3.mult === 1 && bonus3.gold < bonus2.gold,
+  `(+${bonus3.gold} ทอง, streak ${bonus3.streak}, x${bonus3.mult.toFixed(1)})`);
+
+// getDailyQuests ต้องคืน streak และ bonusMult
+const q = getDailyQuests(c);
+check('getDailyQuests คืน streak/bonusMult', typeof q.streak === 'number' && q.bonusMult >= 1);
 
 console.log(`\nผลลัพธ์: ${pass} ผ่าน, ${fail} ตก`);
 process.exit(fail > 0 ? 1 : 0);

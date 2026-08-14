@@ -33,6 +33,11 @@ export default function DailyQuests() {
   return (
     <Panel title={`📅 ภารกิจประจำวัน (${data.date})`}>
       <p className="panel-text">รีเซ็ตทุกวันเที่ยงคืน — ทำแล้วรับรางวัลพิเศษ!</p>
+      {data.streak > 0 && (
+        <div className="daily-streak-chip">
+          🔥 ภารกิจติดต่อ {data.streak} วัน{data.nextStreak > data.streak ? ` — ทำวันนี้ครบ = ${data.nextStreak} วัน` : ''}
+        </div>
+      )}
 
       <div className="daily-list">
         {quests.map((q) => {
@@ -70,7 +75,9 @@ export default function DailyQuests() {
       {allDone && !allClaimed && (
         <div className="daily-bonus">
           <div className="daily-bonus-text">
-            🎁 ทำครบทุกภารกิจ! รับโบนัสพิเศษ: <b>ทอง + XP</b> และไอเทม
+            🎁 ทำครบทุกภารกิจ! รับโบนัส: <b>ทอง + XP</b> และไอเทม
+            <span className="daily-bonus-mult">x{data.bonusMult.toFixed(1)}</span>
+            {data.nextStreak > 1 && <span className="daily-streak-note">🔥 {data.nextStreak} วันติด!</span>}
           </div>
           <button className="btn btn-primary btn-big" onClick={claimAll}>รับโบนัส ✨</button>
         </div>
