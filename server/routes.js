@@ -59,6 +59,7 @@ router.get('/state', (req, res) => {
     achievements: getAchievementList(c, getProgress(c.id)),
     log: getLog(c.id),
     settings: getSettings(),
+    cities: CITIES.map((city, index) => ({ ...city, index })),
     ...charsPayload(),
     ...dailyPayload(c),
   });
@@ -250,6 +251,29 @@ router.post('/adventure/abort', (req, res) => {
   db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
   addLog(c.id, { type: 'abort', title: '💨 ละทิ้งเซสชัน', detail: 'คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)' });
   res.json({ progress: getProgress(c.id) });
+});
+
+// ----- เดินทาง (ย้อนกลับไปเมืองที่เคยไปมาแล้ว — เสีย 20 ทอง/เมือง) -----
+router.post('/travel', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { cityIndex } = req.body || {};
+  if (!Number.isInteger(cityIndex)) return res.status(400).json({ error: 'ระบุเมืองไม่ถูกต้อง' });
+  if (cityIndex < 0 || cityIndex > c.city_index) return res.status(400).json({ error: 'เดินทางได้เฉพาะเมืองที่เคยไปมาแล้ว' });
+  if (cityIndex === c.city_index) return res.status(400).json({ error: 'คุณอยู่ที่เมืองนี้แล้ว' });
+  const dist = c.city_index - cityIndex;
+  const cost = dist * 20;
+  if (c.gold < cost) return res.status(400).json({ error: `ทองไม่พอ — ต้องใช้ ${cost} ทองเพื่อเดินทางกลับ ${dist} เมือง` });
+  const from = CITIES[c.city_index % CITIES.length];
+  c.gold -= cost;
+  c.city_index = cityIndex;
+  updateCharacter(c);
+  fights.delete(c.id); // เคลียร์สถานะสู้บอสเก่า
+  addLog(c.id, { type: 'travel', title: '🗺️ เดินทาง', detail: `เดินทางจาก ${from.name} กลับสู่ ${CITIES[cityIndex].name} (-${cost} ทอง)`, gold: -cost });
+  res.json({
+    ...serialize(c),
+    progress: getProgress(c.id),
+    message: `🗺️ เดินทางถึง ${CITIES[cityIndex].name} แล้ว (-${cost} ทอง)`,
+  });
 });
 
 // ----- ค่ายพัก (short break) -----

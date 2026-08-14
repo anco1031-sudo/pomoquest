@@ -684,6 +684,25 @@ body {
 .city-log { display: flex; flex-direction: column; }
 .city-log-item { padding: 5px 0; font-size: 13px; color: var(--text); border-bottom: 1px dashed var(--border); }
 
+/* ---------- travel (ย้อนกลับเมือง) ---------- */
+.travel-list { display: flex; flex-direction: column; gap: 8px; }
+.travel-city {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.travel-city.current { border-color: rgba(34, 197, 94, 0.5); }
+.city-ico { font-size: 26px; width: 36px; text-align: center; }
+.city-info { flex: 1; min-width: 0; }
+.city-name { font-size: 14px; font-weight: 800; }
+.travel-city.current .city-name { color: var(--green); }
+.city-sub { font-size: 12px; color: var(--muted); }
+.travel-city .btn { min-height: 36px; padding: 6px 12px; font-size: 12.5px; white-space: nowrap; }
+
 /* ---------- achievement ---------- */
 .achieve-summary {
   text-align: center;
