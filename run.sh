@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# run.sh — ตัวรัน PomoQuest (Pomodoro RPG)
+#
+# วิธีใช้:
+#   ./run.sh            # เท่ากับ dev (โหมดพัฒนา — server :3001 + frontend :5173)
+#   ./run.sh dev        # โหมดพัฒนา (รันหน้าจอ — Ctrl+C เพื่อหยุด)
+#   ./run.sh prod       # build + รัน production ที่ http://localhost:3001 (รันหน้าจอ)
+#   ./run.sh start      # รัน production แบบ background (daemon) — log ที่ /tmp/pomoquest.log
+#   ./run.sh stop       # หยุด server ที่รันอยู่
+#   ./run.sh status     # ดูสถานะ: server / LLM ที่ port 8080
+#   ./run.sh llm        # เช็คว่า LLM (localhost:8080) พร้อมใช้งานไหม
+#   ./run.sh help       # ดูวิธีใช้
+set -euo pipefail
+cd "$(dirname "$0")"
+
+DEV_PORT=5173
+API_PORT=3001
+LLM_PORT=8080
+
+help() {
+  # พิมพ์เฉพาะ block comment ด้านบน (บรรทัดที่ขึ้นต้นด้วย # ยกเว้น shebang)
+  tail -n +2 "$0" | grep '^#' | sed 's/^# \{0,1\}//'
+}
+
+llm_check() {
+  if curl -s -m 3 -o /dev/null "http://localhost:${LLM_PORT}/v1/models"; then
+    echo "✅ LLM พร้อมใช้งานที่ localhost:${LLM_PORT}/v1 (model: \"default\")"
+  else
+    echo "⚠️  ไม่พบ LLM ที่ localhost:${LLM_PORT} — เกมยังรันได้ แต่เรื่องราวการผจญภัยจะใช้ข้อความเดิม"
+    echo "   (รัน g4f / Ollama / LLM server ที่ OpenAI-compatible ไว้ที่ port ${LLM_PORT})"
+    return 1
+  fi
+}
+
+status() {
+  echo "=== PomoQuest สถานะ ==="
+  if pgrep -f "node server/index.js" >/dev/null 2>&1; then
+    echo "✅ server: กำลังรัน (API ที่ http://localhost:${API_PORT})"
+  else
+    echo "⛔ server: ยังไม่รัน"
+  fi
+  if curl -s -m 2 -o /dev/null "http://localhost:${DEV_PORT}"; then
+    echo "✅ frontend (dev): กำลังรันที่ http://localhost:${DEV_PORT}"
+  else
+    echo "⛔ frontend (dev): ยังไม่รัน"
+  fi
+  llm_check || true
+}
+
+case "${1:-dev}" in
+  dev)
+    echo "🚀 โหมดพัฒนา: server :${API_PORT} + frontend :${DEV_PORT} (http://localhost:${DEV_PORT})"
+    echo "   (หยุดด้วย Ctrl+C)"
+    npm run dev
+    ;;
+  prod)
+    echo "🔨 build + รัน production ที่ http://localhost:${API_PORT}"
+    npm run build
+    npm start
+    ;;
+  start)
+    echo "🔨 build + รัน production แบบ background…"
+    npm run build
+    nohup npm start > /tmp/pomoquest.log 2>&1 &
+    echo "✅ รันแล้ว: http://localhost:${API_PORT}  (log: /tmp/pomoquest.log, หยุดด้วย ./run.sh stop)"
+    ;;
+  stop)
+    if pkill -f "node server/index.js" 2>/dev/null; then
+      echo "🛑 หยุด server แล้ว"
+    else
+      echo "ℹ️  ไม่มี server รันอยู่"
+    fi
+    ;;
+  status)
+    status
+    ;;
+  llm)
+    llm_check
+    ;;
+  help | -h | --help)
+    help
+    ;;
+  *)
+    echo "ไม่รู้จักคำสั่ง: $1" >&2
+    help
+    exit 1
+    ;;
+esac

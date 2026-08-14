@@ -36,6 +36,19 @@ PomoQuest ผสม **เทคนิค Pomodoro** เข้ากับ **เ�
 
 ## 🚀 วิธีรัน
 
+**รันง่ายด้วย script** (ดูวิธีใช้เต็ม: `./run.sh help`):
+
+```bash
+./run.sh            # โหมดพัฒนา (server :3001 + frontend :5173)
+./run.sh prod       # build + รัน production ที่ http://localhost:3001
+./run.sh start      # รัน production แบบ background (log: /tmp/pomoquest.log)
+./run.sh stop       # หยุด server
+./run.sh status     # ดูสถานะ server + LLM
+./run.sh llm        # เช็คว่า LLM ที่ localhost:8080 พร้อมใช้ไหม
+```
+
+หรือรันด้วย npm ตรง ๆ:
+
 ```bash
 npm install          # ติดตั้ง dependencies (ครั้งแรก)
 npm run dev          # โหมดพัฒนา — server :3001 + frontend :5173 (เปิด http://localhost:5173)
