@@ -114,6 +114,39 @@ npm start            # รัน server เดียว เสิร์ฟทั
 - **exclusive:** ไอเทม `exclusive: true` จะถูกกรองออกจากร้านและดรอปทั้งหมดอัตโนมัติ — ใช้สำหรับของ Daily Quest เท่านั้น
 - **เมือง & บอส:** เพิ่มได้เหมือนกัน (เพิ่ม `CITIES` + `BOSSES` คู่กัน จำนวนต้องเท่ากัน เพราะบอสผูก index กับเมือง) — แต่ระวังตราลับ "ผู้พิชิตแอสการ์ด" ที่ผูกกับ index เมืองที่ 8 (แก้ใน `data.js` → `SECRET_ACHIEVEMENTS` ได้)
 
+## 🤖 ระบบ LLM (เนื้อเรื่องสุ่มเสริม)
+
+เกมสามารถเชื่อม **LLM** เพื่อเขียน "เรื่องราวการผจญภัย" สั้น ๆ ลงในบันทึกหลังจบแต่ละ session (📖 เรื่องราวการผจญภัย) — เนื้อเรื่องไม่ซ้ำเดิมทุกครั้ง ภาษาไทยปนอังกฤษตามสไตล์เกม
+
+> ⚠️ LLM เขียนแค่ **ข้อความบรรยายเท่านั้น** — XP/ทอง/ไอเทม/รางวัลทั้งหมดยังคำนวณที่ server ตามเดิม (กันโกง + กัน balance พัง) และ **ถ้าไม่มี key หรือ API error เกมจะใช้ข้อความตายตัวเดิมปกติ** ไม่พัง
+
+### วิธีเปิดใช้ (env variables)
+
+```bash
+LLM_API_KEY=your_key_here    # key / credits token — จำเป็น
+LLM_BASE_URL=https://g4f.space/v1   # (ไม่บังคับ) base URL ของ API
+LLM_MODEL=default            # (ไม่บังคับ) ชื่อโมเดล — ค่า default คือ "default"
+LLM_TIMEOUT_MS=15000         # (ไม่บังคับ) timeout ต่อ request
+```
+
+ตัวอย่างรันแบบมี LLM:
+
+```bash
+LLM_API_KEY=xxxx npm run dev
+```
+
+### ใช้กับ g4f.dev (ฟรี)
+
+- โมดูลใช้ API รูปแบบ **OpenAI-compatible** (`POST {base}/chat/completions` กับ `model: "default"`) — endpoint เดียวกับที่ `g4f.dev/dist/js/client.js` ใช้
+- ตอนนี้ทุก endpoint ของ g4f.space ต้องมี **cake credits** — ไป bake proof-of-work ฟรีที่ `g4f.dev/chat` (หรือสมัครสมาชิกเอา key ที่ `g4f.dev/members.html`) แล้วเอา key นั้นมาใส่ `LLM_API_KEY`
+- ใช้ provider อื่นที่ OpenAI-compatible ก็ได้ (เช่น Ollama local: `LLM_BASE_URL=http://localhost:11434/v1`) — แค่เปลี่ยน `LLM_BASE_URL` + `LLM_MODEL`
+
+### จุดที่ LLM ถูกใช้ตอนนี้
+
+| จุด | ผลลัพธ์ |
+|---|---|
+| หลังจบ work session (`/adventure/complete`) | เขียนเรื่องราว 2-3 ประโยคจากบริบท (ตัวละคร/เมือง/เวลาที่โฟกัส/คอมโบ) → บันทึกเป็น log "📖 เรื่องราวการผจญภัย" |
+
 ## 🔌 API หลัก
 
 | Method | Path | ความหมาย |
@@ -137,6 +170,7 @@ npm start            # รัน server เดียว เสิร์ฟทั
 npm run build             # ตรวจว่า compile ผ่าน
 npm run test:achievements # ทดสอบเงื่อนไขตราลับทั้ง 15 ตรา (ใช้ DB ชั่วคราว)
 npm run test:daily       # ทดสอบระบบ Daily Quest (สุ่ม/รับรางวัล/โบนัส)
+npm run test:llm         # ทดสอบโมดูล LLM (mock server — ไม่ต้องใช้เครดิตจริง)
 # ทดสอบ API: รัน `npm start` แล้วใช้ curl ตามตาราง API ด้านบน
 ```
 

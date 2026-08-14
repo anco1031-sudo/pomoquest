@@ -12,6 +12,7 @@ import {
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
+import { llmChat } from './llm.js';
 
 const router = Router();
 
@@ -214,6 +215,20 @@ router.post('/adventure/complete', (req, res) => {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
     xp, gold, focusSec,
   });
+
+  // สรุปการผจญภัยด้วย LLM (ถ้าเปิดใช้) — fire-and-forget: ไม่บล็อก response, error → เงียบ (เกมใช้ข้อความเดิม)
+  const city = CITIES[c.city_index % CITIES.length];
+  llmChat({
+    system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story in Thai mixed with English (like the game\'s style). Narrate only what happened during this focus session — never invent rewards, numbers, items or levels. Keep it fun and concise.',
+    user: JSON.stringify({
+      character: c.name, class: CLASSES[c.class]?.name || c.class, level: c.level,
+      city: city.name, terrain: city.terrain,
+      focusMinutes: Math.round(focusSec / 60), streak: prog.streak,
+      xpGained: xp, goldGained: gold, sessionsCompleted: prog.sessions_completed,
+    }),
+  }).then((tale) => {
+    if (tale) addLog(c.id, { type: 'llm_tale', title: '📖 เรื่องราวการผจญภัย', detail: tale.slice(0, 500) });
+  }).catch(() => {});
   // ตัวนับรายวัน (Daily Quest)
   bumpDaily(c.id, 'sessions');
   bumpDaily(c.id, 'focus_sec', focusSec);
