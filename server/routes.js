@@ -35,6 +35,14 @@ const charBrief = (c) => ({
 
 const charsPayload = () => ({ characters: getCharacters().map(charBrief), activeCharacterId: getActiveCharacterId() });
 
+// เช็คชื่อซ้ำ (ไม่แยกตัวพิมพ์เล็ก/ใหญ่)
+const nameTaken = (name, excludeId = null) => {
+  const row = excludeId
+    ? db.prepare('SELECT id FROM character WHERE name = ? COLLATE NOCASE AND id != ?').get(name, excludeId)
+    : db.prepare('SELECT id FROM character WHERE name = ? COLLATE NOCASE').get(name);
+  return !!row;
+};
+
 // ----- สถานะรวม -----
 router.get('/state', (req, res) => {
   const c = getCharacter();
@@ -67,6 +75,7 @@ router.post('/character/create', (req, res) => {
   const { name, class: cls } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'ต้องตั้งชื่อตัวละคร' });
   if (!CLASSES[cls]) return res.status(400).json({ error: 'เลือกคลาสไม่ถูกต้อง' });
+  if (nameTaken(name.trim())) return res.status(400).json({ error: `มีตัวละครชื่อ "${name.trim()}" อยู่แล้ว — ลองชื่ออื่น` });
 
   const b = CLASSES[cls].base;
   const info = db.prepare(`INSERT INTO character (name, class, hp, max_hp, mp, max_mp, atk, def, spd, crit)
@@ -90,6 +99,7 @@ router.post('/character/rename', (req, res) => {
   const { name } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'ต้องตั้งชื่อตัวละคร' });
   const newName = name.trim().slice(0, 20);
+  if (nameTaken(newName, c.id)) return res.status(400).json({ error: `มีตัวละครชื่อ "${newName}" อยู่แล้ว` });
   db.prepare('UPDATE character SET name = ? WHERE id = ?').run(newName, c.id);
   const updated = db.prepare('SELECT * FROM character WHERE id = ?').get(c.id);
   addLog(c.id, { type: 'system', title: '📝 เปลี่ยนชื่อ', detail: `เปลี่ยนชื่อเป็น ${newName}` });
@@ -97,7 +107,9 @@ router.post('/character/rename', (req, res) => {
 });
 
 router.post('/character/delete', (req, res) => {
-  const { id } = req.body || {};
+  const { id, confirm } = req.body || {};
+  // กันลบโดยไม่ตั้งใจ — ต้องส่ง confirm: true (จาก UI ที่กดยืนยัน 2 ครั้ง)
+  if (confirm !== true) return res.status(400).json({ error: 'ต้องยืนยันการลบตัวละครก่อน' });
   const target = db.prepare('SELECT id FROM character WHERE id = ?').get(id);
   if (!target) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
   deleteCharacter(id);

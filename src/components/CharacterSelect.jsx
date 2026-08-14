@@ -6,11 +6,13 @@ import CharacterCreation from './CharacterCreation.jsx';
 export default function CharacterSelect({ standalone = false, onClose, onDone }) {
   const { characters, activeCharacterId, post, refresh } = useGame();
   const [showCreate, setShowCreate] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   if (showCreate) return <CharacterCreation />;
 
   const select = async (c) => {
     sfx.click();
+    setConfirmDeleteId(null);
     await post('/character/select', { id: c.id });
     await refresh();
     onDone?.();
@@ -25,16 +27,24 @@ export default function CharacterSelect({ standalone = false, onClose, onDone })
     }
   };
 
+  // กันลบโดยไม่ตั้งใจ: กดครั้งแรก = เริ่มยืนยัน, กดครั้งที่สอง = ลบจริง
   const remove = async (c) => {
-    if (!window.confirm(`ลบตัวละคร "${c.name}"? ข้อมูล เลเวล และไอเทมทั้งหมดจะหายไปถาวร`)) return;
     sfx.click();
-    const d = await post('/character/delete', { id: c.id });
+    if (confirmDeleteId !== c.id) {
+      setConfirmDeleteId(c.id);
+      return;
+    }
+    setConfirmDeleteId(null);
+    const d = await post('/character/delete', { id: c.id, confirm: true });
     if (d) await refresh();
   };
 
   const content = (
     <div className={standalone ? 'select-screen' : 'modal character-select-modal'}>
       <div className="select-title">👥 เลือกตัวละคร</div>
+      <p className="hint" style={{ textAlign: 'left', marginTop: 0, marginBottom: 10 }}>
+        🛡️ ลบตัวละครต้องกด 🗑️ ยืนยัน 2 ครั้ง เพื่อกันลบโดยไม่ตั้งใจ
+      </p>
       {characters.length === 0 && <p className="hint">ยังไม่มีตัวละคร — สร้างกันเลย!</p>}
 
       {characters.map((c) => (
@@ -53,16 +63,25 @@ export default function CharacterSelect({ standalone = false, onClose, onDone })
               <button className="btn btn-sm btn-primary" onClick={() => select(c)}>เลือก</button>
             )}
             <button className="btn btn-sm" onClick={() => rename(c)} title="เปลี่ยนชื่อ">✏️</button>
-            <button className="btn btn-sm btn-danger-soft" onClick={() => remove(c)} title="ลบตัวละคร">🗑️</button>
+            <button
+              className={`btn btn-sm ${confirmDeleteId === c.id ? 'btn-danger' : 'btn-danger-soft'}`}
+              onClick={() => remove(c)}
+              title={confirmDeleteId === c.id ? 'กดอีกครั้งเพื่อยืนยันการลบ' : 'ลบตัวละคร'}
+            >
+              {confirmDeleteId === c.id ? 'ยืนยันลบ?' : '🗑️'}
+            </button>
           </div>
         </div>
       ))}
 
-      <button className="btn btn-primary btn-big" onClick={() => setShowCreate(true)}>
+      <button
+        className="btn btn-primary btn-big"
+        onClick={() => { setConfirmDeleteId(null); setShowCreate(true); }}
+      >
         ✨ สร้างตัวละครใหม่
       </button>
       {!standalone && (
-        <button className="btn" onClick={onClose}>ปิด</button>
+        <button className="btn" onClick={() => { setConfirmDeleteId(null); onClose(); }}>ปิด</button>
       )}
     </div>
   );
