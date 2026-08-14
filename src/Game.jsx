@@ -8,6 +8,7 @@ import CampScreen from './components/CampScreen.jsx';
 import BossScreen from './components/BossScreen.jsx';
 import EventModal from './components/EventModal.jsx';
 import LevelUpModal from './components/LevelUpModal.jsx';
+import AchievementModal from './components/AchievementModal.jsx';
 import Toast from './components/Toast.jsx';
 
 const STORE_KEY = 'pomoquest-timer';
@@ -24,7 +25,7 @@ function loadTimer() {
 }
 
 export default function Game() {
-  const { loading, hasCharacter, character, settings, post, get, eventQueue, closeEvent, levelUp, dismissLevelUp } = useGame();
+  const { loading, hasCharacter, character, settings, post, get, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUp, dismissLevelUp } = useGame();
 
   const [phase, setPhase] = useState('idle'); // idle | work | short_break | long_break
   const [sessionIdx, setSessionIdx] = useState(1);
@@ -246,6 +247,8 @@ export default function Game() {
       )}
 
       {eventQueue.length > 0 && <EventModal event={eventQueue[0]} onClose={closeEvent} />}
+
+      {achieveQueue.length > 0 && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
 
       {levelUp && <LevelUpModal levelUp={levelUp} onClose={dismissLevelUp} />}
 

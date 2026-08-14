@@ -95,7 +95,22 @@ CREATE TABLE IF NOT EXISTS log (
   gold INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS achievement_unlock (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  character_id INTEGER NOT NULL,
+  achievement_id TEXT NOT NULL,
+  unlocked_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(character_id, achievement_id)
+);
 `);
+
+// migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)
+function ensureColumn(table, column, def) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+}
+ensureColumn('progress', 'quests_completed', 'INTEGER DEFAULT 0');
 
 // seed items
 const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, price, lvl)

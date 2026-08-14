@@ -525,6 +525,56 @@ body {
   text-align: center;
 }
 
+/* ---------- achievement ---------- */
+.achieve-summary {
+  text-align: center;
+  background: linear-gradient(135deg, rgba(245, 185, 66, 0.12), var(--panel));
+  border: 1px solid rgba(245, 185, 66, 0.35);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+.achieve-summary b { color: var(--gold); font-size: 17px; }
+
+.achieve-grid { display: flex; flex-direction: column; gap: 8px; }
+.achieve-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  opacity: 0.75;
+}
+.achieve-card.unlocked {
+  opacity: 1;
+  border-color: rgba(245, 185, 66, 0.45);
+  background: linear-gradient(135deg, rgba(245, 185, 66, 0.1), var(--bg));
+}
+.achieve-icon { font-size: 28px; width: 40px; text-align: center; }
+.achieve-icon.dim { filter: grayscale(1); opacity: 0.6; }
+.achieve-body { flex: 1; min-width: 0; }
+.achieve-name { font-size: 14px; font-weight: 800; }
+.achieve-card.unlocked .achieve-name { color: var(--gold); }
+.achieve-desc { font-size: 12px; color: var(--muted); }
+.achieve-date { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.achieve-progress { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.achieve-progress .bar { flex: 1; height: 8px; }
+.achieve-count { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+.achieve-modal { text-align: center; border-top: 4px solid var(--gold); animation: achievePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes achievePop {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+.achieve-modal .achieve-icon { font-size: 56px; margin-bottom: 4px; animation: bob 1.2s ease-in-out infinite; }
+.achieve-label { color: var(--gold); font-weight: 800; letter-spacing: 1px; font-size: 13px; }
+.achieve-modal .achieve-name { font-size: 24px; font-weight: 900; margin: 4px 0; color: var(--text); }
+.achieve-modal .achieve-desc { color: var(--muted); font-size: 14px; margin-bottom: 10px; }
+.achieve-rewards { display: flex; justify-content: center; gap: 12px; font-size: 15px; font-weight: 800; margin-bottom: 16px; }
+
 /* ---------- splash ---------- */
 .splash {
   display: flex;

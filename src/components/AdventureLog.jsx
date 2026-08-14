@@ -5,6 +5,7 @@ const TYPE_ICON = {
   battle_win: '🗡️', battle_lose: '💨', treasure: '🎁', shrine: '⛩️', merchant: '🧙', trap: '⚠️',
   session_done: '✅', abort: '💨', shop: '🛒', equip: '🔧', rest: '🔥',
   quest_win: '📜', quest_fail: '📜', boss_win: '🏆', boss_lose: '💨', system: '🎒',
+  achievement: '🏅',
 };
 
 function fmtLogTime(iso) {

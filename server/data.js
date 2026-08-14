@@ -123,3 +123,34 @@ export const QUESTS = [
 ];
 
 export const SHOP_STOCK = ITEMS.filter((i) => i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id));
+
+// ----- Achievement (stat = ตัวเลขที่ใช้เปรียบเทียบ ดูใน achievements.js) -----
+export const ACHIEVEMENTS = [
+  { id: 'first_step',  name: 'ก้าวแรก',          icon: '🐣', stat: 'sessions',  target: 1,    reward: { gold: 20 }, desc: 'ทำโฟกัสครบ 1 session' },
+  { id: 'first_level', name: 'เริ่มเติบโต',      icon: '⬆️', stat: 'level',     target: 2,    reward: { gold: 25 }, desc: 'อัพเป็นเลเวล 2' },
+  { id: 'first_boss',  name: 'นักล่าบอส',       icon: '⚔️', stat: 'bosses',    target: 1,    reward: { gold: 100 }, desc: 'ชนะบอสตัวแรก' },
+  { id: 'treasure_5',  name: 'นักล่าสมบัติ',     icon: '💰', stat: 'treasures', target: 5,    reward: { gold: 50 }, desc: 'เจอสมบัติ 5 ครั้ง' },
+  { id: 'monster_10',  name: 'นักกำจัดมอนสเตอร์', icon: '🐺', stat: 'monsters',  target: 10,   reward: { gold: 50 }, desc: 'กำจัดมอนสเตอร์ 10 ตัว' },
+  { id: 'quest_5',     name: 'นักทำภารกิจ',     icon: '📜', stat: 'quests',    target: 5,    reward: { gold: 50 }, desc: 'ทำภารกิจสำเร็จ 5 ครั้ง' },
+  { id: 'streak_3',    name: 'คอมโบเริ่มต้น',    icon: '🧵', stat: 'streak',    target: 3,    reward: { gold: 30 }, desc: 'คอมโบโฟกัส 3 session ติดต่อ' },
+  { id: 'equip_all',   name: 'พร้อมรบเต็มยศ',   icon: '🔧', stat: 'equip',     target: 1,    reward: { gold: 50 }, desc: 'สวมอุปกรณ์ครบทั้ง 3 ช่อง' },
+  { id: 'focus_5h',    name: 'ห้าชั่วโมงแห่งโฟกัส', icon: '⏳', stat: 'focus_sec', target: 18000, reward: { gold: 100 }, desc: 'โฟกัสรวม 5 ชั่วโมง' },
+  { id: 'gold_1000',   name: 'เศรษฐีน้อย',      icon: '🏦', stat: 'gold_earned', target: 1000, reward: { gold: 50 }, desc: 'สะสมทองรวม 1,000' },
+
+  { id: 'focus_10',    name: 'นักโฟกัส',        icon: '🎯', stat: 'sessions',  target: 10,   reward: { gold: 50 }, desc: 'ทำโฟกัสครบ 10 session' },
+  { id: 'level_5',     name: 'นักผจญภัย',      icon: '🛡️', stat: 'level',     target: 5,    reward: { gold: 50 }, desc: 'อัพเป็นเลเวล 5' },
+  { id: 'boss_5',      name: 'นักล่าบอสสายอาชีพ', icon: '🗡️', stat: 'bosses',   target: 5,    reward: { gold: 250 }, desc: 'ชนะบอส 5 ตัว' },
+  { id: 'treasure_20', name: 'ราชาสมบัติ',      icon: '💎', stat: 'treasures', target: 20,   reward: { gold: 200 }, desc: 'เจอสมบัติ 20 ครั้ง' },
+  { id: 'monster_50',  name: 'นักล่ามอนสเตอร์', icon: '💀', stat: 'monsters',  target: 50,   reward: { gold: 200 }, desc: 'กำจัดมอนสเตอร์ 50 ตัว' },
+  { id: 'quest_15',    name: 'สายภารกิจ',      icon: '🏅', stat: 'quests',    target: 15,   reward: { gold: 150 }, desc: 'ทำภารกิจสำเร็จ 15 ครั้ง' },
+  { id: 'streak_7',    name: 'คอมโบร้อนแรง',   icon: '⚡', stat: 'streak',    target: 7,    reward: { gold: 100 }, desc: 'คอมโบโฟกัส 7 session ติดต่อ' },
+  { id: 'traveler',    name: 'นักเดินทาง',      icon: '🚶', stat: 'cycles',    target: 2,    reward: { gold: 100 }, desc: 'เดินทางครบ 2 รอบเมือง' },
+  { id: 'focus_20h',   name: 'ยี่สิบชั่วโมงแห่งโฟกัส', icon: '🧘', stat: 'focus_sec', target: 72000, reward: { gold: 300 }, desc: 'โฟกัสรวม 20 ชั่วโมง' },
+  { id: 'gold_5000',   name: 'เศรษฐีใหม่',      icon: '💰', stat: 'gold_earned', target: 5000, reward: { gold: 200 }, desc: 'สะสมทองรวม 5,000' },
+
+  { id: 'focus_50',    name: 'สายโฟกัสตัวจริง', icon: '🔥', stat: 'sessions',  target: 50,   reward: { gold: 200 }, desc: 'ทำโฟกัสครบ 50 session' },
+  { id: 'level_10',    name: 'นักรบผู้แข็งแกร่ง', icon: '🗡️', stat: 'level',    target: 10,   reward: { gold: 150 }, desc: 'อัพเป็นเลเวล 10' },
+  { id: 'boss_10',     name: 'ราชันย์นักล่าบอส', icon: '🐲', stat: 'bosses',   target: 10,   reward: { gold: 500 }, desc: 'ชนะบอส 10 ตัว' },
+  { id: 'focus_100',   name: 'ตำนานแห่งโฟกัส', icon: '👑', stat: 'sessions',  target: 100,  reward: { gold: 500 }, desc: 'ทำโฟกัสครบ 100 session' },
+  { id: 'level_20',    name: 'ตำนานมีชีวิต',    icon: '🌟', stat: 'level',     target: 20,   reward: { gold: 400 }, desc: 'อัพเป็นเลเวล 20' },
+];

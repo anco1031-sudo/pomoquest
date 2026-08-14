@@ -10,6 +10,7 @@ import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn,
   rollQuests, resolveQuest,
 } from './game.js';
+import { checkAchievements, getAchievementList } from './achievements.js';
 
 const router = Router();
 
@@ -33,9 +34,16 @@ router.get('/state', (req, res) => {
     ...serialize(c),
     inventory: getInventory(c.id),
     progress: getProgress(c.id),
+    achievements: getAchievementList(c, getProgress(c.id)),
     log: getLog(c.id),
     settings: getSettings(),
   });
+});
+
+// รายการ achievement ทั้งหมด (สำหรับหน้า "ตรา")
+router.get('/achievements', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  res.json({ achievements: getAchievementList(c, getProgress(c.id)) });
 });
 
 // ----- ตัวละคร -----
@@ -93,11 +101,13 @@ router.post('/adventure/event', (req, res) => {
   if (ev.key === 'treasure') patch = { treasures_found: prog.treasures_found + 1 };
   if (patch) db.prepare('UPDATE progress SET monsters_slain=?, treasures_found=? WHERE id=?').run(
     patch.monsters_slain ?? prog.monsters_slain, patch.treasures_found ?? prog.treasures_found, prog.id);
+  const ach = checkAchievements(c, prog);
   res.json({
     ...serialize(c),
     event: ev,
     progress: getProgress(c.id),
-    levelUps: { levels: ev.ups || 0, statPoints: c.stat_points },
+    achievements: ach.fresh,
+    levelUps: { levels: (ev.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
 });
 
@@ -127,11 +137,13 @@ router.post('/adventure/complete', (req, res) => {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
     xp, gold,
   });
+  const ach = checkAchievements(c, prog);
   res.json({
     ...serialize(c),
     progress: getProgress(c.id),
     reward: { xp, gold, bonus, streak: prog.streak },
-    levelUps: { levels: ups, statPoints: c.stat_points },
+    achievements: ach.fresh,
+    levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
   });
 });
 
@@ -217,7 +229,8 @@ router.post('/inventory/equip', (req, res) => {
   c[slot] = itemId;
   updateCharacter(c);
   addLog(c.id, { type: 'equip', title: '🔧 สวมใส่', detail: `สวม ${item.icon} ${item.name}` });
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `สวม ${item.name} เรียบร้อย` });
+  const ach = checkAchievements(c, getProgress(c.id));
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `สวม ${item.name} เรียบร้อย`, achievements: ach.fresh, levelUps: { levels: ach.ups, statPoints: c.stat_points } });
 });
 
 router.post('/camp/rest', (req, res) => {
@@ -239,7 +252,19 @@ router.post('/quest/do', (req, res) => {
   updateCharacter(c);
   if (result.item) addItem(c.id, result.item.id);
   addLog(c.id, { type: result.success ? 'quest_win' : 'quest_fail', title: `📜 ${quest.title}`, detail: result.detail, xp: result.xp, gold: result.gold });
-  res.json({ ...serialize(c), result, inventory: getInventory(c.id), levelUps: { levels: result.ups || 0, statPoints: c.stat_points } });
+  // นับภารกิจที่ทำสำเร็จ
+  const prog = getProgress(c.id);
+  if (result.success) {
+    prog.quests_completed += 1;
+    db.prepare('UPDATE progress SET quests_completed = ? WHERE id = ?').run(prog.quests_completed, prog.id);
+  }
+  const ach = checkAchievements(c, prog);
+  res.json({
+    ...serialize(c), result, inventory: getInventory(c.id),
+    achievements: ach.fresh,
+    progress: getProgress(c.id),
+    levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
+  });
 });
 
 // ----- บอส (long break) -----
@@ -264,6 +289,7 @@ router.post('/boss/act', (req, res) => {
 
   updateCharacter(c);
 
+  let ach = { fresh: [], ups: 0 };
   if (result.outcome === 'win') {
     const prog = getProgress(c.id);
     prog.cycles_completed += 1;
@@ -275,6 +301,7 @@ router.post('/boss/act', (req, res) => {
     updateCharacter(c);
     fights.delete(c.id);
     addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} และเดินทางสู่ ${CITIES[c.city_index].name}!`, xp: result.xp, gold: result.gold });
+    ach = checkAchievements(c, prog);
   }
   res.json({
     ...serialize(c),
@@ -284,7 +311,8 @@ router.post('/boss/act', (req, res) => {
     item: result.item || null,
     inventory: getInventory(c.id),
     progress: getProgress(c.id),
-    levelUps: { levels: result.ups || 0, statPoints: c.stat_points },
+    achievements: ach.fresh,
+    levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
 });
 

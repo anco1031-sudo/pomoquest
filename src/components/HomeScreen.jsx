@@ -4,16 +4,18 @@ import { sfx, setMuted, isMuted } from '../sound.js';
 import { Bar, Panel, fmtDuration } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
+import AchievementList from './AchievementList.jsx';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
   { key: 'sheet', label: 'ตัวละคร', icon: '🛡️' },
   { key: 'log', label: 'บันทึก', icon: '📜' },
+  { key: 'achieve', label: 'ตรา', icon: '🏅' },
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
 export default function HomeScreen({ onStart }) {
-  const { character, progress, settings, put, refresh, showToast, post } = useGame();
+  const { character, progress, settings, achievements, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
 
@@ -106,6 +108,8 @@ export default function HomeScreen({ onStart }) {
                 <div className="stat-box"><b>{fmtDuration(progress?.total_focus_sec || 0)}</b><span>เวลาที่โฟกัส</span></div>
                 <div className="stat-box"><b>{progress?.gold_earned || 0}</b><span>ทองที่หามาได้</span></div>
                 <div className="stat-box"><b>{progress?.best_streak || 0}</b><span>คอมโบสูงสุด</span></div>
+                <div className="stat-box"><b>{achievements?.unlocked || 0}/{achievements?.total || 25}</b><span>ตรา</span></div>
+                <div className="stat-box"><b>{progress?.quests_completed || 0}</b><span>ภารกิจสำเร็จ</span></div>
               </div>
             </Panel>
 
@@ -115,6 +119,7 @@ export default function HomeScreen({ onStart }) {
 
         {tab === 'sheet' && <CharacterSheet />}
         {tab === 'log' && <AdventureLog limit={50} />}
+        {tab === 'achieve' && <AchievementList />}
 
         {tab === 'settings' && (
           <div className="panel">
