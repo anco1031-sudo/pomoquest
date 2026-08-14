@@ -1,22 +1,25 @@
 // server/llm.js — โมดูล LLM แบบ pluggable (OpenAI-compatible chat completions)
 //
+// ค่า default: ชี้ไปที่ localhost:8080/v1 (เช่น g4f local instance / Ollama) และเปิดใช้เองอัตโนมัติ
 // ตั้งค่าผ่าน env (ดู README):
-//   LLM_API_KEY    = key / credits token (สำหรับ g4f: key จาก g4f.dev/members.html)
-//   LLM_ENABLED    = "1" เปิดใช้โดยไม่ต้องส่ง key — สำหรับกรณี credits ผูกกับ IP
-//                    (bake cake credits ฟรีที่ g4f.dev/chat แล้วเครื่องนั้นใช้ได้) หรือ Ollama local ที่ไม่ต้อง auth
-//   LLM_BASE_URL   = base URL ของ API (default: https://g4f.space/v1 — endpoint เดียวกับที่ g4f client.js ใช้)
+//   LLM_BASE_URL   = base URL ของ API (default: http://localhost:8080/v1 — เรียก LLM ในเครื่อง)
+//   LLM_API_KEY    = key / credits token (สำหรับ g4f.space: key จาก g4f.dev/members.html)
+//   LLM_ENABLED    = "1" บังคับเปิดใช้ / "0" บังคับปิด — สำหรับ remote ที่ต้อง auth (เช่น g4f.space)
 //   LLM_MODEL      = ชื่อโมเดล (default: "default" — ตามที่ตั้งไว้ในเกม)
-//   LLM_TIMEOUT_MS = timeout ของแต่ละ request (default: 15000)
+//   LLM_TIMEOUT_MS = timeout ของแต่ละ request (default: 30000 — เผื่อ cold start ของโมเดล local)
 //
 // หลักการสำคัญ: ปิดใช้งาน / เรียกไม่สำเร็จ / ตอบไม่ครบ → คืน null เสมอ
 // ฝั่งที่เรียกใช้ fallback กลับไปใช้ข้อความตายตัวเดิม — เกมไม่เคยพังเพราะ LLM
 
-const BASE_URL = (process.env.LLM_BASE_URL || 'https://g4f.space/v1').replace(/\/+$/, '');
+const BASE_URL = (process.env.LLM_BASE_URL || 'http://localhost:8080/v1').replace(/\/+$/, '');
 const API_KEY = process.env.LLM_API_KEY || '';
 const FORCE_ENABLED = process.env.LLM_ENABLED === '1' || process.env.LLM_ENABLED === 'true';
+const FORCE_DISABLED = process.env.LLM_ENABLED === '0' || process.env.LLM_ENABLED === 'false';
+const IS_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?($|\/)/.test(BASE_URL);
 const MODEL = process.env.LLM_MODEL || 'default';
-const TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '15000', 10);
-const ENABLED = FORCE_ENABLED || !!API_KEY;
+const TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '30000', 10);
+// เปิดใช้เมื่อ: ไม่ถูกบังคับปิด และ (มี key หรือ ชี้ไป localhost หรือ ถูกบังคับเปิด)
+const ENABLED = !FORCE_DISABLED && (FORCE_ENABLED || !!API_KEY || IS_LOCAL);
 
 export function llmEnabled() {
   return ENABLED;

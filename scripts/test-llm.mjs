@@ -71,9 +71,19 @@ ok('llmEnabled() = true เมื่อ LLM_ENABLED=1', child2Result.enabled ===
 ok('llmChat ทำงานได้แบบไม่มี key', child2Result.out === 'เรื่องราวจาก LLM (mock) OK', String(child2Result.out));
 ok('ไม่ส่ง Authorization header (ไม่ต้อง auth)', received.auth === null, String(received.auth));
 
-console.log('llm.js — ปิดใช้งาน (ไม่มี key ไม่มี LLM_ENABLED)');
-const childResult = await runChild({ LLM_API_KEY: '', LLM_ENABLED: '', LLM_BASE_URL: '' });
-ok('llmEnabled() = false เมื่อไม่มี key', childResult.enabled === false, JSON.stringify(childResult));
+console.log('llm.js — ค่า default: ชี้ localhost:8080/v1 และเปิดใช้อัตโนมัติ');
+// ไม่ตั้ง env อะไรเลย → base = http://localhost:8080/v1 (local → auto-enable)
+const childDefault = await runChild({ LLM_API_KEY: '', LLM_ENABLED: '', LLM_BASE_URL: '' });
+ok('llmEnabled() = true เมื่อ base เป็น localhost (auto-enable)', childDefault.enabled === true, JSON.stringify(childDefault));
+
+console.log('llm.js — fallback เมื่อไม่มี server (connection refused)');
+// ชี้ไป port ที่ไม่มีใครฟัง (127.0.0.1:1) — ต้องคืน null เงียบ ๆ
+const childRefused = await runChild({ LLM_API_KEY: '', LLM_ENABLED: '1', LLM_BASE_URL: 'http://127.0.0.1:1/v1' });
+ok('llmChat คืน null เมื่อ connection refused (fallback เงียบ)', childRefused.out === null, String(childRefused.out));
+
+console.log('llm.js — ปิดใช้งาน (remote URL + ไม่มี key ไม่มี LLM_ENABLED)');
+const childResult = await runChild({ LLM_API_KEY: '', LLM_ENABLED: '', LLM_BASE_URL: 'https://g4f.space/v1' });
+ok('llmEnabled() = false เมื่อ remote และไม่มี key', childResult.enabled === false, JSON.stringify(childResult));
 ok('llmChat คืน null เมื่อปิดใช้งาน', childResult.out === null);
 
 server.close();

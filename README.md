@@ -120,40 +120,34 @@ npm start            # รัน server เดียว เสิร์ฟทั
 
 > ⚠️ LLM เขียนแค่ **ข้อความบรรยายเท่านั้น** — XP/ทอง/ไอเทม/รางวัลทั้งหมดยังคำนวณที่ server ตามเดิม (กันโกง + กัน balance พัง) และ **ถ้าไม่มี key หรือ API error เกมจะใช้ข้อความตายตัวเดิมปกติ** ไม่พัง
 
-### วิธีเปิดใช้ (env variables)
+### วิธีเปิดใช้ — ค่า default ชี้ไป LLM ในเครื่อง (`localhost:8080/v1`)
 
-เปิดได้ 2 แบบ:
+**รันตามปกติได้เลย ไม่ต้องตั้ง env อะไร** — โมดูลจะเรียก `http://localhost:8080/v1/chat/completions` ด้วย `model: "default"` โดยอัตโนมัติ (กรณี base URL เป็น localhost เกมจะเปิดใช้ LLM เอง ไม่ต้อง auth):
 
 ```bash
-# แบบ 1: มี key / token
-LLM_API_KEY=your_key_here    # key จาก g4f.dev/members.html หรือ provider อื่น
-
-# แบบ 2: ไม่ต้องส่ง key (LLM_ENABLED=1)
-LLM_ENABLED=1                # ใช้เมื่อ credits ผูกกับ IP ของเครื่อง (bake ฟรีที่ g4f.dev/chat)
-                             # หรือใช้กับ Ollama local ที่ไม่ต้อง auth
+npm run dev
 ```
 
-ตั้งค่าอื่น (ไม่บังคับ):
+> ตัวอย่าง: รัน g4f instance / Ollama / LLM server ใดก็ได้ที่ OpenAI-compatible ไว้ที่ port 8080 (เช่น `g4f` local: `python -m g4f`)
+
+ตั้งค่าเพิ่มเติม (ไม่บังคับ):
 
 ```bash
-LLM_BASE_URL=https://g4f.space/v1   # base URL ของ API (ค่า default นี้ = endpoint เดียวกับ g4f client.js)
+LLM_BASE_URL=http://localhost:8080/v1   # base URL ของ API (ค่า default)
 LLM_MODEL=default            # ชื่อโมเดล — ค่า default คือ "default"
-LLM_TIMEOUT_MS=15000         # timeout ต่อ request
+LLM_TIMEOUT_MS=30000         # timeout ต่อ request (เผื่อ cold start โมเดล local)
+LLM_ENABLED=0                # บังคับปิด LLM (ไม่เรียกเลย)
 ```
 
-ตัวอย่างรัน:
+### ใช้กับ g4f.space (remote — ต้อง auth)
+
+- **g4f.space ตรวจ credits ฝั่ง backend** — ต่อให้ใช้ `g4f.dev/dist/js/client.js` ใน browser ตรง ๆ ก็เจอ error `402 No cake credits` ถ้าเครื่องยังไม่มี credits (ทดสอบจริงแล้ว)
+- วิธีใช้: bake proof-of-work ฟรีที่ `g4f.dev/chat` → credits ผูกกับ IP → รันด้วย `LLM_ENABLED=1 npm run dev` (ไม่ต้อง key) หรือสมัคร `g4f.dev/members.html` เอา key มาใส่ `LLM_API_KEY`
 
 ```bash
-LLM_ENABLED=1 npm run dev          # ไม่ต้อง key (credits ผูก IP)
+LLM_ENABLED=1 npm run dev          # credits ผูก IP (bake ฟรีแล้ว)
 LLM_API_KEY=xxxx npm run dev       # มี key
 ```
-
-### ใช้กับ g4f.dev (ฟรี)
-
-- โมดูลใช้ API รูปแบบ **OpenAI-compatible** (`POST {base}/chat/completions` กับ `model: "default"`) — endpoint เดียวกับที่ `g4f.dev/dist/js/client.js` ใช้ (แต่รันฝั่ง server ไม่ต้องพึ่ง CDN ใน browser)
-- **g4f.space ตรวจ credits ฝั่ง backend** — ต่อให้ใช้ client.js ใน browser ตรง ๆ ก็เจอ error `402 No cake credits` ถ้าเครื่องยังไม่มี credits (ทดสอบจริงแล้ว)
-- วิธีได้ credits ฟรี: ไป **bake proof-of-work ที่ `g4f.dev/chat`** → credits ผูกกับ IP ของเครื่อง → รันเกมด้วย `LLM_ENABLED=1` ใช้ได้เลย (หรือสมัครที่ `g4f.dev/members.html` เอา key มาใส่ `LLM_API_KEY`)
-- ใช้ provider อื่นที่ OpenAI-compatible ก็ได้ (เช่น Ollama local: `LLM_BASE_URL=http://localhost:11434/v1`) — แค่เปลี่ยน `LLM_BASE_URL` + `LLM_MODEL`
 
 ### จุดที่ LLM ถูกใช้ตอนนี้
 
