@@ -2,8 +2,8 @@
 process.env.POMOQUEST_DB = `/tmp/pq-daily-${Date.now()}.db`;
 
 const { db } = await import('../server/db.js');
-const { getDailyQuests, claimDailyQuest, claimDailyAll } = await import('../server/daily.js');
-const { CLASSES } = await import('../server/data.js');
+const { getDailyQuests, claimDailyQuest, claimDailyAll, randomRewardItem } = await import('../server/daily.js');
+const { CLASSES, SHOP_STOCK } = await import('../server/data.js');
 const { bumpDaily, today } = await import('../server/db.js');
 
 const b = CLASSES.warrior.base;
@@ -20,6 +20,13 @@ const check = (label, cond, extra = '') => {
 
 const quests = getDailyQuests(c).quests;
 check('สุ่ม quest 3 อัน', quests.length === 3);
+check('ร้านค้าไม่มีไอเทม exclusive', SHOP_STOCK.every((i) => !i.exclusive));
+check('randomRewardItem มีโอกาสได้ exclusive', (() => {
+  for (let i = 0; i < 30; i++) {
+    if (randomRewardItem(c).exclusive) return true;
+  }
+  return false;
+})());
 
 // ทำเควสให้ครบโดย bump counter ตาม key ของ quest ที่สุ่มได้
 const date = today();

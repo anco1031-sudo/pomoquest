@@ -51,8 +51,11 @@ CREATE TABLE IF NOT EXISTS item (
   crit_bonus REAL DEFAULT 0,
   heal_pct REAL DEFAULT 0,
   mana_pct REAL DEFAULT 0,
+  use_xp INTEGER DEFAULT 0,
+  use_gold INTEGER DEFAULT 0,
   price INTEGER DEFAULT 0,
-  lvl INTEGER DEFAULT 1
+  lvl INTEGER DEFAULT 1,
+  exclusive INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS inventory (
@@ -145,8 +148,8 @@ ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
 
 // seed items
-const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, price, lvl)
-  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @price, @lvl)`);
+const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, exclusive)
+  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @exclusive)`);
 const seedItems = db.transaction(() => {
   for (const i of ITEMS) {
     insertItem.run({
@@ -155,10 +158,14 @@ const seedItems = db.transaction(() => {
       atk_bonus: i.atk_bonus || 0, def_bonus: i.def_bonus || 0,
       spd_bonus: i.spd_bonus || 0, crit_bonus: i.crit_bonus || 0,
       heal_pct: i.heal_pct || 0, mana_pct: i.mana_pct || 0,
-      price: i.price || 0, lvl: i.lvl || 1,
+      use_xp: i.use_xp || 0, use_gold: i.use_gold || 0,
+      price: i.price || 0, lvl: i.lvl || 1, exclusive: i.exclusive ? 1 : 0,
     });
   }
 });
+ensureColumn('item', 'exclusive', 'INTEGER DEFAULT 0');
+ensureColumn('item', 'use_xp', 'INTEGER DEFAULT 0');
+ensureColumn('item', 'use_gold', 'INTEGER DEFAULT 0');
 seedItems();
 
 // seed settings
@@ -216,7 +223,8 @@ export const getSettings = () => db.prepare('SELECT * FROM settings WHERE id = 1
 
 export const getInventory = (charId) => db.prepare(`
   SELECT inv.item_id, inv.qty, item.name, item.icon, item.type, item.price, item.heal_pct, item.mana_pct,
-         item.hp_bonus, item.mp_bonus, item.atk_bonus, item.def_bonus, item.spd_bonus, item.crit_bonus, item.desc
+         item.hp_bonus, item.mp_bonus, item.atk_bonus, item.def_bonus, item.spd_bonus, item.crit_bonus, item.desc,
+         item.use_xp, item.use_gold, item.exclusive
   FROM inventory inv JOIN item ON item.id = inv.item_id
   WHERE inv.character_id = ? AND inv.qty > 0
   ORDER BY item.type, item.id`).all(charId);

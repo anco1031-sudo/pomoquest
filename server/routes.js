@@ -286,13 +286,23 @@ router.post('/inventory/use', (req, res) => {
   const item = ITEM_BY_ID[itemId];
   const stats = computeStats(c);
   let used = false;
+  let ups = 0;
   if (item.heal_pct && c.hp < stats.maxHp) { c.hp = Math.min(stats.maxHp, c.hp + Math.round(stats.maxHp * item.heal_pct)); used = true; }
   if (item.mana_pct && c.mp < stats.maxMp) { c.mp = Math.min(stats.maxMp, c.mp + Math.round(stats.maxMp * item.mana_pct)); used = true; }
+  if (item.use_gold) { c.gold += item.use_gold; used = true; }
+  if (item.use_xp) { ups += gainXp(c, item.use_xp); used = true; }
   if (!used) return res.status(400).json({ error: 'พลังเต็มอยู่แล้ว' });
   db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
   updateCharacter(c);
   bumpDaily(c.id, 'potions');
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ใช้ ${item.name} เรียบร้อย`, ...dailyPayload(c) });
+  const ach = checkAchievements(c, getProgress(c.id));
+  res.json({
+    ...serialize(c), inventory: getInventory(c.id),
+    message: `ใช้ ${item.name} เรียบร้อย`,
+    achievements: ach.fresh,
+    ...dailyPayload(c),
+    levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
+  });
 });
 
 router.post('/inventory/equip', (req, res) => {

@@ -82,10 +82,14 @@ export function getDailyQuests(c) {
   };
 }
 
-// ไอเทมสำหรับตัวเลือก "ไอเทมสุ่ม"
-function randomRewardItem(c) {
+// ไอเทมสำหรับตัวเลือก "ไอเทมสุ่ม" — 40% ได้ของพิเศษ (exclusive) ที่หาซื้อตามร้านไม่ได้
+export function randomRewardItem(c) {
+  if (Math.random() < 0.4) {
+    const pool = Object.values(ITEM_BY_ID).filter((i) => i.exclusive);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
   const pool = Object.values(ITEM_BY_ID).filter(
-    (i) => i.type === 'consumable' ? [2, 4].includes(i.id) : (i.lvl || 1) <= c.level + 1
+    (i) => !i.exclusive && (i.type === 'consumable' ? [2, 4].includes(i.id) : (i.lvl || 1) <= c.level + 1)
   );
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -146,10 +150,14 @@ export function claimDailyAll(c) {
     ON CONFLICT(character_id) DO UPDATE SET streak = excluded.streak, last_date = excluded.last_date`)
     .run(c.id, nextStreak, today());
 
-  // ของรางวัลพิเศษ: 40% ได้อุปกรณ์สุ่ม, มิฉะนั้นได้ยาฟื้นฟูเต็ม
+  // ของรางวัลพิเศษ: 35% ได้ไอเทม exclusive (หาซื้อไม่ได้), 30% ได้อุปกรณ์, ที่เหลือยาฟื้นฟูเต็ม
   let item = null;
-  if (Math.random() < 0.4) {
-    const equips = Object.values(ITEM_BY_ID).filter((i) => i.type !== 'consumable' && (i.lvl || 1) <= c.level + 1);
+  const roll = Math.random();
+  if (roll < 0.35) {
+    const pool = Object.values(ITEM_BY_ID).filter((i) => i.exclusive);
+    item = pool[Math.floor(Math.random() * pool.length)];
+  } else if (roll < 0.65) {
+    const equips = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && (i.lvl || 1) <= c.level + 1);
     item = equips[Math.floor(Math.random() * equips.length)];
   } else {
     item = ITEM_BY_ID[4];

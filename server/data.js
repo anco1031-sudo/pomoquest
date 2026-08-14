@@ -44,6 +44,13 @@ export const ITEMS = [
   { id: 31, name: 'สร้อยเวท',     icon: '📿', type: 'accessory', mp_bonus: 20, price: 100, desc: 'สร้อยที่อัดแน่นด้วยมานา', lvl: 2 },
   { id: 32, name: 'รองเท้าเงา',   icon: '👟', type: 'accessory', spd_bonus: 5, price: 150, desc: 'เดินเบาเหมือนเงา', lvl: 3 },
   { id: 33, name: 'ต่างหูมรกต',   icon: '💚', type: 'accessory', crit_bonus: 8, price: 260, desc: 'มรกตเขียวขจี เพิ่มดวง', lvl: 4 },
+
+  // ---- ไอเทมพิเศษเฉพาะ Daily Quest (exclusive: true — หาซื้อตามร้านไม่ได้) ----
+  { id: 40, name: 'ถุงเงินนำโชค',     icon: '🧧', type: 'consumable', use_gold: 150, price: 80, exclusive: true, desc: '✦ พิเศษ — ใช้แล้วได้ทอง 150 ทันที' },
+  { id: 41, name: 'คัมภีร์ประสบการณ์', icon: '📜', type: 'consumable', use_xp: 120, price: 80, exclusive: true, desc: '✦ พิเศษ — ใช้แล้วได้ XP 120 ทันที' },
+  { id: 42, name: 'สมุดนำโชค',       icon: '🍀', type: 'accessory', spd_bonus: 3, crit_bonus: 4, price: 200, exclusive: true, desc: '✦ พิเศษ — เครื่องรางจากดินแดนแห่งโชค' },
+  { id: 43, name: 'มงกุฎนักโฟกัส',   icon: '👑', type: 'accessory', hp_bonus: 40, mp_bonus: 15, price: 250, exclusive: true, desc: '✦ พิเศษ — รางวัลแห่งผู้มุ่งมั่น' },
+  { id: 44, name: 'อีลิกเซอร์บริสุทธิ์', icon: '⚡', type: 'consumable', heal_pct: 1, mana_pct: 1, price: 200, exclusive: true, desc: '✦ พิเศษ — ฟื้น HP + MP 100% ทันที' },
 ];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
@@ -122,7 +129,9 @@ export const QUESTS = [
   { id: 'q6', title: 'ฝึกซ้อมกับทหารยาม', icon: '🤺', detail: 'ท้าประลองกับทหารยามจอมเก่ง', xp: 45, gold: 0, success: 0.7, fail: 'แพ้ซะยับ แต่ก็ได้ประสบการณ์', win: 'ชนะ! ทหารยามยอมรับฝีมือ' },
 ];
 
-export const SHOP_STOCK = ITEMS.filter((i) => i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id));
+// ร้านค้าขายเฉพาะไอเทมธรรมดา — ไอเทม exclusive (พิเศษ) หาซื้อไม่ได้
+// (item.type: consumable/weapon/armor/accessory, exclusive = ได้จาก Daily Quest เท่านั้น)
+export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && (i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id)));
 
 // ----- ภารกิจประจำวัน (Daily Quest) — สุ่ม 3 อันต่อวันตามเลเวล -----
 // key ตรงกับชื่อ counter ใน daily_counter ตาราง

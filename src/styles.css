@@ -526,6 +526,18 @@ body {
   text-align: center;
 }
 
+/* ---------- exclusive item ---------- */
+.exclusive-tag {
+  background: linear-gradient(135deg, #f5b942, #f97316);
+  color: #221a05;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* ---------- daily quest ---------- */
 .daily-streak-chip {
   background: rgba(245, 185, 66, 0.12);

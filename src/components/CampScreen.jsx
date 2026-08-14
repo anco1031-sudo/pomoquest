@@ -153,7 +153,7 @@ export default function CampScreen({ remain, total, running, onSkip }) {
               <div className="inv-row" key={i.item_id}>
                 <span className="inv-icon">{i.icon}</span>
                 <div className="inv-info">
-                  <div className="inv-name">{i.name} <span className="inv-qty">x{i.qty}</span></div>
+                  <div className="inv-name">{i.name} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
                   <div className="inv-desc">{i.desc}</div>
                 </div>
                 <div className="inv-actions">

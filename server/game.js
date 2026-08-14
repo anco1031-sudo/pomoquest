@@ -167,7 +167,7 @@ export function rollEvent(c) {
     base.ups = ups;
     base.detail = `เปิดกล่องสมบัติ: ได้ทอง ${gold} และประสบการณ์ ${xp}`;
     if (Math.random() < 0.12) {
-      const item = pick(Object.values(ITEM_BY_ID).filter((i) => i.type === 'consumable' || (i.lvl || 1) <= c.level + 1));
+      const item = pick(Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && (i.type === 'consumable' || (i.lvl || 1) <= c.level + 1)));
       base.item = { id: item.id, name: item.name, icon: item.icon, lvl: item.lvl || 1 };
       base.detail += ` — และพบ ${item.icon} ${item.name}!`;
     }
@@ -275,9 +275,11 @@ export function bossPlayerTurn(c, fight, action, itemId) {
       c.mp = clamp(c.mp + Math.round(stats.maxMp * item.mana_pct), 0, stats.maxMp);
       used = true;
     }
+    if (item.use_gold) { c.gold += item.use_gold; used = true; log.push(`💰 ${item.name}: +${item.use_gold} ทอง!`); }
+    if (item.use_xp) { gainXp(c, item.use_xp); used = true; log.push(`📜 ${item.name}: +${item.use_xp} XP!`); }
     if (!used) return { error: 'พลังยังเต็มอยู่ ไม่จำเป็นต้องใช้' };
     slot.qty -= 1;
-    log.push(`🧪 ใช้ ${item.icon} ${item.name} — ฟื้นพลัง! (HP ${c.hp}/${stats.maxHp}, MP ${c.mp}/${stats.maxMp})`);
+    if (!item.use_xp && !item.use_gold) log.push(`🧪 ใช้ ${item.icon} ${item.name} — ฟื้นพลัง! (HP ${c.hp}/${stats.maxHp}, MP ${c.mp}/${stats.maxMp})`);
   }
 
   // เทิร์นบอส
@@ -295,7 +297,7 @@ export function bossPlayerTurn(c, fight, action, itemId) {
     const gold = 120 + 40 * c.level;
     const ups = gainXp(c, xp);
     c.gold += gold;
-    const drop = Math.random() < 0.35 ? pick(Object.values(ITEM_BY_ID).filter((i) => i.type !== 'consumable' && (i.lvl || 1) <= c.level + 1)) : null;
+    const drop = Math.random() < 0.35 ? pick(Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && (i.lvl || 1) <= c.level + 1)) : null;
     log.push(`🏆 กำราบ ${fight.boss.name} ได้! +${xp} XP, +${gold} ทอง${drop ? ` และได้ ${drop.icon} ${drop.name}` : ''}`);
     return { log, outcome, xp, gold, item: drop, boss: fight.boss, ups };
   }
