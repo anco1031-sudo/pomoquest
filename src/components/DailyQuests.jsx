@@ -3,9 +3,12 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { Panel } from './ui.jsx';
 
+const REWARD_SHORT = { gold: 'ทอง', xp: 'XP', item: 'ไอเทม' };
+
 export default function DailyQuests() {
-  const { daily, get, post } = useGame();
+  const { daily, get, post, character } = useGame();
   const [local, setLocal] = useState(null);
+  const [chooseFor, setChooseFor] = useState(null);
   const data = daily || local;
 
   useEffect(() => {
@@ -20,10 +23,25 @@ export default function DailyQuests() {
   if (!data) return null;
   const { quests, allDone, allClaimed } = data;
 
-  const claim = async (q) => {
+  const claim = async (q, reward) => {
     sfx.click();
-    await post('/daily/claim', { questId: q.id });
+    await post('/daily/claim', { questId: q.id, reward });
+    setChooseFor(null);
   };
+
+  const goldAmt = 40 + (character?.level || 1) * 6;
+  const xpAmt = 30 + (character?.level || 1) * 4;
+
+  const RewardChoices = ({ q }) => (
+    <div className="daily-choices">
+      <div className="daily-choices-label">เลือกรางวัล:</div>
+      <div className="daily-choices-btns">
+        <button className="btn btn-sm" onClick={() => claim(q, 'gold')}>💰 {goldAmt} ทอง</button>
+        <button className="btn btn-sm" onClick={() => claim(q, 'xp')}>✨ {xpAmt} XP</button>
+        <button className="btn btn-sm" onClick={() => claim(q, 'item')}>🎁 ไอเทมสุ่ม</button>
+      </div>
+    </div>
+  );
 
   const claimAll = async () => {
     sfx.click();
@@ -61,11 +79,15 @@ export default function DailyQuests() {
                 </div>
               </div>
               {q.claimed ? (
-                <span className="daily-claimed">✓ รับแล้ว</span>
+                <span className="daily-claimed">✓ รับแล้ว{q.claimedReward ? ` (${REWARD_SHORT[q.claimedReward]})` : ''}</span>
+              ) : q.complete ? (
+                chooseFor === q.id ? (
+                  <RewardChoices q={q} />
+                ) : (
+                  <button className="btn btn-sm btn-primary" onClick={() => setChooseFor(q.id)}>รับรางวัล</button>
+                )
               ) : (
-                <button className="btn btn-sm" disabled={!q.complete} onClick={() => claim(q)}>
-                  {q.complete ? 'รับรางวัล' : 'ยังไม่เสร็จ'}
-                </button>
+                <span className="daily-locked">ยังไม่เสร็จ</span>
               )}
             </div>
           );

@@ -28,12 +28,17 @@ for (const q of quests) bumpDaily(c.id, q.key, q.target);
 const after = getDailyQuests(c);
 check('allDone = true หลังทำครบ', after.allDone);
 
-// รับรางวัลแต่ละอัน
-for (const q of after.quests) {
-  const r = claimDailyQuest(c, q.id);
-  check(`claim ${q.name}`, !r.error && r.gold > 0, `(+${r.gold} ทอง)`);
-}
-check('allClaimed ยังเป็น false (ยังไม่ได้โบนัส)', getDailyQuests(c).allClaimed === false);
+// รับรางวัลแต่ละอัน — ทดสอบเลือกทั้ง 3 แบบ: ทอง / XP / ไอเทม
+const choice = ['gold', 'xp', 'item'];
+after.quests.forEach((q, i) => {
+  const r = claimDailyQuest(c, q.id, choice[i % 3]);
+  if (choice[i % 3] === 'gold') check(`claim ${q.name} (ทอง)`, !r.error && r.gold > 0 && !r.xp, `(+${r.gold} ทอง)`);
+  else if (choice[i % 3] === 'xp') check(`claim ${q.name} (XP)`, !r.error && r.xp > 0 && !r.gold, `(+${r.xp} XP)`);
+  else check(`claim ${q.name} (ไอเทม)`, !r.error && r.item, `(ได้ ${r.item?.icon} ${r.item?.name})`);
+});
+const afterClaim = getDailyQuests(c);
+check('allClaimed ยังเป็น false (ยังไม่ได้โบนัส)', afterClaim.allClaimed === false);
+check('บันทึกประเภทที่เลือก (claimedReward)', afterClaim.quests.every((q) => q.claimed && q.claimedReward));
 
 // รับโบนัสครบทุกภารกิจ (วันแรก → streak 1, คูณ x1.0)
 const bonus = claimDailyAll(c);

@@ -142,6 +142,7 @@ ensureColumn('progress', 'traps', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'merchant_gifts', 'INTEGER DEFAULT 0');
 ensureColumn('settings', 'active_character_id', 'INTEGER');
 ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
+ensureColumn('daily_quest_done', 'reward', 'TEXT');
 
 // seed items
 const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, price, lvl)

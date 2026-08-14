@@ -333,15 +333,20 @@ router.get('/daily', (req, res) => {
 
 router.post('/daily/claim', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { questId } = req.body || {};
-  const result = claimDailyQuest(c, questId);
+  const { questId, reward } = req.body || {};
+  const result = claimDailyQuest(c, questId, reward);
   if (result.error) return res.status(400).json({ error: result.error });
+  const msg = result.rewardType === 'item'
+    ? `🎁 ได้ ${result.item.icon} ${result.item.name}!`
+    : result.rewardType === 'xp'
+      ? `✨ รับ XP +${result.xp}!`
+      : `💰 รับทอง +${result.gold}!`;
   res.json({
     ...serialize(c),
     ...dailyPayload(c),
-    reward: { gold: result.gold, xp: result.xp },
-    levelUps: { levels: result.ups, statPoints: c.stat_points },
-    message: `📅 รับรางวัล +${result.gold} ทอง!`,
+    reward: result,
+    levelUps: { levels: result.ups || 0, statPoints: c.stat_points },
+    message: `📅 ${msg}`,
   });
 });
 

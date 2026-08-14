@@ -44,8 +44,8 @@ export function getDailyQuests(c) {
     picked.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
   }
 
-  const doneRows = db.prepare('SELECT quest_id, claimed_at FROM daily_quest_done WHERE character_id = ? AND date = ?').all(c.id, date);
-  const doneMap = new Map(doneRows.map((r) => [r.quest_id, r.claimed_at]));
+  const doneRows = db.prepare('SELECT quest_id, claimed_at, reward FROM daily_quest_done WHERE character_id = ? AND date = ?').all(c.id, date);
+  const doneMap = new Map(doneRows.map((r) => [r.quest_id, r]));
 
   const quests = picked.map((q) => {
     const target = typeof q.target === 'function' ? q.target(c.level) : q.target;
@@ -63,6 +63,7 @@ export function getDailyQuests(c) {
       desc: q.desc.replace('{n}', q.unit === 'min' ? Math.round(target / 60) : target),
       complete: current >= target,
       claimed: doneMap.has(q.id),
+      claimedReward: doneMap.get(q.id)?.reward || null,
     };
   });
 
@@ -81,8 +82,18 @@ export function getDailyQuests(c) {
   };
 }
 
-// รับรางวัลภารกิจเดี่ยว — คืน { gold, xp, ups, error? }
-export function claimDailyQuest(c, questId) {
+// ไอเทมสำหรับตัวเลือก "ไอเทมสุ่ม"
+function randomRewardItem(c) {
+  const pool = Object.values(ITEM_BY_ID).filter(
+    (i) => i.type === 'consumable' ? [2, 4].includes(i.id) : (i.lvl || 1) <= c.level + 1
+  );
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const REWARD_LABEL = { gold: 'ทอง', xp: 'XP', item: 'ไอเทม' };
+
+// รับรางวัลภารกิจเดี่ยว — เลือกได้: 'gold' | 'xp' | 'item' (คืนสิ่งที่ได้จริง)
+export function claimDailyQuest(c, questId, reward = 'gold') {
   const date = today();
   const daily = getDailyQuests(c);
   const q = daily.quests.find((x) => x.id === questId);
@@ -91,12 +102,28 @@ export function claimDailyQuest(c, questId) {
   const ins = db.prepare('INSERT OR IGNORE INTO daily_quest_done (character_id, date, quest_id) VALUES (?, ?, ?)').run(c.id, date, questId);
   if (!ins.changes) return { error: 'รับรางวัลไปแล้ว' };
 
-  const { gold, xp } = rewardFor(c);
-  const ups = gainXp(c, xp);
-  c.gold += gold;
+  const base = rewardFor(c);
+  let granted;
+  if (reward === 'xp') {
+    const ups = gainXp(c, base.xp);
+    granted = { rewardType: 'xp', xp: base.xp, ups };
+  } else if (reward === 'item') {
+    const item = randomRewardItem(c);
+    addItem(c.id, item.id);
+    granted = { rewardType: 'item', item: { id: item.id, name: item.name, icon: item.icon } };
+  } else {
+    c.gold += base.gold;
+    granted = { rewardType: 'gold', gold: base.gold };
+  }
+
+  db.prepare('UPDATE daily_quest_done SET reward = ? WHERE character_id = ? AND date = ? AND quest_id = ?')
+    .run(granted.rewardType, c.id, date, questId);
   updateCharacter(c);
-  addLog(c.id, { type: 'daily_quest', title: `📅 ${q.name}`, detail: `รางวัลภารกิจประจำวัน +${xp} XP, +${gold} ทอง`, xp, gold });
-  return { gold, xp, ups };
+  const detail = granted.rewardType === 'item'
+    ? `รางวัลภารกิจประจำวัน: ได้ ${granted.item.icon} ${granted.item.name}`
+    : `รางวัลภารกิจประจำวัน: +${granted.xp ?? granted.gold} ${REWARD_LABEL[granted.rewardType]}`;
+  addLog(c.id, { type: 'daily_quest', title: `📅 ${q.name}`, detail, xp: granted.xp || 0, gold: granted.gold || 0 });
+  return granted;
 }
 
 // รับโบนัสทำครบทุกภารกิจของวัน — คืน { gold, xp, ups, item?, error? }
