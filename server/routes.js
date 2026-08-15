@@ -418,10 +418,13 @@ function blackMarketStock(visit) {
   const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
   const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll');
   const spec = pick(specPool);
+  // ของพิเศษ exclusive หลุดมาจาก daily quest (ยกเว้น ถุงเงินนำโชค id 40 — กันวนซื้อแล้วใช้ +150 ทอง)
+  const bmExclusive = pick(ITEMS.filter((i) => i.exclusive && i.id !== 40));
   return [
     { ...scroll, ...bmDisc(scroll, 0.85), bmTag: 'คัมภีร์หายาก' },
     { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
     { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
+    { ...bmExclusive, ...bmDisc(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
   ];
 }
 
@@ -445,8 +448,13 @@ router.get('/camp', (req, res) => {
     const ins = db.prepare('INSERT OR IGNORE INTO camp_shop (character_id, visit, item_id, qty, market) VALUES (?, ?, ?, 0, ?)');
     for (const i of chosen) ins.run(c.id, visit, i.id, 'camp');
     // ตลาดมืด (ถ้าเจอ) — เพิ่มสินค้าเข้าร้านค่ายพักนี้ (market='black')
+    // UPSERT: ถ้าสินค้าชิ้นนั้นอยู่ในร้านปกติด้วย (เช่น ของเถื่อนที่สุ่มมาเป็นเกียร์ชิ้นเดียวกัน) ให้ตลาดมืดแย่งช่อง
     const bm = blackMarketStock(visit);
-    if (bm) for (const i of bm) ins.run(c.id, visit, i.id, 'black');
+    if (bm) {
+      const bmIns = db.prepare(`INSERT INTO camp_shop (character_id, visit, item_id, qty, market) VALUES (?, ?, ?, 0, ?)
+        ON CONFLICT(character_id, visit, item_id) DO UPDATE SET market = 'black'`);
+      for (const i of bm) bmIns.run(c.id, visit, i.id, 'black');
+    }
     stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   }
   // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของไม่ดังลดราคา

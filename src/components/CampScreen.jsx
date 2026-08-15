@@ -117,7 +117,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
           {blackMarket && (
             <div className="panel bm-panel">
               <div className="panel-title bm-title">🖤 ตลาดมืด (พ่อค้าเงาลึกลับ)</div>
-              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายากราคาลดพิเศษ — ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
+              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายาก + ของพิเศษ exclusive (ปกติได้จาก Daily Quest เท่านั้น!) ราคาลดพิเศษ — ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
               <div className="shop-list">
                 {blackMarket.items.map((i) => (
                   <div className="shop-row" key={i.id}>

@@ -153,8 +153,9 @@ try {
     db.prepare('UPDATE character SET gold = 5000 WHERE id = ?').run(cid);
     r = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
     const bm = r.json.blackMarket;
-    // response ใช้ field `price` (ราคาลดแล้ว) + `bmNormal` (ราคาปกติ)
-    expect('camp: ตลาดมืด 3 ชิ้น ราคาลดกว่าปกติ', !!bm && bm.items.length === 3 && bm.items.every((i) => i.price < i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.price, i.bmNormal])));
+    // response ใช้ field `price` (ราคาลดแล้ว) + `bmNormal` (ราคาปกติ) — 4 ช่อง: คัมภีร์/ของหายาก/ของเถื่อน/ของพิเศษ exclusive
+    expect('camp: ตลาดมืด 4 ชิ้น ราคาลดกว่าปกติ', !!bm && bm.items.length === 4 && bm.items.every((i) => i.price < i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.price, i.bmNormal])));
+    expect('black market: มีของพิเศษ exclusive หลุดมา (ไม่ใช่ถุงเงินนำโชค 40)', !!bm?.items.some((i) => i.exclusive && i.id !== 40), JSON.stringify(bm?.items?.map((i) => i.name)));
     const r2 = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
     expect('black market: เปิดหน้าเดิมซ้ำ ของ/ราคาเหมือนเดิม (deterministic)', JSON.stringify(r.json.shop) === JSON.stringify(r2.json.shop));
 
