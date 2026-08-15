@@ -216,6 +216,14 @@ try {
     expect('dev xp: DB ไม่บันทึก (เลเวลเท่าเดิม)', stateAfter.level === levelBefore, `before=${levelBefore}, after=${stateAfter.level}`);
     const devLogs = db.prepare("SELECT COUNT(*) n FROM log WHERE type = 'dev'").get().n;
     expect('dev: ไม่มี log dev เข้า DB', devLogs === 0);
+
+    // --- dev: บังคับตลาดมืด (ทดสอบที่ค่ายพัก) ---
+    r = await devPost('/dev/black-market', { on: true });
+    expect('dev bm: เปิดการบังคับตลาดมืด', r.status === 200 && r.json.blackMarketForced === true, r.json.error || '');
+    r = await api(`/camp?visit=bm-force-${Date.now()}`);
+    expect('dev bm: ค่ายพักถัดไปเจอตลาดมืดแน่นอน', r.status === 200 && !!r.json.blackMarket, r.json.error || '');
+    r = await devPost('/dev/black-market', { on: false });
+    expect('dev bm: ปิดการบังคับได้', r.status === 200 && r.json.blackMarketForced === false, r.json.error || '');
   }
 
   // --- export/backup ---

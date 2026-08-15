@@ -132,6 +132,8 @@ export default function DevPanel({ onClose }) {
               <button className="btn" onClick={() => dev('/dev/tale', {})} disabled={busy}>📖 เรื่องราวทดสอบ</button>
               <button className="btn" onClick={() => dev('/dev/heal', {})} disabled={busy}>💖 เติม HP/MP เต็ม</button>
               <button className="btn" onClick={() => dev('/dev/next-city', {})} disabled={busy}>🗺️ เมืองถัดไป</button>
+              <button className="btn" onClick={() => dev('/dev/black-market', { on: true }, '🖤 บังคับตลาดมืดแล้ว')} disabled={busy}>🖤 บังคับตลาดมืด</button>
+              <button className="btn" onClick={() => dev('/dev/black-market', { on: false }, '🌙 ปิดการบังคับตลาดมืด')} disabled={busy}>🌙 ปิดบังคับตลาดมืด</button>
             </div>
 
             <div className="dev-section">⚡ สกิล (เลเวล/คัมภีร์)</div>

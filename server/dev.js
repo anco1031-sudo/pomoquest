@@ -13,6 +13,9 @@ const DEV_USER = process.env.DEV_USER || 'admin';
 const DEV_PASS = process.env.DEV_PASS || 'admin';
 // token อยู่ในหน่วยความจำ — รีสตาร์ท server แล้วต้อง login ใหม่
 const tokens = new Set();
+// บังคับให้ตลาดมืดเจอทุกค่ายพัก (dev — อยู่ในหน่วยความจำ รีสตาร์ทแล้วหาย)
+let forceBm = false;
+export const isBmForced = () => forceBm;
 
 const router = Router();
 
@@ -58,6 +61,15 @@ const dryRun = (res, fn) => {
   res.json(out);
   return out;
 };
+
+// บังคับ/ปิด ตลาดมืด (ใช้ทดสอบ — ไม่ใช่การแก้ข้อมูลตัวละคร เลยไม่ dry-run)
+router.post('/dev/black-market', requireDev, (req, res) => {
+  forceBm = !!req.body?.on;
+  res.json({
+    blackMarketForced: forceBm,
+    message: forceBm ? '🖤 บังคับตลาดมืดแล้ว — ค่ายพักถัดไปจะเจอตลาดมืดแน่นอน (จนกว่าจะปิด)' : '🌙 ปิดการบังคับตลาดมืดแล้ว — กลับเป็นสุ่ม ~25% เหมือนเดิม',
+  });
+});
 
 // ----- ทดสอบระบบต่าง ๆ (ต้องมี token — ผลลัพธ์ไม่บันทึก) -----
 

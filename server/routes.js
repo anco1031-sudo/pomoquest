@@ -20,6 +20,7 @@ import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
 import { llmChat, llmEnabled } from './llm.js';
 import { WRITABLE_TABLES, exportJsonData, restoreFromJson, checkDbSchema } from './data-io.js';
+import { isBmForced } from './dev.js';
 
 const router = Router();
 
@@ -408,7 +409,8 @@ const pickRandom = (arr, n) => {
 // ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
 // รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%)
 const BM_OPEN_CHANCE = 0.25;
-const blackMarketOpen = (visit) => seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE;
+// dev: บังคับให้เจอตลาดมืดทุกค่ายพัก (isBmForced อยู่ในหน่วยความจำ — รีสตาร์ทแล้วหาย)
+const blackMarketOpen = (visit) => (isBmForced() ? true : seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE);
 const bmDisc = (item, mult) => ({ bmPrice: Math.max(1, Math.round(item.price * mult)), bmNormal: item.price });
 function blackMarketStock(visit) {
   if (!visit || !blackMarketOpen(visit)) return null;
