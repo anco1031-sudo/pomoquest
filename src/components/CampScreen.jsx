@@ -3,7 +3,7 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
-import ItemStatChips from './ItemStats.jsx';
+import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
 
 const TABS = [
   { key: 'shop', label: 'ร้านค้า', icon: '🛒' },
@@ -131,6 +131,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       {i.bmNormal > 0 && (
                         <div className="bm-normal">ปกติ {i.bmNormal} ทอง → <b>{i.price} ทอง</b></div>
                       )}
+                      {itemReqMissing(i, character).length > 0 && (
+                        <div className="inv-req-block shop-warn">⚠️ ซื้อแล้วสวมไม่ได้ตอนนี้: {itemReqMissing(i, character).join(' · ')}</div>
+                      )}
                     </div>
                     {i.bought ? (
                       <span className="sold-tag">ขายแล้ว</span>
@@ -161,6 +164,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                     </div>
                     <ItemStatChips item={i} character={character} />
                     <div className="inv-desc">{i.desc}</div>
+                    {itemReqMissing(i, character).length > 0 && (
+                      <div className="inv-req-block shop-warn">⚠️ ซื้อแล้วสวมไม่ได้ตอนนี้: {itemReqMissing(i, character).join(' · ')}</div>
+                    )}
                   </div>
                   {i.bought ? (
                     <span className="sold-tag">ขายแล้ว</span>

@@ -423,6 +423,17 @@ body {
   color: #fca5a5;
   margin-top: 2px;
 }
+/* ป้ายเตือนบนไอเทมร้านค้า — ซื้อแล้วยังสวมไม่ได้ (ขาด stat/เลเวล/คลาส) */
+.shop-warn {
+  color: #fcd34d;
+  font-weight: 600;
+  background: rgba(252, 211, 77, 0.08);
+  border: 1px dashed rgba(252, 211, 77, 0.35);
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-top: 4px;
+  display: inline-block;
+}
 /* ตลาดมืด (ค่ายพัก) */
 .bm-panel { border: 1px solid rgba(168, 85, 247, 0.55); background: linear-gradient(180deg, rgba(88, 28, 135, 0.18), rgba(0, 0, 0, 0.25)); }
 .bm-title { color: #d8b4fe; }
