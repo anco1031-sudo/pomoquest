@@ -78,7 +78,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
     sfx.complete();
     const d = await post('/camp/rest');
     if (d) showToast('🔥 พลังเต็มเปี่ยม!');
+    // โหมดเอาชีวิตรอด: พักไม่ฟรี — ใช้ error จาก server เป็น toast
   };
+  const isSurvival = character?.challengeMode === 'survival';
 
   if (!character) return null;
 
@@ -263,7 +265,11 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
 
       {tab === 'char' && (
         <>
-          <button className="btn btn-primary btn-big" onClick={rest}>🔥 พักฟื้นพลังเต็ม (ฟรี)</button>
+          {isSurvival ? (
+            <button className="btn btn-primary btn-big" onClick={rest} style={{ background: '#7f1d1d' }}>🩸 พักฟื้นพลัง (โหมดเอาชีวิตรอด — ใช้ยาเท่านั้น)</button>
+          ) : (
+            <button className="btn btn-primary btn-big" onClick={rest}>🔥 พักฟื้นพลังเต็ม (ฟรี)</button>
+          )}
           <CharacterSheet />
         </>
       )}

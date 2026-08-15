@@ -218,6 +218,7 @@ export function serializeCharacter(c) {
     statPoints: c.stat_points,
     cityIndex: c.city_index,
     city: CITIES[c.city_index % CITIES.length],
+    challengeMode: c.challenge_mode || '',
     skills: getCharacterSkills(c), // สกิลคลาส + สกิลจากคัมภีร์ พร้อมเลเวล/XP — ใช้ตอนสู้บอส
     equipment: {
       weapon: itemOf(c.weapon_id),
@@ -277,10 +278,45 @@ export function dodgeChance(spd) {
 }
 
 // ----- ระบบมอนสเตอร์ / ต่อสู้อัตโนมัติ (ช่วง work session — ไม่รบกวนสมาธิ) -----
-export function rollMonster(level) {
+export function rollMonster(level, c = null) {
   const m = pick(MONSTERS);
-  const power = Math.round((12 + 5 * level) * m.power);
+  const power = Math.round((12 + 5 * level) * m.power * enemyMult(c));
   return { ...m, power };
+}
+
+// ----- โหมดท้าทาย (challenge mode) -----
+// '' = ปกติ · 'hard' = โหด (มอนสเตอร์/บอสแรง + ดรอปยาก + ราคาแพง แต่รางวัลเพิ่ม)
+// 'marathon' = มาราธอน (ห้ามพักระหว่างโฟกัส — พัก = เสีย session แต่ session ครบได้โบนัส)
+// 'survival' = เอาชีวิตรอด (ค่ายพักไม่ฟื้นพลังฟรี + หมด HP เสียของ/เริ่มเมืองใหม่)
+export const CHALLENGES = {
+  hard:     { label: '⚔️ โหมดโหด',        rewardMult: 1.5,  enemyMult: 1.3,  dropMult: 0.6,  priceMult: 1.3 },
+  marathon: { label: '⏱️ โหมดมาราธอน',   rewardMult: 1.5,  enemyMult: 1,    dropMult: 1,    priceMult: 1 },
+  survival: { label: '🩸 โหมดเอาชีวิตรอด', rewardMult: 1.5,  enemyMult: 1,    dropMult: 1,    priceMult: 1 },
+};
+export const challengeOf = (c) => CHALLENGES[c?.challenge_mode] || null;
+
+// ตัวคูณรางวัล (XP/ทอง) ตามโหมด — ทุกโหมดได้ +50% (เสี่ยงสูง รางวัลสูง)
+export function rewardMult(c) {
+  const ch = challengeOf(c);
+  return ch?.rewardMult || 1;
+}
+
+// ตัวคูณพลังศัตรู (มอนสเตอร์/บอส) — โหมดโหดแรงขึ้น x1.3
+export function enemyMult(c) {
+  const ch = challengeOf(c);
+  return ch?.enemyMult || 1;
+}
+
+// ตัวคูณโอกาสดรอปของ — โหมดโหดดรอปยากขึ้น x0.6
+export function dropMult(c) {
+  const ch = challengeOf(c);
+  return ch?.dropMult || 1;
+}
+
+// ตัวคูณราคาในร้านค้า — โหมดโหดของแพงขึ้น x1.3
+export function priceMult(c) {
+  const ch = challengeOf(c);
+  return ch?.priceMult || 1;
 }
 
 export function playerPower(c) {
@@ -338,7 +374,7 @@ export function rollEvent(c, forceKey = null) {
   };
 
   if (ev.key === 'monster') {
-    const m = rollMonster(c.level);
+    const m = rollMonster(c.level, c);
     // มีโอกาสเล็กน้อย (15%) ที่ตัวละครใช้สกิลอัตโนมัติ (รวมสกิลจากคัมภีร์) → ชนะง่ายขึ้น + รางวัลเพิ่ม
     const skills = getCharacterSkills(c);
     let skillUsed = null;
@@ -362,10 +398,10 @@ export function rollEvent(c, forceKey = null) {
     } else {
       res = resolveCombat(c, m);
     }
-    // ชนะ → มีโอกาส ~40% ได้ loot ประจำตัวมอนสเตอร์ (ขยะราคาไม่สูง — ขายได้ที่แคมป์)
+    // ชนะ → มีโอกาส ~40% ได้ loot ประจำตัวมอนสเตอร์ (ขยะราคาไม่สูง — ขายได้ที่แคมป์) — โหมดโหดดรอปยากขึ้น
     let loot = null;
     if (res.win && m.loot) {
-      if (Math.random() < 0.4) {
+      if (Math.random() < 0.4 * dropMult(c)) {
         loot = ITEM_BY_ID[m.loot];
         res.detail += ` และได้ ${loot.icon} ${loot.name}!`;
       }
@@ -473,19 +509,20 @@ export function rollEvent(c, forceKey = null) {
 
 // ----- บอส (พักใหญ่หลังครบ 4 session) -----
 // บอสแต่ละเมืองมีสกิล (ท่าเด็ด) ของตัวเอง — ใช้แทนโจมตีปกติเป็นครั้งคราว
-export function generateBoss(level, cityIndex) {
+export function generateBoss(level, cityIndex, c = null) {
   const boss = BOSSES[cityIndex % BOSSES.length];
   const loadout = BOSS_LOADOUTS[cityIndex % BOSS_LOADOUTS.length] || [];
   const skills = loadout.map((k) => BOSS_SKILLS[k]).filter(Boolean);
-  const maxHp = 90 + 32 * level;
+  const em = enemyMult(c);
+  const maxHp = Math.round((90 + 32 * level) * em);
   return {
     name: boss.name,
     icon: boss.icon,
     loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
     maxHp,
     hp: maxHp,
-    atk: 9 + Math.round(2.5 * level),
-    def: 3 + level,
+    atk: Math.round((9 + 2.5 * level) * em),
+    def: Math.round((3 + level) * em),
     crit: 10,
     skills,
   };

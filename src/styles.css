@@ -328,6 +328,35 @@ body {
 .creation-hero h1 { font-size: 34px; font-weight: 900; letter-spacing: 1px; }
 .subtitle { color: var(--muted); margin-top: 4px; }
 .class-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* เลือกโหมดท้าทายตอนสร้างตัวละคร */
+.challenge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.challenge-card {
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  font-family: inherit;
+}
+.challenge-card.selected { border-color: var(--red); box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3); }
+.challenge-name { font-weight: 800; font-size: 13.5px; color: var(--text); }
+.challenge-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.challenge-detail { font-size: 11px; color: var(--gold); margin-top: 5px; line-height: 1.5; }
+/* badge โหมดท้าทายบนการ์ดตัวละคร (หน้าแรก) */
+.challenge-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fca5a5;
+  border: 1px solid #f8717133;
+  background: #f8717118;
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: 2px;
+}
 .class-card {
   text-align: left;
   background: var(--bg);

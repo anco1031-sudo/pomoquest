@@ -10,19 +10,40 @@ const CLASSES = [
   { key: 'cleric', name: 'นักบวช', en: 'Cleric', icon: '✨', desc: 'สายสมดุล มนามาก ฟื้นพลังได้เรื่อย ๆ', base: 'MP 50 · ATK 10 · DEF 9' },
 ];
 
+// โหมดท้าทาย — เลือกได้ตอนสร้างตัวละคร (เพิ่มความยากแลกรางวัล x1.5 + ตราเฉพาะโหมด)
+const CHALLENGES = [
+  {
+    key: '', name: '🎮 ปกติ', desc: 'สมดุล เหมาะกับเริ่มเล่น',
+    detail: 'มอนสเตอร์/บอส/ราคาปกติ · ค่ายพักฟื้นพลังฟรี · พักระหว่างโฟกัสได้',
+  },
+  {
+    key: 'hard', name: '⚔️ โหมดโหด', desc: 'ศัตรูแรงขึ้น ของยากขึ้น ของแพงขึ้น',
+    detail: 'มอนสเตอร์/บอส +30% · ดรอป -40% · ราคาร้าน +30% · แต่ XP/ทอง x1.5 + ตราเฉพาะ',
+  },
+  {
+    key: 'marathon', name: '⏱️ โหมดมาราธอน', desc: 'ห้ามพักระหว่างโฟกัส',
+    detail: 'พักกลาง session = เสีย session (ไม่ได้รางวัล) · โฟกัสครบได้ XP/ทอง x1.5 + ตราเฉพาะ',
+  },
+  {
+    key: 'survival', name: '🩸 โหมดเอาชีวิตรอด', desc: 'พักแคมป์ไม่ฟื้นพลัง ใกล้ตายเสียของ',
+    detail: 'พักแคมป์ไม่ฟื้น HP/MP ฟรี · HP เหลือ 1 ตอนจบ session = เสียของสุ่ม + คอมโบหาย · XP/ทอง x1.5 + ตราเฉพาะ',
+  },
+];
+
 // modal = แสดงเป็น modal (กดจากปุ่ม "สร้างตัวละครใหม่" ในหน้าเลือกตัวละคร)
 // onClose = กลับไปหน้าเลือกตัวละคร (เฉพาะโหมด modal)
 export default function CharacterCreation({ modal = false, onClose }) {
   const { post } = useGame();
   const [name, setName] = useState('');
   const [cls, setCls] = useState(null);
+  const [challenge, setChallenge] = useState('');
   const [busy, setBusy] = useState(false);
 
   const create = async () => {
     if (!name.trim() || !cls || busy) return;
     setBusy(true);
     sfx.start();
-    await post('/character/create', { name, class: cls });
+    await post('/character/create', { name, class: cls, challengeMode: challenge });
     setBusy(false);
   };
 
@@ -39,6 +60,23 @@ export default function CharacterCreation({ modal = false, onClose }) {
           maxLength={20}
           onChange={(e) => setName(e.target.value)}
         />
+      </div>
+
+      <div className="panel">
+        <div className="panel-title">🔥 เลือกโหมดท้าทาย <span className="hint" style={{ fontSize: 11 }}>(เลือกครั้งเดียวตอนสร้าง — เริ่มต้นแบบปกติแล้วค่อยลองก็ได้)</span></div>
+        <div className="challenge-grid">
+          {CHALLENGES.map((ch) => (
+            <button
+              key={ch.key || 'normal'}
+              className={`challenge-card ${challenge === ch.key ? 'selected' : ''}`}
+              onClick={() => { setChallenge(ch.key); sfx.click(); }}
+            >
+              <div className="challenge-name">{ch.name}</div>
+              <div className="challenge-desc">{ch.desc}</div>
+              {challenge === ch.key && <div className="challenge-detail">{ch.detail}</div>}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="panel">
@@ -90,7 +128,7 @@ export default function CharacterCreation({ modal = false, onClose }) {
         disabled={!name.trim() || !cls || busy}
         onClick={create}
       >
-        🚀 เริ่มการผจญภัย
+        🚀 เริ่มการผจญภัย{challenge ? ` (${CHALLENGES.find((c) => c.key === challenge)?.name})` : ''}
       </button>
       <p className="hint">ทุก 25 นาทีที่คุณโฟกัส = 1 session ผจญภัย · ครบ 4 session = สู้บอส!</p>
       {modal && (

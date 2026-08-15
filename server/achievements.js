@@ -50,6 +50,9 @@ export function buildCtx(c, prog, extra = {}) {
     bossHpPct: bossWin.pct ?? -1,
     bossNoEquip: bossWin.noEquip === true,
     bossCityIndex: bossWin.cityIndex ?? -1,
+    // โหมดท้าทาย — รอบเมืองที่จบในโหมดนั้น (counter แยกต่อโหมด)
+    challengeMode: c.challenge_mode || '',
+    challengeCycles: prog[`${c.challenge_mode || 'none'}_cycles`] || 0,
   };
 }
 

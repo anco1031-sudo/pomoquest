@@ -175,6 +175,10 @@ export const ITEMS = [
   { id: 135, name: 'คริสตัลการ์เดี้ยน', icon: '💠', type: 'junk', price: 130, desc: 'คริสตัลบริสุทธิ์จากร่างการ์เดี้ยน' },
   { id: 136, name: 'หิมะนิรันดร์',     icon: '🧊', type: 'junk', price: 150, desc: 'ก้อนหิมะที่ไม่เคยละลายของมังกรน้ำแข็ง' },
   { id: 137, name: 'หัวใจจอมมาร',     icon: '🖤', type: 'junk', price: 180, desc: 'หัวใจดำมืดของจอมมารเงา ล้ำค่าที่สุด' },
+  { id: 138, name: 'มงกุฎมรกต',       icon: '👑', type: 'junk', price: 200, desc: 'มงกุฎที่สลักจากมรกตบริสุทธิ์ของราชามรกต' },
+  { id: 139, name: 'แกนสายฟ้า',        icon: '⚡', type: 'junk', price: 220, desc: 'แกนพลังงานสายฟ้าที่ประจุอยู่ตลอดเวลา' },
+  { id: 140, name: 'ไข่มุกทราย',       icon: '🫧', type: 'junk', price: 240, desc: 'ไข่มุกโบราณที่ถูกฝังใต้ทรายมานับพันปี' },
+  { id: 141, name: 'เกล็ดราชามังกร',   icon: '🐲', type: 'junk', price: 260, desc: 'เกล็ดทองคำของราชามังกร ล้ำค่ายิ่งนัก' },
 
   // ---- คัมภีร์สกิลหายาก (type: scroll) — เจอจากกล่องสมบัติเท่านั้น (โอกาสน้อยมาก) ----
   // ใช้แล้วเรียนรู้สกิล (learn_skill) — ถ้าเรียนไปแล้วใช้ไม่ได้
@@ -198,6 +202,10 @@ export const CITIES = [
   { name: 'เมืองคริสตัล',    icon: '💎', terrain: 'หุบเขาคริสตัล' },
   { name: 'ดินแดนน้ำแข็ง',   icon: '🧊', terrain: 'ทุ่งหิมะนิรันดร์' },
   { name: 'แอสการ์ด',       icon: '🏰', terrain: 'เมืองหลวงในตำนาน' },
+  { name: 'หุบเขามรกต',     icon: '💚', terrain: 'หุบเขาปกคลุมด้วยมรกต' },
+  { name: 'นครสายฟ้า',      icon: '⚡', terrain: 'เมืองกลางพายุฟ้าคะนอง' },
+  { name: 'ทะเลทรายนิรันดร์', icon: '🏜️', terrain: 'ทะเลทรายที่ไม่มีวันสิ้นสุด' },
+  { name: 'อาณาจักรมังกร',   icon: '🐉', terrain: 'ดินแดนศักดิ์สิทธิ์ของมังกร' },
 ];
 
 // loot = ของรางวัลเฉพาะตัว (id ใน ITEMS) — ดรอปตอนชนะบอส (โอกาส ~50%)
@@ -210,6 +218,10 @@ export const BOSSES = [
   { name: 'คริสตัลการ์เดี้ยน', icon: '🔮', loot: 135 },
   { name: 'มังกรน้ำแข็ง', icon: '🐉', loot: 136 },
   { name: 'จอมมารเงา', icon: '👹', loot: 137 },
+  { name: 'ราชามรกต', icon: '💚', loot: 138 },
+  { name: 'ราชินีพายุ', icon: '⚡', loot: 139 },
+  { name: 'ทรายดูดยักษ์', icon: '🐍', loot: 140 },
+  { name: 'ราชามังกร', icon: '🐲', loot: 141 },
 ];
 
 // ----- สกิลของบอส — แต่ละเมือง/บอสมีท่าเด็ดของตัวเอง (มีโอกาสใช้แทนโจมตีปกติ) -----
@@ -234,6 +246,10 @@ export const BOSS_LOADOUTS = [
   ['guard', 'drain'],
   ['venom', 'guard'],
   ['crush', 'venom'],
+  ['heal', 'drain'],
+  ['rage', 'crush'],
+  ['venom', 'drain'],
+  ['crush', 'heal'],
 ];
 
 // มอนสเตอร์ที่เจอระหว่างผจญภัย (power_mult คูณพลังมอนสเตอร์ตามเลเวล)
@@ -369,5 +385,8 @@ export const SECRET_ACHIEVEMENTS = [
 
   { id: 'explorer',       name: 'นักสำรวจ',        icon: '🗺️', hint: 'ขอบโลกมีจริงหรือ?',                              reward: { gold: 600 }, check: (ctx) => ctx.cycles >= 8 },
   { id: 'asgard_slayer',  name: 'ผู้พิชิตแอสการ์ด', icon: '👹', hint: 'ตำนานเล่าถึงจอมมารเงา…',                         reward: { gold: 800 }, check: (ctx) => ctx.bossCityIndex === 7 },
+  { id: 'challenge_hard',     name: 'นักสู้สุดหิน',   icon: '⚔️', hint: 'เลือกทางที่ยากกว่าเสมอ…',                        reward: { gold: 500 }, check: (ctx) => ctx.challengeMode === 'hard' && ctx.challengeCycles >= 1 },
+  { id: 'challenge_marathon', name: 'จิตใจเหนือเหล็ก', icon: '⏱️', hint: 'ไม่มีวันพัก ไม่มีวันแพ้…',                      reward: { gold: 500 }, check: (ctx) => ctx.challengeMode === 'marathon' && ctx.challengeCycles >= 1 },
+  { id: 'challenge_survival', name: 'เอาชีวิตรอด',    icon: '🩸', hint: 'เลือดทุกหยดมีค่า…',                           reward: { gold: 500 }, check: (ctx) => ctx.challengeMode === 'survival' && ctx.challengeCycles >= 1 },
   { id: 'master',         name: 'จ้าวแห่งการโฟกัส', icon: '🏆', hint: 'เมื่อความสำเร็จทั้งหมดมารวมกัน…',                  reward: { gold: 1000 }, check: (ctx) => ctx.normalUnlocked >= ACHIEVEMENTS.length },
 ];

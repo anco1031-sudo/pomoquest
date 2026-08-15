@@ -178,6 +178,10 @@ ensureColumn('progress', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'break_extended', 'INTEGER DEFAULT 0');
 // ขายของให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
 ensureColumn('progress', 'wanted_sales', 'INTEGER DEFAULT 0');
+// รอบเมืองที่จบในแต่ละโหมดท้าทาย (ตราเฉพาะโหมด — นับตอนชนะบอส)
+ensureColumn('progress', 'hard_cycles', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'marathon_cycles', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'survival_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('settings', 'active_character_id', 'INTEGER');
 ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'break_sec', 'INTEGER DEFAULT 0');
@@ -192,6 +196,8 @@ ensureColumn('log', 'city', 'TEXT');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
 // ตลาดมืด (black market) — สินค้าที่ขายในค่ายพักนี้ ระบุแหล่งที่มา ('camp' = ร้านปกติ, 'black' = ตลาดมืด)
 ensureColumn('camp_shop', 'market', "TEXT DEFAULT 'camp'");
+// โหมดท้าทาย ('' = ปกติ, 'hard' = โหด, 'marathon' = มาราธอน, 'survival' = เอาชีวิตรอด)
+ensureColumn('character', 'challenge_mode', "TEXT DEFAULT ''");
 // ช่องสวมใส่ใหม่ (ระบบ RPG — กัน DB เก่าใช้งานได้)
 ensureColumn('character', 'offhand_id', 'INTEGER');
 ensureColumn('character', 'head_id', 'INTEGER');

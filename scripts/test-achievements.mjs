@@ -80,6 +80,20 @@ expect('bm_deal (ซื้อตลาดมืด 3 ครั้ง)', checkAch
 setProg({ bm_buys: 10 });
 expect('bm_king (ซื้อตลาดมืด 10 ครั้ง — bm_deal ปลดไปแล้วจากเคสก่อน)', checkAchievements(c, prog), ['bm_king']);
 
+// --- ตราโหมดท้าทาย (รอบเมืองที่จบในโหมดนั้น) ---
+c.challenge_mode = 'hard';
+prog.hard_cycles = 1;
+expect('challenge_hard (จบ 1 รอบในโหมดโหด)', checkAchievements(c, prog), ['challenge_hard']);
+c.challenge_mode = 'marathon';
+prog.marathon_cycles = 0;
+expect('challenge_marathon: ยังไม่จบรอบ → ไม่ปลดล็อก', checkAchievements(c, prog), []);
+prog.marathon_cycles = 1;
+expect('challenge_marathon (จบ 1 รอบในโหมดมาราธอน)', checkAchievements(c, prog), ['challenge_marathon']);
+c.challenge_mode = 'survival';
+prog.survival_cycles = 1;
+expect('challenge_survival (จบ 1 รอบในโหมดเอาชีวิตรอด)', checkAchievements(c, prog), ['challenge_survival']);
+c.challenge_mode = '';
+
 // --- จ้าวแห่งการโฟกัส (ต้องปลดล็อกตราปกติครบ 25) ---
 for (const a of ACHIEVEMENTS) {
   db.prepare('INSERT OR IGNORE INTO achievement_unlock (character_id, achievement_id) VALUES (?,?)').run(c.id, a.id);
@@ -90,7 +104,7 @@ expect('master (ปลดล็อกตราปกติครบทุกอ�
 const list = getAchievementList(c, prog);
 const secretCount = list.list.filter((a) => a.secret).length;
 const lockedSecret = list.list.filter((a) => a.secret && !a.unlocked);
-const okSecretCount = secretCount === 15 && lockedSecret.length === 0;
+const okSecretCount = secretCount === 18 && lockedSecret.length === 0;
 console.log(`${okSecretCount ? '✅' : '❌'} รายการ UI: ตราลับ ${secretCount} อัน (ปลดล็อกครบ ${list.list.filter((a) => a.secret && a.unlocked).length})`);
 okSecretCount ? pass++ : fail++;
 

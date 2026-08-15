@@ -193,7 +193,7 @@ router.post('/dev/skill-xp', requireDev, (req, res) => {
 // ชนะบอสทันที (ทดสอบรอบเมือง / วัฏจักร)
 router.post('/dev/boss-win', requireDev, (req, res) => {
   dryRun(res, (c) => {
-    const boss = generateBoss(c.level, c.city_index);
+    const boss = generateBoss(c.level, c.city_index, c);
     const prog = getProgress(c.id);
     const xp = 250 + 60 * c.level;
     const gold = 120 + 40 * c.level;
@@ -202,8 +202,9 @@ router.post('/dev/boss-win', requireDev, (req, res) => {
     prog.cycles_completed += 1;
     prog.bosses_defeated += 1;
     prog.gold_earned += gold;
-    db.prepare('UPDATE progress SET cycles_completed=?, bosses_defeated=?, gold_earned=? WHERE id=?')
-      .run(prog.cycles_completed, prog.bosses_defeated, prog.gold_earned, prog.id);
+    if (c.challenge_mode) prog[`${c.challenge_mode}_cycles`] = (prog[`${c.challenge_mode}_cycles`] || 0) + 1;
+    db.prepare('UPDATE progress SET cycles_completed=?, bosses_defeated=?, gold_earned=?, hard_cycles=?, marathon_cycles=?, survival_cycles=? WHERE id=?')
+      .run(prog.cycles_completed, prog.bosses_defeated, prog.gold_earned, prog.hard_cycles || 0, prog.marathon_cycles || 0, prog.survival_cycles || 0, prog.id);
     const drop = Math.random() < 0.35
       ? pickGear(c.level)
       : null;

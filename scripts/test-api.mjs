@@ -232,6 +232,63 @@ try {
     expect('dev bm: ค่ายพักจริงไม่ถูกบังคับ (ตลาดมืดยังสุ่มตามปกติ)', campR.status === 200, campR.json.error || '');
   }
 
+  // --- โหมดท้าทาย: hard (ราคาแพง + XP/ทอง x1.5) ---
+  {
+    r = await api('/character/create', { method: 'POST', body: { name: 'ฮาร์ดโหมด', class: 'rogue', challengeMode: 'hard' } });
+    expect('challenge: สร้างตัวละครโหมดโหดได้', r.status === 200 && r.json.character.challengeMode === 'hard', r.json.error || '');
+    const hardId = r.json.character.id;
+    r = await api('/character/select', { method: 'POST', body: { id: hardId } });
+    const shopBefore = await api('/camp?visit=hard-shop');
+    // เทียบราคากับตัวละครปกติ: เปิดร้านด้วย visit เดียวกัน (deterministic stock เหมือนกัน) → ราคา hard ควรแพงกว่า
+    r = await api('/character/create', { method: 'POST', body: { name: 'โหมดปกติ', class: 'rogue' } });
+    const normId = r.json.character.id;
+    r = await api('/character/select', { method: 'POST', body: { id: normId } });
+    const sameVisit = 'same-visit-price';
+    const shopNormRes = await api(`/camp?visit=${sameVisit}`); // ตอนนี้ select ตัวปกติอยู่
+    r = await api('/character/select', { method: 'POST', body: { id: hardId } });
+    const shopHardRes = await api(`/camp?visit=${sameVisit}`);
+    const shopHard = shopHardRes.json.shop, shopNorm = shopNormRes.json.shop;
+    const shared = shopHard.filter((i) => shopNorm.some((n) => n.id === i.id));
+    expect('challenge: hard ราคาแพงกว่าปกติ (x1.3) — เทียบ item เดียวกัน', shared.length > 0 && shared.every((i) => { const n = shopNorm.find((x) => x.id === i.id); return i.price > n.price; }), `shared=${shared.length} hard=${shared[0]?.price} norm=${shopNorm.find((x) => x.id === shared[0]?.id)?.price}`);
+    // กลับไป hard → complete session → XP/ทอง x1.5
+    r = await api('/character/select', { method: 'POST', body: { id: hardId } });
+    const beforeGold = (await api('/state')).json.character.gold;
+    const beforeXp = (await api('/state')).json.character.xp;
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500 } });
+    expect('challenge: hard mode ได้รางวัล x1.5 (XP/ทองเพิ่ม)', r.status === 200 && r.json.reward.xp >= 150 && r.json.reward.gold >= 37, `xp=${r.json.reward?.xp} gold=${r.json.reward?.gold}`);
+  }
+
+  // --- โหมดท้าทาย: marathon (พักกลาง session = เสีย session) ---
+  {
+    r = await api('/character/create', { method: 'POST', body: { name: 'มาราธอน', class: 'cleric', challengeMode: 'marathon' } });
+    const mId = r.json.character.id;
+    r = await api('/character/select', { method: 'POST', body: { id: mId } });
+    const xpBefore = (await api('/state')).json.character.xp;
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 300 } }); // โฟกัสแค่ 5 นาที (ควร 25)
+    expect('challenge: marathon โฟกัสไม่ครบ (พัก) → เสีย session', r.status === 200 && r.json.failed === true && r.json.reward === undefined, JSON.stringify(r.json.reward));
+    const xpAfter = (await api('/state')).json.character.xp;
+    expect('challenge: marathon เสีย session → ไม่ได้ XP', xpAfter === xpBefore, `before=${xpBefore} after=${xpAfter}`);
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 2400 } }); // work_min 40 นาที (settings ถูกตั้งจากเทสต์ก่อน) → 2400 ≥ 90%×2400
+    expect('challenge: marathon โฟกัสครบ → session ปกติ (x1.5)', r.status === 200 && !r.json.failed && r.json.reward?.xp >= 150, `status=${r.status} err=${r.json.error || ''} xp=${r.json.reward?.xp}`);
+  }
+
+  // --- โหมดท้าทาย: survival (พักแคมป์ไม่ฟรี + HP ต่ำ = เสียของ) ---
+  {
+    r = await api('/character/create', { method: 'POST', body: { name: 'เซอร์ไววัล', class: 'warrior', challengeMode: 'survival' } });
+    const sId = r.json.character.id;
+    r = await api('/character/select', { method: 'POST', body: { id: sId } });
+    r = await api('/camp/rest', { method: 'POST' });
+    expect('challenge: survival พักแคมป์ไม่ฟรี (ถูก reject)', r.status === 400 && r.json.error.includes('เอาชีวิตรอด'), r.json.error || '');
+    // ใส่ไอเทม + ตั้ง HP = 1 แล้วจบ session → เสียของสุ่ม
+    addItem(sId, 122, 1); // ขนหมาป่า
+    const invBefore = (await api('/state')).json.inventory.find((i) => i.item_id === 122)?.qty || 0;
+    db.prepare('UPDATE character SET hp = 1 WHERE id = ?').run(sId);
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500 } });
+    expect('challenge: survival HP=1 จบ session → มี survivalFall (เสียของ)', r.status === 200 && !!r.json.survivalFall, r.json.survivalFall || '');
+    const invAfter = (await api('/state')).json.inventory.find((i) => i.item_id === 122)?.qty || 0;
+    expect('challenge: survival ของในกระเป๋าลดลง (เสียของสุ่ม)', invAfter < invBefore, `before=${invBefore} after=${invAfter}`);
+  }
+
   // --- export/backup ---
   const backupRes = await fetch(`${base}/api/backup`);
   const buf = Buffer.from(await backupRes.arrayBuffer());

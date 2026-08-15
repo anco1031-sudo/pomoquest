@@ -15,6 +15,7 @@ import {
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT,
+  rewardMult, dropMult, priceMult, challengeOf,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -85,14 +86,15 @@ router.get('/achievements', (req, res) => {
 
 // ----- ตัวละคร -----
 router.post('/character/create', (req, res) => {
-  const { name, class: cls } = req.body || {};
+  const { name, class: cls, challengeMode } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'ต้องตั้งชื่อตัวละคร' });
   if (!CLASSES[cls]) return res.status(400).json({ error: 'เลือกคลาสไม่ถูกต้อง' });
   if (nameTaken(name.trim())) return res.status(400).json({ error: `มีตัวละครชื่อ "${name.trim()}" อยู่แล้ว — ลองชื่ออื่น` });
+  const cm = ['hard', 'marathon', 'survival'].includes(challengeMode) ? challengeMode : '';
 
   const b = CLASSES[cls].base;
-  const info = db.prepare(`INSERT INTO character (name, class, hp, max_hp, mp, max_mp, atk, def, spd, crit)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name.trim().slice(0, 20), cls, b.hp, b.hp, b.mp, b.mp, b.atk, b.def, b.spd, b.crit);
+  const info = db.prepare(`INSERT INTO character (name, class, hp, max_hp, mp, max_mp, atk, def, spd, crit, challenge_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(name.trim().slice(0, 20), cls, b.hp, b.hp, b.mp, b.mp, b.atk, b.def, b.spd, b.crit, cm);
   const c = db.prepare('SELECT * FROM character WHERE id = ?').get(info.lastInsertRowid);
   setActiveCharacter(c.id); // ตัวที่สร้างใหม่ = ตัวที่เล่น
   addLog(c.id, { type: 'system', title: '🎒 เริ่มการผจญภัย', detail: `${c.name} (${CLASSES[cls].name}) ออกเดินทางจาก ${CITIES[0].name}!` });
@@ -196,14 +198,44 @@ router.post('/adventure/complete', (req, res) => {
   const { focusSec = 1500, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null } = req.body || {};
   const prog = getProgress(c.id);
 
+  // โหมดมาราธอน: ห้ามพักระหว่างโฟกัส — ถ้าโฟกัสไม่ถึง 90% ของเวลาที่ควร (กดพัก/กลับหน้าหลักกลาง session)
+  // → session นี้ "เสีย": ไม่ได้รางวัล ไม่นับ session ไม่สะสม XP/ทอง/คอมโบ
+  if (c.challenge_mode === 'marathon' && focusSec < 0.9 * getSettings().work_min * 60) {
+    prog.streak = 0;
+    db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
+    addLog(c.id, {
+      type: 'abort', title: '💔 เสีย session (มาราธอน)',
+      detail: `พักระหว่างโฟกัส (${Math.round(focusSec / 60)} นาที/${getSettings().work_min} นาที) — session นี้ไม่ได้รางวัล คอมโบหาย!`,
+      focusSec,
+    });
+    return res.json({ ...serialize(c), failed: true, message: '💔 เสีย session — โหมดมาราธอนห้ามพักระหว่างโฟกัส (ไม่ได้รางวัล)' });
+  }
+
+  // โหมดเอาชีวิตรอด: ถ้า HP เหลือ 1 (ใกล้ตายจากสู้มอนสเตอร์) ตอนจบ session → "อ่อนแรงล้ม"
+  // เสียของสุ่ม 1 ชิ้น + คอมโบหาย + เริ่มรอบเมืองใหม่ (ไม่กลับไปเมืองก่อน) — ยังได้ XP/ทอง session (โฟกัสงานครบจริง)
+  let survivalFall = null;
+  if (c.challenge_mode === 'survival' && c.hp <= 1) {
+    const inv = getInventory(c.id).filter((i) => i.qty > 0 && i.type !== 'scroll');
+    if (inv.length > 0) {
+      const victim = inv[Math.floor(Math.random() * inv.length)];
+      db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, victim.item_id);
+      survivalFall = `💀 อ่อนแรงล้มกลางป่า — ของหาย: ${victim.icon} ${victim.name} x1`;
+    } else {
+      survivalFall = '💀 อ่อนแรงล้มกลางป่า — กระเป๋าเปล่า ไม่มีของให้เสีย';
+    }
+    prog.streak = 0;
+    c.hp = 1; // ฟื้นนิดหน่อยจากหมดสติ (ยังไม่ตาย — โหมดนี้โหดแต่ไม่สิ้นหวัง)
+  }
+
   prog.streak += 1;
   prog.best_streak = Math.max(prog.best_streak, prog.streak);
   prog.sessions_completed += 1;
   prog.total_focus_sec += focusSec;
 
   const bonus = 1 + Math.min(prog.streak - 1, 4) * 0.1;
-  const xp = Math.round((100 + 20 * c.level) * bonus);
-  const gold = 25 + 8 * c.level;
+  const chMult = rewardMult(c); // โหมดท้าทาย: XP/ทอง x1.5 (เสี่ยงสูง รางวัลสูง)
+  const xp = Math.round((100 + 20 * c.level) * bonus * chMult);
+  const gold = Math.round((25 + 8 * c.level) * chMult);
   const ups = gainXp(c, xp);
   c.gold += gold;
   prog.gold_earned += gold;
@@ -223,9 +255,12 @@ router.post('/adventure/complete', (req, res) => {
 
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
   const taleAfter = addLog(c.id, {
-    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
+    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${survivalFall ? ` · ${survivalFall}` : ''}`,
     xp, gold, focusSec,
   });
+  if (survivalFall) {
+    addLog(c.id, { type: 'survival_fall', title: '💀 อ่อนแรงล้ม', detail: survivalFall });
+  }
 
   // เหตุการณ์ที่เจอใน session นี้ (จาก client) — ส่งให้ LLM แต่งเรื่อง + ใช้เป็นสรุปสำรอง
   const sessionEvents = (Array.isArray(events) ? events : [])
@@ -298,6 +333,7 @@ router.post('/adventure/complete', (req, res) => {
     levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
     taleAfter,
     talePending: llmEnabled(),
+    survivalFall,
   });
 });
 
@@ -439,15 +475,17 @@ router.get('/camp', (req, res) => {
   // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของไม่ดังลดราคา
   const dayKey = today();
   const bm = blackMarketStock(visit);
+  // โหมดโหด: ราคาในร้านแพงขึ้น x1.3 (ราคาที่โชว์ = ราคาที่จ่ายจริง)
+  const pm = priceMult(c);
   const shop = stock.map((s) => {
     const base = ITEM_BY_ID[s.item_id];
     if (!base) return null;
     if (s.market === 'black') {
       const b = bm?.find((x) => x.id === s.item_id);
-      return { ...base, price: b?.bmPrice ?? base.price, bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
+      return { ...base, price: Math.round((b?.bmPrice ?? base.price) * pm), bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
     }
     const m = marketPrice(base, dayKey);
-    return { ...base, price: m.price, priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
+    return { ...base, price: Math.round(m.price * pm), priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
   }).filter(Boolean);
   // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ — จังหวะรายวัน (พ่อค้าอยากได้ของบางชิ้น → แพงขึ้น, เปลี่ยนทุกวัน)
   // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — ปรับราคาที่โชว์ให้ตรงกับที่จ่ายจริง
@@ -478,15 +516,16 @@ router.post('/shop/buy', (req, res) => {
   if (!row) return res.status(400).json({ error: 'สินค้านี้ไม่อยู่ในร้านค่ายพักนี้' });
   if (row.qty >= 1) return res.status(400).json({ error: 'ซื้อได้ครั้งเดียวต่อค่ายพัก — ขายหมดแล้ว' });
   // ราคาตามแหล่งที่มา: ร้านปกติ = ราคาตลาดวันนี้ · ตลาดมืด = ราคาลดพิเศษ (เท่ากับที่โชว์ใน /camp)
+  // โหมดโหด: ของทุกอย่างแพงขึ้น x1.3 (ราคาที่โชว์ในร้านก็ปรับให้ตรง)
   let price, fromBm = false;
   if (row.market === 'black') {
     const bm = blackMarketStock(visit);
     const bmItem = bm?.find((x) => x.id === itemId);
     if (!bmItem) return res.status(400).json({ error: 'ของชิ้นนี้ไม่อยู่ในตลาดมืดค่ายนี้' });
-    price = bmItem.bmPrice;
+    price = Math.round(bmItem.bmPrice * priceMult(c));
     fromBm = true;
   } else {
-    price = marketPrice(item, today()).price;
+    price = Math.round(marketPrice(item, today()).price * priceMult(c));
   }
   if (c.gold < price) return res.status(400).json({ error: `ทองไม่พอ! (ต้องใช้ ${price} ทอง)` });
   c.gold -= price;
@@ -675,6 +714,10 @@ router.post('/inventory/unequip', (req, res) => {
 
 router.post('/camp/rest', (req, res) => {
   const c = requireChar(res); if (!c) return;
+  // โหมดเอาชีวิตรอด: พักแคมป์ไม่ฟื้นพลังฟรี — ต้องใช้ยา/สมุนไพรเอง
+  if (c.challenge_mode === 'survival') {
+    return res.status(400).json({ error: '🩸 โหมดเอาชีวิตรอด: พักแคมป์ไม่ฟื้นพลังฟรี — ใช้ยา/สมุนไพรในกระเป๋า หรือสู้ต่อ!' });
+  }
   const stats = computeStats(c);
   c.hp = stats.maxHp; c.mp = stats.maxMp;
   updateCharacter(c);
@@ -752,7 +795,7 @@ router.get('/boss', (req, res) => {
   const c = requireChar(res); if (!c) return;
   let fight = fights.get(c.id);
   if (!fight) {
-    fight = { boss: generateBoss(c.level, c.city_index) };
+    fight = { boss: generateBoss(c.level, c.city_index, c) };
     fights.set(c.id, fight);
   }
   res.json({ ...serialize(c), boss: { ...fight.boss, hp: fight.boss.hp } });
@@ -783,7 +826,13 @@ router.post('/boss/act', (req, res) => {
     prog.cycles_completed += 1;
     prog.bosses_defeated += 1;
     prog.gold_earned += result.gold || 0;
-    db.prepare(`UPDATE progress SET cycles_completed=@cycles_completed, bosses_defeated=@bosses_defeated, gold_earned=@gold_earned WHERE id=@id`).run(prog);
+    // นับรอบที่จบในโหมดท้าทาย (ตราเฉพาะโหมด)
+    if (c.challenge_mode) {
+      const col = `${c.challenge_mode}_cycles`;
+      prog[col] = (prog[col] || 0) + 1;
+    }
+    db.prepare(`UPDATE progress SET cycles_completed=@cycles_completed, bosses_defeated=@bosses_defeated, gold_earned=@gold_earned,
+      hard_cycles=@hard_cycles, marathon_cycles=@marathon_cycles, survival_cycles=@survival_cycles WHERE id=@id`).run(prog);
     if (result.item) addItem(c.id, result.item.id);
     c.city_index = (c.city_index + 1) % CITIES.length;
     updateCharacter(c);

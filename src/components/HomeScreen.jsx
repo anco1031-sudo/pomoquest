@@ -154,6 +154,9 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               <div className="hero-name">{character.name}</div>
               <div className="hero-class">
                 {character.className} <span className="en">{character.classEn}</span> · Lv.{character.level}
+                {character.challengeMode === 'hard' && <span className="challenge-badge">⚔️ โหมดโหด</span>}
+                {character.challengeMode === 'marathon' && <span className="challenge-badge">⏱️ มาราธอน</span>}
+                {character.challengeMode === 'survival' && <span className="challenge-badge">🩸 เอาชีวิตรอด</span>}
               </div>
             </div>
             <div className="hero-city">
