@@ -10,6 +10,7 @@ import BossScreen from './components/BossScreen.jsx';
 import EventModal from './components/EventModal.jsx';
 import LevelUpModal from './components/LevelUpModal.jsx';
 import AchievementModal from './components/AchievementModal.jsx';
+import StoryModal from './components/StoryModal.jsx';
 import Toast from './components/Toast.jsx';
 
 const storeKey = (charId) => `pomoquest-timer-${charId}`;
@@ -47,6 +48,7 @@ export default function Game() {
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [sessionEvents, setSessionEvents] = useState([]); // เหตุการณ์ที่เจอใน session นี้ (ดูย้อนหลังตอนพัก)
   const [breakVisit, setBreakVisit] = useState(null); // id ค่ายพักปัจจุบัน — ใช้ล็อก stock ร้านค้า (ซื้อครั้งเดียวต่อค่ายพัก)
+  const [story, setStory] = useState(null); // เรื่องราว LLM หลังจบ session (modal)
 
   const eventBusyRef = useRef(false);
   const endedRef = useRef(false);
@@ -79,6 +81,7 @@ export default function Game() {
     setMounted(true);
     setSessionEvents([]);
     setBreakVisit(null);
+    setStory(null);
 
     const t = loadTimer(character.id);
     if (t) {
@@ -145,6 +148,7 @@ export default function Game() {
     sfx.complete();
     const res = await post('/adventure/complete', { focusSec: elapsedRef.current });
     if (!res) { setPhase('idle'); return; }
+    if (res && res.talePending && res.taleAfter) pollStory(res.taleAfter); // รอเรื่องราว LLM แล้วเด้ง modal
     if (sessionIdxRef.current >= settings.sessions_per_cycle) startLongBreak();
     else startShortBreak();
   };
@@ -196,6 +200,20 @@ export default function Game() {
     const last = eventQueue[eventQueue.length - 1];
     setSessionEvents((prev) => (prev[prev.length - 1] === last ? prev : [...prev, last]));
   }, [eventQueue, phase]);
+
+  // ---- เรื่องราวการผจญภัย (LLM) หลังจบ session — poll จนเจอเรื่องใหม่แล้วเด้ง modal ----
+  const pollStory = useCallback(async (after) => {
+    for (let i = 0; i < 40; i++) { // ~32 วิ — เผื่อ LLM local คิดช้า (timeout 30 วิ)
+      const d = await get(`/adventure/story?after=${after}`);
+      if (!d) return;
+      if (d.story) {
+        setStory(d.story);
+        return;
+      }
+      if (!d.pending) return; // LLM ปิดอยู่ — ไม่มีเรื่องราว
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }, [get]);
 
   const handleAbort = async () => {
     if (!window.confirm('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป')) return;
@@ -287,6 +305,9 @@ export default function Game() {
       {achieveQueue.length > 0 && !inActiveWork && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
 
       {levelUpQueue.length > 0 && !inActiveWork && <LevelUpModal levelUp={levelUpQueue[0]} onClose={dismissLevelUp} />}
+
+      {/* เรนเดอร์ท้ายสุด = อยู่หน้าสุด */}
+      {story && !inActiveWork && <StoryModal story={story} onClose={() => setStory(null)} />}
 
       {showCharSelect && (
         <CharacterSelect

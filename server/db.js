@@ -266,9 +266,9 @@ export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
 export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0 }) {
-  // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน)
-  db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec);
+  // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec).lastInsertRowid;
 }
 
 export const addItem = (charId, itemId, qty = 1) => {

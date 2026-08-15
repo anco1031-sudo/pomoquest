@@ -525,6 +525,12 @@ body {
 .event-rewards { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 16px; font-weight: 700; font-size: 14px; }
 .event-auto-close { font-size: 12px; color: var(--muted); margin-top: 10px; }
 
+/* story modal (เรื่องราวการผจญภัยหลังจบ session) */
+.story-modal { text-align: center; border-top: 4px solid var(--purple); }
+.story-icon { font-size: 44px; }
+.story-title { font-size: 20px; font-weight: 900; color: var(--gold); margin: 8px 0 12px; }
+.story-text { font-size: 14.5px; line-height: 1.6; color: var(--text); background: var(--bg); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left; }
+
 /* level up modal */
 .levelup-modal { text-align: center; border-top: 4px solid var(--gold); }
 .levelup-icon { font-size: 52px; }

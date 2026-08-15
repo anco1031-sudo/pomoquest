@@ -12,7 +12,7 @@ import {
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
-import { llmChat } from './llm.js';
+import { llmChat, llmEnabled } from './llm.js';
 
 const router = Router();
 
@@ -212,7 +212,7 @@ router.post('/adventure/complete', (req, res) => {
     total_focus_sec=@total_focus_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
 
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
-  addLog(c.id, {
+  const taleAfter = addLog(c.id, {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง`,
     xp, gold, focusSec,
   });
@@ -241,7 +241,17 @@ router.post('/adventure/complete', (req, res) => {
     achievements: ach.fresh,
     ...dailyPayload(c),
     levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
+    taleAfter,
+    talePending: llmEnabled(),
   });
+});
+
+// เรื่องราว LLM หลังจบ session — client poll เรื่องใหม่ที่เพิ่งเขียน (id > after)
+router.get('/adventure/story', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const after = parseInt(req.query.after, 10) || 0;
+  const tale = db.prepare(`SELECT * FROM log WHERE character_id = ? AND type = 'llm_tale' AND id > ? ORDER BY id LIMIT 1`).get(c.id, after);
+  res.json({ story: tale || null, pending: llmEnabled() });
 });
 
 router.post('/adventure/abort', (req, res) => {
