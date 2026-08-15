@@ -165,7 +165,13 @@ ensureColumn('character', 'accessory_2_id', 'INTEGER');
 ensureColumn('character', 'accessory_3_id', 'INTEGER');
 ensureColumn('character', 'accessory_4_id', 'INTEGER');
 
-// seed items
+// seed items — ต้อง ensureColumn item ให้ครบก่อน db.prepare() เพราะ SQLite เช็คคอลัมน์ตอนคอมไพล์
+// (ถ้าเตรียม statement ก่อนเพิ่มคอลัมน์ จะพังตอนเปิด DB เก่า: table item has no column named ...)
+ensureColumn('item', 'exclusive', 'INTEGER DEFAULT 0');
+ensureColumn('item', 'use_xp', 'INTEGER DEFAULT 0');
+ensureColumn('item', 'use_gold', 'INTEGER DEFAULT 0');
+ensureColumn('item', 'handed', 'INTEGER DEFAULT 1');
+
 const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, handed, exclusive)
   VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @handed, @exclusive)`);
 const seedItems = db.transaction(() => {
@@ -181,10 +187,6 @@ const seedItems = db.transaction(() => {
     });
   }
 });
-ensureColumn('item', 'exclusive', 'INTEGER DEFAULT 0');
-ensureColumn('item', 'use_xp', 'INTEGER DEFAULT 0');
-ensureColumn('item', 'use_gold', 'INTEGER DEFAULT 0');
-ensureColumn('item', 'handed', 'INTEGER DEFAULT 1');
 seedItems();
 // กัน DB เก่า: อัปเดต handed ของอาวุธสองมือที่ seed ไปแล้ว (INSERT OR IGNORE ไม่ทับของเดิม)
 for (const i of ITEMS) {
