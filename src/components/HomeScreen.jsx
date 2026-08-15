@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, setMuted, isMuted } from '../sound.js';
 import { Bar, Panel, fmtDuration, fmtTime } from './ui.jsx';
@@ -25,6 +25,8 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
   const [showDev, setShowDev] = useState(false);
+  const [showImportNote, setShowImportNote] = useState(false); // modal แจ้งรีสตาร์ทหลัง import
+  const fileRef = useRef(null);
 
   if (!character) return null;
   const city = character.city;
@@ -41,6 +43,50 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const saveSettings = async (patch) => {
     const d = await put('/settings', patch);
     if (d) showToast('บันทึกการตั้งค่าแล้ว');
+  };
+
+  // ---- ข้อมูล: export / import / reset ----
+  const handleExport = async () => {
+    try {
+      const res = await fetch('/api/backup');
+      if (!res.ok) throw new Error('export ไม่สำเร็จ');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      a.href = url;
+      a.download = `pomoquest-backup-${ts}.db`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📤 ดาวน์โหลด backup แล้ว');
+    } catch (e) {
+      showToast(e.message);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // เลือกไฟล์เดิมซ้ำได้
+    if (!file) return;
+    if (!window.confirm('แทนที่ข้อมูลปัจจุบันด้วยไฟล์ backup นี้? ข้อมูลที่ไม่ได้ backup จะหาย (แนะนำให้ Export ก่อน)')) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const res = await fetch('/api/restore', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(d.error || 'import ไม่สำเร็จ'); return; }
+      setShowImportNote(true);
+    } catch (err) {
+      showToast(err.message);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm('⚠️ ล้างข้อมูลเกมทั้งหมด (ตัวละคร/ไอเทม/ประวัติ session)? กู้คืนไม่ได้!')) return;
+    const d = await post('/reset');
+    if (d) {
+      showToast(d.message || 'ล้างข้อมูลแล้ว');
+      refresh();
+    }
   };
 
   return (
@@ -204,9 +250,46 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
             <button className="btn" onClick={onManageCharacters}>👥 จัดการตัวละคร (เลือก / สร้าง / เปลี่ยนชื่อ / ลบ)</button>
           </div>
         )}
+
+        {tab === 'settings' && (
+          <div className="panel">
+            <div className="panel-title">💾 ข้อมูล (Export / Import / Reset)</div>
+            <div className="setting-row">
+              <label>📤 Export</label>
+              <button className="btn" onClick={handleExport}>ดาวน์โหลด backup (.db)</button>
+            </div>
+            <div className="setting-row">
+              <label>📥 Import</label>
+              <button className="btn" onClick={() => fileRef.current?.click()}>อัปโหลดไฟล์ .db</button>
+              <input ref={fileRef} type="file" accept=".db,application/octet-stream" hidden onChange={handleImport} />
+            </div>
+            <div className="setting-row">
+              <label>🗑️ Reset</label>
+              <button className="btn btn-danger" onClick={handleReset}>ล้างข้อมูลทั้งหมด</button>
+            </div>
+            <p className="hint">💡 Export ได้ไฟล์ .db เดียวกับ <code>./run.sh backup</code> — ใช้กู้คืนผ่าน <code>./run.sh restore</code> หรือปุ่ม Import ได้</p>
+          </div>
+        )}
       </main>
 
       {showDev && <DevPanel onClose={() => setShowDev(false)} />}
+
+      {/* หลัง import สำเร็จ — ต้องรีสตาร์ท server ถึงจะเห็นข้อมูลใหม่ */}
+      {showImportNote && (
+        <div className="modal-backdrop" onClick={() => setShowImportNote(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>📥 กู้คืนข้อมูลแล้ว</h2>
+            <p>
+              ไฟล์ backup ถูกแทนที่ลงในฐานข้อมูลแล้ว — แต่ server ยังถือข้อมูลเก่าอยู่ในหน่วยความจำ
+              <br />
+              <b>กรุณารีสตาร์ท server</b> เพื่อให้ข้อมูลใหม่มีผล:
+            </p>
+            <pre className="code-block">./run.sh stop && ./run.sh start</pre>
+            <p className="hint">(หรือ Ctrl+C แล้วรันใหม่ — หลังรีสตาร์ทแล้วเปิดหน้านี้อีกครั้ง)</p>
+            <button className="btn btn-primary btn-big" onClick={() => setShowImportNote(false)}>รับทราบ</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

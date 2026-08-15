@@ -784,6 +784,19 @@ body {
 .levelup-sub { margin: 8px 0 16px; }
 .levelup-modal .alloc-box { text-align: left; }
 
+/* ---------- ข้อมูล / import ---------- */
+.code-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  overflow-x: auto;
+  text-align: left;
+  margin: 8px 0;
+}
+
 /* ---------- toast (แบบคิว — โชว์เรียงกันหลายอัน) ---------- */
 .toast-stack {
   position: fixed;

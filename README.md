@@ -194,6 +194,9 @@ LLM_API_KEY=xxxx npm run dev       # มี key
 | POST | `/api/character/allocate` | จัดสรรแต้มสถานะ |
 | POST | `/api/travel` | เดินทางย้อนกลับไปเมืองที่เคยไปมาแล้ว (เสีย 20 ทอง/เมือง) |
 | PUT | `/api/settings` | ปรับเวลา Pomodoro |
+| GET | `/api/backup` | Export ข้อมูลทั้งหมดเป็นไฟล์ .db (ดาวน์โหลด) |
+| POST | `/api/restore` | Import ไฟล์ .db (ต้องรีสตาร์ท server ถึงมีผล) |
+| POST | `/api/reset` | ล้างข้อมูลเกมทั้งหมด (มีผลทันที) |
 
 ## 🧪 Dev Test Panel
 

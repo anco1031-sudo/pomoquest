@@ -9,7 +9,8 @@ const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 // รองรับการทดสอบด้วย DB แยก (POMOQUEST_DB=/path/to.db)
-export const db = new Database(process.env.POMOQUEST_DB || path.join(dataDir, 'pomoquest.db'));
+export const DB_PATH = process.env.POMOQUEST_DB || path.join(dataDir, 'pomoquest.db');
+export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 import {
-  db, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
+  db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
   getSkillRow, learnSkill,
 } from './db.js';
@@ -853,6 +856,55 @@ router.put('/settings', (req, res) => {
       Math.max(1, Math.min(8, sessions_per_cycle ?? s.sessions_per_cycle)),
     );
   res.json({ settings: getSettings() });
+});
+
+// ----- ข้อมูล: export / import / reset (แท็บตั้งค่า) -----
+
+// Export — ดาวน์โหลด DB ทั้งหมดเป็นไฟล์ .db (snapshot สม่ำเสมอ — ใช้ได้กับ ./run.sh restore)
+router.get('/backup', (req, res) => {
+  const buf = db.serialize();
+  const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="pomoquest-backup-${ts}.db"`);
+  res.send(Buffer.from(buf));
+});
+
+// Import — อัปโหลดไฟล์ .db แทนที่ฐานข้อมูล (ตรวจว่าเป็น SQLite ของ PomoQuest ก่อน)
+// หมายเหตุ: server เปิด DB ค้างไว้ → ต้องรีสตาร์ท server ถึงจะเห็นข้อมูลใหม่
+router.post('/restore', (req, res) => {
+  const chunks = [];
+  req.on('data', (c) => chunks.push(c));
+  req.on('end', () => {
+    const buf = Buffer.concat(chunks);
+    if (!buf.length) return res.status(400).json({ error: 'ไฟล์ว่างเปล่า' });
+    const tmp = path.join(path.dirname(DB_PATH), 'restore-pending.db');
+    try {
+      fs.writeFileSync(tmp, buf);
+      // ตรวจว่าเป็น SQLite DB ที่มีตารางของ PomoQuest จริง
+      const test = new Database(tmp, { readonly: true });
+      const tables = test.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name);
+      test.close();
+      const need = ['character', 'item', 'log', 'progress', 'settings'];
+      if (!need.every((t) => tables.includes(t))) throw new Error('schema ไม่ตรง');
+      // แทนที่ไฟล์จริง + ลบ WAL/SHM เก่า (server ยังถือข้อมูลเก่าในความจำจนกว่าจะ restart)
+      fs.renameSync(tmp, DB_PATH);
+      for (const f of [DB_PATH + '-wal', DB_PATH + '-shm']) fs.rmSync(f, { force: true });
+      res.json({ message: 'กู้คืนข้อมูลแล้ว — รีสตาร์ท server เพื่อให้ข้อมูลใหม่มีผล (./run.sh start)' });
+    } catch (e) {
+      fs.rmSync(tmp, { force: true });
+      res.status(400).json({ error: 'ไฟล์ไม่ใช่ฐานข้อมูล PomoQuest ที่ถูกต้อง' });
+    }
+  });
+});
+
+// Reset — ล้างข้อมูลเกมทั้งหมด (มีผลทันที ไม่ต้องรีสตาร์ท)
+router.post('/reset', (req, res) => {
+  for (const t of ['achievement_unlock', 'camp_shop', 'character_skill', 'daily_counter', 'daily_quest_done', 'daily_streak', 'inventory', 'log', 'progress', 'character']) {
+    db.prepare(`DELETE FROM ${t}`).run();
+  }
+  db.prepare('DELETE FROM sqlite_sequence').run(); // รีเซ็ต autoincrement
+  db.prepare("UPDATE settings SET work_min=25, short_break_min=5, long_break_min=15, sessions_per_cycle=4, event_every_sec=90, active_character_id=NULL WHERE id=1").run();
+  res.json({ message: 'ล้างข้อมูลเกมทั้งหมดแล้ว — เริ่มต้นใหม่ได้เลย' });
 });
 
 export default router;
