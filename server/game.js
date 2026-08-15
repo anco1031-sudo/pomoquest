@@ -208,6 +208,11 @@ export function isCrit(critPct) {
   return Math.random() * 100 < critPct;
 }
 
+// โอกาสหลบหลีกจากความเร็ว (SPD) — ใช้ในสู้บอส: โจร (SPD สูงสุด) หลบได้บ่อยสุด สูงสุด 20%
+export function dodgeChance(spd) {
+  return Math.min(20, Math.round(spd * 0.8));
+}
+
 // ----- ระบบมอนสเตอร์ / ต่อสู้อัตโนมัติ (ช่วง work session — ไม่รบกวนสมาธิ) -----
 export function rollMonster(level) {
   const m = pick(MONSTERS);
@@ -543,7 +548,9 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       // โอกาส 30% ที่บอสใช้ท่าเด็ด (สกิล) แทนโจมตีปกติ
       const bossSkill = fight.boss.skills?.length && Math.random() < 0.3 ? pick(fight.boss.skills) : null;
       const bossName = `${fight.boss.icon} ${fight.boss.name}`;
-      const playerHit = (dmg, crit) => {
+      const dodge = dodgeChance(stats.spd); // โอกาสหลบโจมตีบอส (SPD สูง = หลบเก่ง)
+      const playerHit = (dmg) => {
+        if (Math.random() * 100 < dodge) return 0; // 💨 หลบได้ — ไม่เสียดาเมจ
         let d = dmg;
         if (fight.playerGuard) { d = Math.max(1, Math.round(d * (1 - fight.playerGuard))); }
         c.hp = Math.max(1, c.hp - d);
@@ -569,15 +576,19 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
           const crit = Math.random() * 100 < fight.boss.crit;
           let dmg = attackDamage(fight.boss.atk * (sk.mult || 1), stats.def);
           if (crit) dmg = Math.round(dmg * 1.5);
-          const dealt = playerHit(dmg, crit);
-          log.push(`💢 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
+          const dealt = playerHit(dmg);
+          log.push(dealt === 0
+            ? `💨 ${c.name} หลบสกิล ${sk.icon} ${sk.name} ได้!`
+            : `💢 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
         }
       } else {
         const crit = Math.random() * 100 < fight.boss.crit;
         let dmg = attackDamage(fight.boss.atk, stats.def);
         if (crit) dmg = Math.round(dmg * 1.5);
-        const dealt = playerHit(dmg, crit);
-        log.push(`💢 ${bossName} ตอบโต้ โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
+        const dealt = playerHit(dmg);
+        log.push(dealt === 0
+          ? `💨 ${c.name} หลบการโจมตีได้!`
+          : `💢 ${bossName} ตอบโต้ โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
       }
       fight.playerGuard = null; // โล่เวท (ผู้เล่น) คุ้มกันแค่เทิร์นนี้เท่านั้น
     }

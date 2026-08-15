@@ -91,6 +91,14 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('session_summary เก็บเมือง + รวมรายชื่อเมืองตามลำดับ session แรก', JSON.stringify(cities) === JSON.stringify(['แอสการ์ด', 'ปราสาทมังกร']), cities.join(','));
 }
 
+// --- dodgeChance (SPD → โอกาสหลบโจมตีบอส) ---
+{
+  const { dodgeChance } = await import('../server/game.js');
+  expect('dodgeChance: warrior spd 8 → 6%', dodgeChance(8) === 6, `got ${dodgeChance(8)}`);
+  expect('dodgeChance: rogue spd 14 → 11% (หลบเก่งสุด)', dodgeChance(14) === 11, `got ${dodgeChance(14)}`);
+  expect('dodgeChance: cap ที่ 20%', dodgeChance(100) === 20, `got ${dodgeChance(100)}`);
+}
+
 // --- export/import JSON (data-io) — roundtrip + เช็คเวอร์ชัน ---
 {
   const { exportJsonData, restoreFromJson, SCHEMA_VERSION } = await import('../server/data-io.js');

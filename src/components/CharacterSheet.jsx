@@ -156,6 +156,8 @@ export default function CharacterSheet() {
         <StatRow label="พลังป้องกัน" value={character.def} bonus={eqBonus.def} icon="🛡️" />
         <StatRow label="ความเร็ว" value={character.spd} bonus={eqBonus.spd} icon="👟" />
         <StatRow label="คริติคอล" value={`${character.crit}%`} bonus={eqBonus.crit} icon="🎯" />
+        {/* สูตรเดียวกับ server/game.js dodgeChance — SPD สูง หลบโจมตีบอสได้บ่อย (สูงสุด 20%) */}
+        <StatRow label="หลบหลีก" value={`${Math.min(20, Math.round(character.spd * 0.8))}%`} icon="💨" />
       </Panel>
 
       <Panel title={`⚡ สกิล (${(character.skills || []).length})`}>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
+import { SKILLS } from '../../server/data.js';
 
 const CLASSES = [
   { key: 'warrior', name: 'นักรบ', en: 'Warrior', icon: '⚔️', desc: 'เลือดหนา พลังโจมตีสูง เหมาะกับสายบุก', base: 'HP 120 · ATK 14 · DEF 10' },
@@ -53,9 +54,35 @@ export default function CharacterCreation({ modal = false, onClose }) {
               <div className="class-name">{c.name} <span className="class-en">{c.en}</span></div>
               <div className="class-desc">{c.desc}</div>
               <div className="class-base">{c.base}</div>
+              <div className="class-skills">
+                {(SKILLS[c.key] || []).map((s) => (
+                  <span key={s.id} className="class-skill-chip" title={`${s.name}: ${s.desc} (${s.mp} MP)`}>
+                    {s.icon}
+                  </span>
+                ))}
+              </div>
             </button>
           ))}
         </div>
+
+        {cls && (
+          <div className="class-skill-panel">
+            <div className="class-skill-panel-title">
+              🎯 สกิลของ{CLASSES.find((c) => c.key === cls)?.name}
+            </div>
+            {(SKILLS[cls] || []).map((s) => (
+              <div className="class-skill-row" key={s.id}>
+                <span className="class-skill-icon">{s.icon}</span>
+                <div className="class-skill-info">
+                  <div className="class-skill-name">
+                    {s.name} <span className="mp-chip">-{s.mp} MP</span>
+                  </div>
+                  <div className="class-skill-desc">{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <button

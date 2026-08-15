@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
+import { SKILLS } from '../../server/data.js';
 import CharacterCreation from './CharacterCreation.jsx';
 
 export default function CharacterSelect({ standalone = false, onClose, onDone }) {
   const { characters, activeCharacterId, post, refresh } = useGame();
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [showSkillsId, setShowSkillsId] = useState(null);
 
   if (showCreate) return <CharacterCreation modal onClose={() => setShowCreate(false)} />;
 
@@ -57,11 +59,41 @@ export default function CharacterSelect({ standalone = false, onClose, onDone })
             </div>
             <div className="char-sub">{c.className} · Lv.{c.level} · {c.city.icon} {c.city.name}</div>
             <div className="char-sub">💰 {c.gold} ทอง</div>
+            <div className="class-skills">
+              {(SKILLS[c.class] || []).map((s) => (
+                <span key={s.id} className="class-skill-chip" title={`${s.name}: ${s.desc} (${s.mp} MP)`}>
+                  {s.icon}
+                </span>
+              ))}
+            </div>
+            {showSkillsId === c.id && (
+              <div className="class-skill-panel">
+                <div className="class-skill-panel-title">🎯 สกิลของ{c.className}</div>
+                {(SKILLS[c.class] || []).map((s) => (
+                  <div className="class-skill-row" key={s.id}>
+                    <span className="class-skill-icon">{s.icon}</span>
+                    <div className="class-skill-info">
+                      <div className="class-skill-name">
+                        {s.name} <span className="mp-chip">-{s.mp} MP</span>
+                      </div>
+                      <div className="class-skill-desc">{s.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="char-actions">
             {c.id !== activeCharacterId && (
               <button className="btn btn-sm btn-primary" onClick={() => select(c)}>เลือก</button>
             )}
+            <button
+              className="btn btn-sm"
+              onClick={() => { sfx.click(); setShowSkillsId(showSkillsId === c.id ? null : c.id); }}
+              title="ดูสกิล"
+            >
+              {showSkillsId === c.id ? 'สกิล ▲' : 'สกิล ▼'}
+            </button>
             <button className="btn btn-sm" onClick={() => rename(c)} title="เปลี่ยนชื่อ">✏️</button>
             <button
               className={`btn btn-sm ${confirmDeleteId === c.id ? 'btn-danger' : 'btn-danger-soft'}`}

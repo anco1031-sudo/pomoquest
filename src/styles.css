@@ -344,6 +344,37 @@ body {
 .class-en { color: var(--muted); font-size: 11px; font-weight: 500; }
 .class-desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .class-base { font-size: 11px; color: var(--gold); margin-top: 6px; font-weight: 600; }
+.class-skills { display: flex; gap: 4px; margin-top: 8px; }
+.class-skill-chip {
+  font-size: 13px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px 6px;
+  cursor: help;
+}
+.class-skill-panel {
+  margin-top: 12px;
+  background: var(--bg);
+  border: 1px solid var(--purple);
+  border-radius: 12px;
+  padding: 12px;
+}
+.class-skill-panel-title { font-size: 13px; font-weight: 800; color: var(--gold); margin-bottom: 8px; }
+.class-skill-row { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--border); align-items: flex-start; }
+.class-skill-row:last-child { border-bottom: none; }
+.class-skill-icon { font-size: 20px; }
+.class-skill-name { font-weight: 700; font-size: 13.5px; }
+.class-skill-desc { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.mp-chip {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
 
 /* ---------- camp ---------- */
 .camp-header {
