@@ -346,9 +346,7 @@ body {
 }
 .camp-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
-/* ---------- item stat chips + tooltip ---------- */
-.item-tip { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
-.item-tip.slot-item { flex-direction: column; align-items: flex-start; gap: 3px; }
+/* ---------- item stat chips ---------- */
 .item-stat-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .item-stat-chip {
   background: rgba(139, 92, 246, 0.14);
@@ -360,23 +358,6 @@ body {
   padding: 1px 6px;
   white-space: nowrap;
 }
-.item-tooltip {
-  position: fixed;
-  z-index: 80;
-  max-width: 260px;
-  background: #0d0f16;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 12.5px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-  text-align: left;
-}
-.tip-name { font-weight: 800; margin-bottom: 4px; }
-.tip-meta { color: var(--muted); margin-bottom: 4px; }
-.tip-stats { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; color: var(--gold); }
-.tip-desc { color: var(--muted); line-height: 1.45; }
 
 .shop-row, .inv-row {
   display: flex;
@@ -428,7 +409,7 @@ body {
 .stat-bonus { color: var(--green); font-size: 12px; }
 .slot-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
 .slot-label { color: var(--muted); width: 100px; font-size: 13.5px; }
-.slot-item { flex: 1; font-size: 14px; font-weight: 600; }
+.slot-item { flex: 1; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 .slot-empty { flex: 1; color: var(--muted); font-size: 13px; }
 
 /* ---------- bars (XP) ---------- */
