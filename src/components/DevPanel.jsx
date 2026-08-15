@@ -78,6 +78,7 @@ export default function DevPanel({ onClose }) {
       <div className="modal dev-panel" onClick={(e) => e.stopPropagation()}>
         <h2>🧪 Dev Test Panel</h2>
         <p className="dev-sub">ทดสอบระบบต่าง ๆ ของเกม — ต้องเข้าสู่ระบบก่อน (admin/admin)</p>
+        <p className="dev-sub" style={{ color: '#fcd34d' }}>⚠️ ปุ่ม /dev/* (ทอง/XP/ไอเทม/ตรา/ชนะบอส/สกิล…) เป็นโหมดลองเล่น — แสดงผลเหมือนจริงแต่ <b>ไม่บันทึกลง DB</b> (กันปั๊มเลเวล) · ปุ่มที่เรียกระบบจริงของเกม (event/session/ภารกิจ/ซื้อ) ยังบันทึกตามปกติ</p>
 
         {!token ? (
           <div className="dev-login">

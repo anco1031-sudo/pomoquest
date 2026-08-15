@@ -15,16 +15,29 @@ export function StatAllocator({ onDone }) {
     setAlloc((a) => ({ ...a, [k]: next }));
   };
 
+  // น้ำหนักการจัดสรรอัตโนมัติตามคลาส — แต่ละคลาสเน้นค่าไม่เหมือนกัน (ดูก่อนว่าเป็นคลาสอะไร)
+  const CLASS_WEIGHTS = {
+    warrior: { hp: 3, atk: 3, def: 2, spd: 1.5, mp: 0.5 },   // นักรบ: เลือดหนา + บุกหนัก + ทน
+    mage:    { mp: 3, atk: 2.5, spd: 1.5, hp: 1.5, def: 0.5 }, // นักเวทย์: มานา (ใช้สกิลเวท) + โจมตีเวท
+    rogue:   { spd: 3, atk: 2.5, hp: 1.5, def: 1, mp: 0.5 },  // โจร: ว่องไว (หลบ + พลัง) + คริติคอล
+    cleric:  { hp: 2.5, mp: 2.5, def: 2, atk: 1.5, spd: 1 }, // นักบวช: สมดุล ทน + มานาฟื้นพลัง
+  };
+  const w = CLASS_WEIGHTS[character.class] || CLASS_WEIGHTS.warrior;
+  const AUTO_KEYS = ['hp', 'mp', 'atk', 'def', 'spd'];
+  const priorityHint = [...AUTO_KEYS].sort((a, b) => w[b] - w[a]).map((k) => ({ hp: 'HP', mp: 'MP', atk: 'ATK', def: 'DEF', spd: 'SPD' }[k])).join(' > ');
+
   const auto = () => {
-    let left = character.statPoints;
+    const total = character.statPoints;
+    const sum = AUTO_KEYS.reduce((a, k) => a + w[k], 0);
+    const raw = {};
+    for (const k of AUTO_KEYS) raw[k] = (total * w[k]) / sum;
     const a = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 };
-    const order = ['hp', 'atk', 'spd', 'def', 'mp'];
+    let used = 0;
+    for (const k of AUTO_KEYS) { a[k] = Math.floor(raw[k]); used += a[k]; }
+    // แจกแต้มที่เหลือให้ stat ที่มีเศษมากที่สุดก่อน (จัดสรรตามสัดส่วนพอดี)
+    const order = AUTO_KEYS.map((k) => [k, raw[k] - a[k]]).sort((x, y) => y[1] - x[1]);
     let i = 0;
-    while (left > 0) {
-      a[order[i % order.length]] += 1;
-      left -= 1;
-      i += 1;
-    }
+    while (used < total) { a[order[i % order.length][0]] += 1; used += 1; i += 1; }
     setAlloc(a);
     sfx.click();
   };
@@ -51,8 +64,9 @@ export function StatAllocator({ onDone }) {
     <div className="alloc-box">
       <div className="alloc-header">
         <span>🪙 แต้มสถานะคงเหลือ: <b>{remaining}</b></span>
-        <button className="btn btn-sm" onClick={auto}>✨ จัดอัตโนมัติ</button>
+        <button className="btn btn-sm" onClick={auto} title={`เน้นตามคลาส: ${priorityHint}`}>✨ จัดอัตโนมัติ (ตามคลาส)</button>
       </div>
+      <div className="alloc-hint">🎯 {character.className} ควรเน้น: <b>{priorityHint}</b> — จัดอัตโนมัติกระจายตามสัดส่วนนี้</div>
       {rows.map((r) => (
         <div className="alloc-row" key={r.k}>
           <span className="alloc-label">{r.label}</span>

@@ -190,6 +190,29 @@ try {
     expect('daily quest: junk_sold เพิ่ม +1 เมื่อขาย loot มอนสเตอร์', counter?.value === before + 1, `before=${before}, after=${counter?.value}`);
   }
 
+  // --- dev test: โหมดลองเล่น — แสดงผลเหมือนจริงแต่ไม่บันทึกลง DB ---
+  {
+    r = await api('/dev/login', { method: 'POST', body: { user: 'admin', pass: 'admin' } });
+    expect('dev login: admin/admin ได้ token', r.status === 200 && !!r.json.token);
+    const token = r.json.token;
+    const devPost = async (path, body) => {
+      const res = await fetch(`${base}/api${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-dev-token': token }, body: JSON.stringify(body || {}) });
+      return { status: res.status, json: await res.json().catch(() => ({})) };
+    };
+    const goldBefore = (await api('/state')).json.character.gold;
+    const levelBefore = (await api('/state')).json.character.level;
+    r = await devPost('/dev/gold', { amount: 5000 });
+    expect('dev gold: ตอบ +5000 (ลองเล่น)', r.status === 200 && r.json.character.gold === goldBefore + 5000, r.json.error || '');
+    const goldAfter = (await api('/state')).json.character.gold;
+    expect('dev gold: DB ไม่บันทึก (ทองเท่าเดิม)', goldAfter === goldBefore, `before=${goldBefore}, after=${goldAfter}`);
+    r = await devPost('/dev/xp', { amount: 999999 });
+    expect('dev xp: แสดงเลเวลอัพเยอะ (ลองเล่น)', r.status === 200 && r.json.character.level > levelBefore);
+    const stateAfter = (await api('/state')).json.character;
+    expect('dev xp: DB ไม่บันทึก (เลเวลเท่าเดิม)', stateAfter.level === levelBefore, `before=${levelBefore}, after=${stateAfter.level}`);
+    const devLogs = db.prepare("SELECT COUNT(*) n FROM log WHERE type = 'dev'").get().n;
+    expect('dev: ไม่มี log dev เข้า DB', devLogs === 0);
+  }
+
   // --- export/backup ---
   const backupRes = await fetch(`${base}/api/backup`);
   const buf = Buffer.from(await backupRes.arrayBuffer());
