@@ -20,7 +20,7 @@ export function GameProvider({ children }) {
   const [toast, setToast] = useState(null);
   const [eventQueue, setEventQueue] = useState([]);
   const [achieveQueue, setAchieveQueue] = useState([]);
-  const [levelUp, setLevelUp] = useState(null);
+  const [levelUpQueue, setLevelUpQueue] = useState([]);
   const toastTimer = useRef(null);
 
   const showToast = useCallback((msg) => {
@@ -46,7 +46,7 @@ export function GameProvider({ children }) {
         hasCharacter: d.character ? true : d.hasCharacter ?? s.hasCharacter,
       }));
       if (d.levelUps && d.levelUps.levels > 0) {
-        setLevelUp({ levels: d.levelUps.levels, statPoints: d.levelUps.statPoints });
+        setLevelUpQueue((q) => [...q, { levels: d.levelUps.levels, statPoints: d.levelUps.statPoints }]);
       }
       if (d.event) setEventQueue((q) => [...q, d.event]);
       if (d.achievements && d.achievements.length) setAchieveQueue((q) => [...q, ...d.achievements]);
@@ -100,7 +100,7 @@ export function GameProvider({ children }) {
 
   const closeEvent = useCallback(() => setEventQueue((q) => q.slice(1)), []);
   const closeAchieve = useCallback(() => setAchieveQueue((q) => q.slice(1)), []);
-  const dismissLevelUp = useCallback(() => setLevelUp(null), []);
+  const dismissLevelUp = useCallback(() => setLevelUpQueue((q) => q.slice(1)), []);
 
   useEffect(() => {
     refresh();
@@ -108,7 +108,7 @@ export function GameProvider({ children }) {
 
   return (
     <Ctx.Provider
-      value={{ ...data, refresh, get, post, put, toast, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUp, dismissLevelUp }}
+      value={{ ...data, refresh, get, post, put, toast, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp }}
     >
       {children}
     </Ctx.Provider>
