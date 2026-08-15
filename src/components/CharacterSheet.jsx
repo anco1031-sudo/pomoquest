@@ -53,6 +53,9 @@ export function StatAllocator({ onDone }) {
     setAlloc(allocateWithGoals(character.statPoints, weights, goals, curStats));
     sfx.click();
   };
+  // แผนที่แนะนำ (ตามคลาส + เกียร์ + เป้าหมายของในกระเป๋า) — ใช้ในโหมดวางแผน
+  const suggestedPlan = allocateWithGoals(character.statPoints, weights, goals, curStats);
+  const planLabel = (a) => AUTO_KEYS.map((k) => `${k.toUpperCase()} ${a[k]}`).join(' · ');
 
   const confirm = async () => {
     if (remaining > 0 || busy) return;
@@ -123,6 +126,10 @@ export function StatAllocator({ onDone }) {
       {plan && (
         <div className="alloc-plan">
           <div className="alloc-plan-title">🔍 ผลลัพธ์ถ้าจัดสรรแบบนี้ (dry-run — ยังไม่บันทึก)</div>
+          <div className="alloc-plan-suggest">
+            <span>💡 แผนแนะนำ: <b>{planLabel(suggestedPlan)}</b></span>
+            <button className="btn btn-sm btn-plan-apply" onClick={auto}>✨ จัดตามแผนนี้</button>
+          </div>
           <div className="alloc-plan-stats">
             {planRows.map((r) => (
               <span className="alloc-plan-stat" key={r.k}>
