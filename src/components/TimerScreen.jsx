@@ -1,7 +1,7 @@
 import { useGame } from '../context.jsx';
 import { fmtTime } from './ui.jsx';
 
-export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort }) {
+export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, sessionEvents = [] }) {
   const { character } = useGame();
   if (!character) return null;
   const city = character.city;
@@ -48,6 +48,26 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
       </div>
 
       <p className="hint">โฟกัสงานของคุณไปเรื่อย ๆ — ตัวละครจะจัดการมอนสเตอร์เอง!</p>
+
+      {sessionEvents.length > 0 && (
+        <div className="session-log">
+          <div className="session-log-title">📜 เหตุการณ์ที่เจอใน session นี้ ({sessionEvents.length})</div>
+          {sessionEvents.map((ev, i) => {
+            const parts = [];
+            if (ev.xp > 0) parts.push(`+${ev.xp} XP`);
+            if (ev.gold > 0) parts.push(`+${ev.gold} ทอง`);
+            if (ev.hpChange < 0) parts.push(`-${Math.abs(ev.hpChange)} HP`);
+            if (ev.mpChange > 0) parts.push(`+${ev.mpChange} MP`);
+            if (ev.item) parts.push(`${ev.item.icon} ${ev.item.name}`);
+            return (
+              <div key={i} className="session-log-item">
+                <span className="session-log-event">{ev.title}</span>
+                {parts.length > 0 && <span className="session-log-reward">{parts.join(' · ')}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

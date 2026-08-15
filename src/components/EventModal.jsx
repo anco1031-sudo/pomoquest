@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { sfx } from '../sound.js';
+
+const AUTO_CLOSE_SEC = 7; // นับถอยหลังแล้วปิดเอง (ไม่รบกวนการโฟกัส) — กดรับทราบก่อนได้เสมอ
 
 const ACCENT = {
   monster: 'red',
@@ -9,6 +12,23 @@ const ACCENT = {
 };
 
 export default function EventModal({ event, onClose }) {
+  const [countdown, setCountdown] = useState(AUTO_CLOSE_SEC);
+
+  // event ใหม่ → เริ่มนับถอยหลังใหม่
+  useEffect(() => {
+    setCountdown(AUTO_CLOSE_SEC);
+  }, [event]);
+
+  // นับถอยหลัง แล้วกด "รับทราบ" ให้อัตโนมัติ
+  useEffect(() => {
+    if (countdown <= 0) {
+      onClose();
+      return;
+    }
+    const id = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [countdown, onClose]);
+
   if (!event) return null;
   const accent = ACCENT[event.key] || 'gold';
 
@@ -33,7 +53,12 @@ export default function EventModal({ event, onClose }) {
           {event.item && <span className="reward-item">🎁 {event.item.icon} {event.item.name}</span>}
         </div>
 
-        <button className="btn btn-primary btn-big" onClick={close}>รับทราบ</button>
+        <button className="btn btn-primary btn-big" onClick={close}>
+          รับทราบ{countdown > 0 ? ` (${countdown})` : ''}
+        </button>
+        {countdown > 0 && (
+          <div className="event-auto-close">⏳ ปิดอัตโนมัติใน {countdown} วินาที — กดรับทราบเพื่อปิดทันที</div>
+        )}
       </div>
     </div>
   );

@@ -25,19 +25,27 @@ function loadTimer(charId) {
   }
 }
 
+// สุ่มเวลาจนกว่า event ถัดไป: 30 - ค่าที่ตั้งไว้ (default 90) วินาที
+const randomEventDelay = (settings) => {
+  const max = settings?.event_every_sec ?? 90;
+  const min = Math.min(30, max);
+  return min + Math.floor(Math.random() * (max - min + 1));
+};
+
 export default function Game() {
-  const { loading, hasCharacter, character, characters, settings, refresh, post, get, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUp, dismissLevelUp } = useGame();
+  const { loading, hasCharacter, character, characters, settings, refresh, post, get, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp } = useGame();
 
   const [phase, setPhase] = useState('idle'); // idle | work | short_break | long_break
   const [sessionIdx, setSessionIdx] = useState(1);
   const [remain, setRemain] = useState(0);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [nextEventIn, setNextEventIn] = useState(90);
+  const [nextEventIn, setNextEventIn] = useState(() => randomEventDelay(settings));
   const [expiredWork, setExpiredWork] = useState(false);
   const [bossState, setBossState] = useState(null);
   const [mounted, setMounted] = useState(false);
   const [showCharSelect, setShowCharSelect] = useState(false);
+  const [sessionEvents, setSessionEvents] = useState([]); // เหตุการณ์ที่เจอใน session นี้ (ดูย้อนหลังตอนพัก)
 
   const eventBusyRef = useRef(false);
   const endedRef = useRef(false);
@@ -62,12 +70,13 @@ export default function Game() {
     setRemain(0);
     setRunning(false);
     setElapsed(0);
-    setNextEventIn(settings.event_every_sec);
+    setNextEventIn(randomEventDelay(settings));
     setExpiredWork(false);
     setBossState(null);
     eventBusyRef.current = false;
     endedRef.current = false;
     setMounted(true);
+    setSessionEvents([]);
 
     const t = loadTimer(character.id);
     if (t) {
@@ -75,7 +84,8 @@ export default function Game() {
       setSessionIdx(t.sessionIdx || 1);
       setRemain(t.remain || 0);
       setElapsed(t.elapsed || 0);
-      setNextEventIn(t.nextEventIn ?? settings.event_every_sec);
+      setNextEventIn(t.nextEventIn ?? randomEventDelay(settings));
+      setSessionEvents(t.sessionEvents || []);
       if (t.phase === 'work' && t.expiresAt && t.remain <= 0) {
         setExpiredWork(true); // ถามผู้ใช้ว่าจะจบหรือทิ้ง
         setRunning(false);
@@ -84,7 +94,7 @@ export default function Game() {
         setSessionIdx(t.phase === 'long_break' ? 1 : (t.sessionIdx || 1) + 1);
         setRemain(settings.work_min * 60);
         setElapsed(0);
-        setNextEventIn(settings.event_every_sec);
+        setNextEventIn(randomEventDelay(settings));
         setPhase('work');
         setRunning(true);
       } else {
@@ -98,9 +108,9 @@ export default function Game() {
   // ---- บันทึกสถานะ timer ----
   useEffect(() => {
     if (!mounted || !character) return;
-    const t = { phase, sessionIdx, remain, running, elapsed, nextEventIn, expiresAt: running ? Date.now() + remain * 1000 : null };
+    const t = { phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, expiresAt: running ? Date.now() + remain * 1000 : null };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -140,7 +150,8 @@ export default function Game() {
     setSessionIdx(idx);
     setRemain(settings.work_min * 60);
     setElapsed(0);
-    setNextEventIn(settings.event_every_sec);
+    setNextEventIn(randomEventDelay(settings));
+    setSessionEvents([]); // session ใหม่ → ล้าง log เหตุการณ์เดิม
     setPhase('work');
     setRunning(true);
     sfx.start();
@@ -168,11 +179,18 @@ export default function Game() {
     (async () => {
       const res = await post('/adventure/event');
       eventBusyRef.current = false;
-      setNextEventIn(settings.event_every_sec);
+      setNextEventIn(randomEventDelay(settings));
       if (res && res.event) sfx.event();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextEventIn, phase, running]);
+
+  // ---- เก็บเหตุการณ์ที่เจอใน session นี้ (ไว้ดูย้อนหลังตอนพักเบรก) ----
+  useEffect(() => {
+    if (phase !== 'work' || eventQueue.length === 0) return;
+    const last = eventQueue[eventQueue.length - 1];
+    setSessionEvents((prev) => (prev[prev.length - 1] === last ? prev : [...prev, last]));
+  }, [eventQueue, phase]);
 
   const handleAbort = async () => {
     if (!window.confirm('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป')) return;
@@ -200,6 +218,9 @@ export default function Game() {
     setBossState(null);
     beginWork(1);
   };
+
+  // กำลังโฟกัสงานอยู่ → ซ่อน notification (เลเวลอัพ/รางวัล) ไว้แจ้งหลังจบ session แทน
+  const inActiveWork = phase === 'work' && running;
 
   if (loading) {
     return (
@@ -230,6 +251,7 @@ export default function Game() {
           onPause={() => { setRunning(false); sfx.pause(); }}
           onResume={() => setRunning(true)}
           onAbort={handleAbort}
+          sessionEvents={sessionEvents}
         />
       )}
 
@@ -256,9 +278,9 @@ export default function Game() {
 
       {eventQueue.length > 0 && <EventModal event={eventQueue[0]} onClose={closeEvent} />}
 
-      {achieveQueue.length > 0 && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
+      {achieveQueue.length > 0 && !inActiveWork && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
 
-      {levelUp && <LevelUpModal levelUp={levelUp} onClose={dismissLevelUp} />}
+      {levelUpQueue.length > 0 && !inActiveWork && <LevelUpModal levelUp={levelUpQueue[0]} onClose={dismissLevelUp} />}
 
       {showCharSelect && (
         <CharacterSelect
