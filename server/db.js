@@ -138,6 +138,14 @@ CREATE TABLE IF NOT EXISTS daily_streak (
   streak INTEGER DEFAULT 0,
   last_date TEXT
 );
+
+CREATE TABLE IF NOT EXISTS camp_shop (
+  character_id INTEGER NOT NULL,
+  visit TEXT NOT NULL,
+  item_id INTEGER NOT NULL,
+  qty INTEGER DEFAULT 0,
+  PRIMARY KEY (character_id, visit, item_id)
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)

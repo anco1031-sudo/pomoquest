@@ -46,6 +46,7 @@ export default function Game() {
   const [mounted, setMounted] = useState(false);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [sessionEvents, setSessionEvents] = useState([]); // เหตุการณ์ที่เจอใน session นี้ (ดูย้อนหลังตอนพัก)
+  const [breakVisit, setBreakVisit] = useState(null); // id ค่ายพักปัจจุบัน — ใช้ล็อก stock ร้านค้า (ซื้อครั้งเดียวต่อค่ายพัก)
 
   const eventBusyRef = useRef(false);
   const endedRef = useRef(false);
@@ -77,6 +78,7 @@ export default function Game() {
     endedRef.current = false;
     setMounted(true);
     setSessionEvents([]);
+    setBreakVisit(null);
 
     const t = loadTimer(character.id);
     if (t) {
@@ -86,6 +88,7 @@ export default function Game() {
       setElapsed(t.elapsed || 0);
       setNextEventIn(t.nextEventIn ?? randomEventDelay(settings));
       setSessionEvents(t.sessionEvents || []);
+      setBreakVisit(t.breakVisit || null);
       if (t.phase === 'work' && t.expiresAt && t.remain <= 0) {
         setExpiredWork(true); // ถามผู้ใช้ว่าจะจบหรือทิ้ง
         setRunning(false);
@@ -108,9 +111,9 @@ export default function Game() {
   // ---- บันทึกสถานะ timer ----
   useEffect(() => {
     if (!mounted || !character) return;
-    const t = { phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, expiresAt: running ? Date.now() + remain * 1000 : null };
+    const t = { phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, breakVisit, expiresAt: running ? Date.now() + remain * 1000 : null };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, breakVisit, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -159,6 +162,7 @@ export default function Game() {
 
   const startShortBreak = () => {
     setRemain(settings.short_break_min * 60);
+    setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`); // ค่ายพักใหม่ = stock ร้านใหม่
     setPhase('short_break');
     setRunning(true);
     sfx.complete();
@@ -166,6 +170,7 @@ export default function Game() {
 
   const startLongBreak = () => {
     setRemain(settings.long_break_min * 60);
+    setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
     setPhase('long_break');
     setRunning(true);
     sfx.boss();
@@ -261,6 +266,7 @@ export default function Game() {
           total={settings.short_break_min * 60}
           running={running}
           onSkip={() => beginWork(sessionIdx + 1)}
+          visit={breakVisit}
         />
       )}
 

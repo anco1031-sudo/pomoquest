@@ -276,31 +276,56 @@ router.post('/travel', (req, res) => {
   });
 });
 
+// สุ่มหยิบของ n ชิ้นจากลิสต์ (Fisher–Yates)
+const pickRandom = (arr, n) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, Math.min(n, a.length));
+};
+
 // ----- ค่ายพัก (short break) -----
+// ร้านค่ายพัก: สินค้าสุ่มใหม่ทุกค่ายพัก (visit ต่างกัน = ค่ายพักใหม่) และซื้อได้ครั้งเดียวต่อค่ายพัก
 router.get('/camp', (req, res) => {
   const c = requireChar(res); if (!c) return;
+  const visit = req.query.visit || `v${Date.now()}`;
+  let stock = db.prepare('SELECT item_id, qty FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
+  if (!stock.length) {
+    db.prepare('DELETE FROM camp_shop WHERE character_id = ?').run(c.id); // ล้าง stock ค่ายเก่า
+    const pool = SHOP_STOCK.filter((i) => i.type === 'consumable' || (i.lvl || 1) <= c.level + 1);
+    const chosen = [...pickRandom(pool.filter((i) => i.type === 'consumable'), 2), ...pickRandom(pool.filter((i) => i.type !== 'consumable'), 3)];
+    const ins = db.prepare('INSERT OR IGNORE INTO camp_shop (character_id, visit, item_id, qty) VALUES (?, ?, ?, 0)');
+    for (const i of chosen) ins.run(c.id, visit, i.id);
+    stock = db.prepare('SELECT item_id, qty FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
+  }
+  const shop = stock.map((s) => ({ ...ITEM_BY_ID[s.item_id], bought: s.qty >= 1 ? 1 : 0 })).filter(Boolean);
   res.json({
     ...serialize(c),
     inventory: getInventory(c.id),
-    shop: SHOP_STOCK.filter((i) => i.type === 'consumable' || (i.lvl || 1) <= c.level + 1)
-      .map((i) => ({ ...i, owned: getInventory(c.id).find((x) => x.item_id === i.id)?.qty || 0 })),
+    shop,
     quests: rollQuests(c.level, 3),
   });
 });
 
 router.post('/shop/buy', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { itemId, qty = 1 } = req.body || {};
+  const { itemId, visit } = req.body || {};
   const item = ITEM_BY_ID[itemId];
   if (!item) return res.status(400).json({ error: 'ไอเทมไม่มีอยู่' });
   if (item.type !== 'consumable' && (item.lvl || 1) > c.level + 1) return res.status(400).json({ error: 'เลเวลยังไม่พอจะใช้ของแบบนี้' });
-  const cost = item.price * qty;
-  if (c.gold < cost) return res.status(400).json({ error: 'ทองไม่พอ!' });
-  c.gold -= cost;
-  addItem(c.id, itemId, qty);
+  if (!visit) return res.status(400).json({ error: 'ต้องระบุค่ายพักก่อนซื้อ' });
+  const row = db.prepare('SELECT qty FROM camp_shop WHERE character_id = ? AND visit = ? AND item_id = ?').get(c.id, visit, itemId);
+  if (!row) return res.status(400).json({ error: 'สินค้านี้ไม่อยู่ในร้านค่ายพักนี้' });
+  if (row.qty >= 1) return res.status(400).json({ error: 'ซื้อได้ครั้งเดียวต่อค่ายพัก — ขายหมดแล้ว' });
+  if (c.gold < item.price) return res.status(400).json({ error: 'ทองไม่พอ!' });
+  c.gold -= item.price;
+  addItem(c.id, itemId, 1);
+  db.prepare('UPDATE camp_shop SET qty = qty + 1 WHERE character_id = ? AND visit = ? AND item_id = ?').run(c.id, visit, itemId);
   updateCharacter(c);
-  addLog(c.id, { type: 'shop', title: '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} x${qty} (-${cost} ทอง)`, gold: -cost });
-  bumpDaily(c.id, 'items_bought', qty);
+  addLog(c.id, { type: 'shop', title: '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${item.price} ทอง)`, gold: -item.price });
+  bumpDaily(c.id, 'items_bought', 1);
   res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ`, ...dailyPayload(c) });
 });
 

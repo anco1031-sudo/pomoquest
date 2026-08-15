@@ -11,7 +11,7 @@ const TABS = [
   { key: 'char', label: 'ตัวละคร', icon: '🛡️' },
 ];
 
-export default function CampScreen({ remain, total, running, onSkip }) {
+export default function CampScreen({ remain, total, running, onSkip, visit }) {
   const { character, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
   const [shop, setShop] = useState([]);
@@ -21,18 +21,22 @@ export default function CampScreen({ remain, total, running, onSkip }) {
 
   useEffect(() => {
     (async () => {
-      const d = await get('/camp');
+      const d = await get(`/camp${visit ? `?visit=${encodeURIComponent(visit)}` : ''}`);
       if (d) {
         setShop(d.shop || []);
         setQuests(d.quests || []);
       }
     })();
-  }, [get]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [get, visit]);
 
   const buy = async (item) => {
     sfx.click();
-    const d = await post('/shop/buy', { itemId: item.id, qty: 1 });
-    if (d) showToast(`ซื้อ ${item.name} แล้ว`);
+    const d = await post('/shop/buy', { itemId: item.id, visit });
+    if (d) {
+      showToast(`ซื้อ ${item.name} แล้ว`);
+      setShop((s) => s.map((i) => (i.id === item.id ? { ...i, bought: 1 } : i)));
+    }
   };
 
   const doQuest = async (q) => {
@@ -97,20 +101,24 @@ export default function CampScreen({ remain, total, running, onSkip }) {
               <div className="shop-row" key={i.id}>
                 <span className="inv-icon">{i.icon}</span>
                 <div className="inv-info">
-                  <div className="inv-name">{i.name} {twoHandTag(i)} {i.owned > 0 && <span className="inv-qty">มี {i.owned}</span>}</div>
+                  <div className="inv-name">{i.name} {twoHandTag(i)}</div>
                   <div className="inv-desc">{i.desc}</div>
                 </div>
-                <button
-                  className="btn btn-sm"
-                  disabled={character.gold < i.price}
-                  onClick={() => buy(i)}
-                >
-                  💰 {i.price}
-                </button>
+                {i.bought ? (
+                  <span className="sold-tag">ขายแล้ว</span>
+                ) : (
+                  <button
+                    className="btn btn-sm"
+                    disabled={character.gold < i.price}
+                    onClick={() => buy(i)}
+                  >
+                    💰 {i.price}
+                  </button>
+                )}
               </div>
             ))}
           </div>
-          <p className="hint">ทองของคุณ: 💰 {character.gold}</p>
+          <p className="hint">ทองของคุณ: 💰 {character.gold} — สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
         </div>
       )}
 
