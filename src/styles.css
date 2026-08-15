@@ -577,6 +577,27 @@ body {
 .alloc-per { flex: 1; color: var(--muted); font-size: 12px; }
 .alloc-btns { display: flex; align-items: center; gap: 8px; }
 .alloc-val { width: 26px; text-align: center; font-weight: 800; font-size: 16px; }
+.alloc-header-btns { display: flex; gap: 6px; align-items: center; }
+.alloc-header-btns .btn { font-size: 12px; padding: 6px 8px; }
+.btn-plan { border-color: #a78bfa !important; color: #a78bfa !important; background: #a78bfa18 !important; }
+.alloc-plan {
+  border: 1px solid #a78bfa66;
+  background: #a78bfa10;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alloc-plan-title { font-weight: 800; color: #c4b5fd; font-size: 12px; }
+.alloc-plan-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.alloc-plan-stat { font-size: 12.5px; }
+.alloc-plan-stat b { color: var(--text); }
+.plan-up { color: var(--green) !important; }
+.alloc-plan-equip { color: var(--green); font-weight: 600; }
+.alloc-plan-still { color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.alloc-plan-still-item em { color: var(--gold); font-style: normal; font-size: 11.5px; }
 
 /* ---------- character sheet ---------- */
 .stat-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }

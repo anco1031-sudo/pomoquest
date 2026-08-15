@@ -9,6 +9,7 @@ export function StatAllocator({ onDone }) {
   const { character, inventory, post } = useGame();
   const [alloc, setAlloc] = useState({ hp: 0, mp: 0, atk: 0, def: 0, spd: 0 });
   const [busy, setBusy] = useState(false);
+  const [plan, setPlan] = useState(false);
   const remaining = character.statPoints - (alloc.hp + alloc.mp + alloc.atk + alloc.def + alloc.spd);
 
   const set = (k, v) => {
@@ -63,6 +64,33 @@ export function StatAllocator({ onDone }) {
     onDone?.();
   };
 
+  // โหมดวางแผน (dry-run): คำนวณสถานะหลัง alloc ฝั่ง client — ไม่แตะ server ไม่บันทึก
+  const after = {
+    maxHp: character.maxHp + alloc.hp * 8,
+    maxMp: character.maxMp + alloc.mp * 5,
+    atk: character.atk + alloc.atk,
+    def: character.def + alloc.def,
+    spd: character.spd + alloc.spd,
+  };
+  const mockChar = {
+    ...character,
+    level: character.level,
+    class: character.class,
+    maxHp: after.maxHp, maxMp: after.maxMp,
+    atk: after.atk, def: after.def, spd: after.spd,
+  };
+  // ของในกระเป๋าที่ตอนนี้สวมไม่ได้ (ขาด stat/เลเวล/คลาส) → หลัง alloc จะสวมได้ไหม
+  const planGear = (inventory || []).filter((i) => i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll');
+  const newlyEquippable = planGear.filter((i) => itemReqMissing(i, character).length > 0 && itemReqMissing(i, mockChar).length === 0);
+  const stillBlocked = planGear.filter((i) => itemReqMissing(i, mockChar).length > 0);
+  const planRows = [
+    { k: 'HP', before: character.maxHp, after: after.maxHp, unit: '' },
+    { k: 'MP', before: character.maxMp, after: after.maxMp, unit: '' },
+    { k: 'ATK', before: character.atk, after: after.atk, unit: '' },
+    { k: 'DEF', before: character.def, after: after.def, unit: '' },
+    { k: 'SPD', before: character.spd, after: after.spd, unit: '' },
+  ];
+
   const rows = [
     { k: 'hp', label: '❤️ HP', per: '+8 ต่อแต้ม', val: character.maxHp },
     { k: 'mp', label: '💧 MP', per: '+5 ต่อแต้ม', val: character.maxMp },
@@ -75,7 +103,10 @@ export function StatAllocator({ onDone }) {
     <div className="alloc-box">
       <div className="alloc-header">
         <span>🪙 แต้มสถานะคงเหลือ: <b>{remaining}</b></span>
-        <button className="btn btn-sm" onClick={auto} title={`เน้นตามคลาส: ${priorityHint}`}>✨ จัดอัตโนมัติ (ตามคลาส)</button>
+        <div className="alloc-header-btns">
+          <button className={`btn btn-sm ${plan ? 'btn-plan' : ''}`} onClick={() => { setPlan(!plan); sfx.click(); }}>🔍 {plan ? 'ปิดโหมดวางแผน' : 'โหมดวางแผน'}</button>
+          <button className="btn btn-sm" onClick={auto} title={`เน้นตามคลาส: ${priorityHint}`}>✨ จัดอัตโนมัติ (ตามคลาส)</button>
+        </div>
       </div>
       <div className="alloc-hint">🎯 {character.className} ควรเน้น: <b>{priorityHint}</b> — จัดอัตโนมัติกระจายตามสัดส่วนนี้{hasGearAdjust ? ' · 🔧 ปรับตามอุปกรณ์ที่สวม' : ''}{goalHint ? ` · ${goalHint}` : ''}</div>
       {rows.map((r) => (
@@ -89,6 +120,29 @@ export function StatAllocator({ onDone }) {
           </div>
         </div>
       ))}
+      {plan && (
+        <div className="alloc-plan">
+          <div className="alloc-plan-title">🔍 ผลลัพธ์ถ้าจัดสรรแบบนี้ (dry-run — ยังไม่บันทึก)</div>
+          <div className="alloc-plan-stats">
+            {planRows.map((r) => (
+              <span className="alloc-plan-stat" key={r.k}>
+                <b>{r.k}</b> {r.before} → <b className={r.after > r.before ? 'plan-up' : ''}>{r.after}{r.unit}</b>
+              </span>
+            ))}
+          </div>
+          {newlyEquippable.length > 0 && (
+            <div className="alloc-plan-equip">✨ จะสวมได้ใหม่: {newlyEquippable.map((i) => `${i.icon} ${i.name}`).join(' · ')}</div>
+          )}
+          {stillBlocked.length > 0 && (
+            <div className="alloc-plan-still">
+              ⏳ ยังสวมไม่ได้:
+              {stillBlocked.map((i) => (
+                <span key={i.item_id} className="alloc-plan-still-item">{i.icon} {i.name} <em>({itemReqMissing(i, mockChar).join(' · ')})</em></span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <button className="btn btn-primary btn-big" onClick={confirm} disabled={remaining > 0 || busy}>
         ✅ ยืนยันการจัดสรร
       </button>

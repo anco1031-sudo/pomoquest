@@ -207,6 +207,15 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('itemReq: stat ถึงเกณฑ์แล้ว → ไม่โชว์ "ขาด"', strong.some((p) => p.text === 'ATK 20+'), JSON.stringify(strong));
   const noChar = itemReqParts(sword, null);
   expect('itemReq: ไม่มี character → ไม่โชว์ "ขาด" (แบบเดิม)', noChar.some((p) => p.text === 'ATK 20+'), JSON.stringify(noChar));
+  // โหมดวางแผน (dry-run): สถานะหลัง alloc = character + alloc*ค่าต่อแต้ม → เช็คว่าจะสวมของได้ไหม
+  const { itemReqMissing } = await import('../src/itemreq.js');
+  const weakChar = { level: 5, class: 'warrior', atk: 14, def: 10, spd: 8, mp: 20 };
+  const gear = { type: 'weapon', item_id: 1, statReq: { atk: 20 }, lvl: 1 };
+  expect('plan: ก่อน alloc สวมไม่ได้ (ขาด ATK)', itemReqMissing(gear, weakChar).length === 1, JSON.stringify(itemReqMissing(gear, weakChar)));
+  const afterChar = { ...weakChar, atk: weakChar.atk + 6 }; // alloc ATK 6 แต้ม (+1/แต้ม)
+  expect('plan: alloc ATK 6 แต้มแล้ว → สวมได้', itemReqMissing(gear, afterChar).length === 0, JSON.stringify(itemReqMissing(gear, afterChar)));
+  const afterChar2 = { ...weakChar, atk: weakChar.atk + 3 }; // alloc ไม่พอ
+  expect('plan: alloc ไม่พอ → ยังสวมไม่ได้', itemReqMissing(gear, afterChar2).length === 1, JSON.stringify(itemReqMissing(gear, afterChar2)));
 }
 
 // --- ทุก event ต้องมี title/flavor/detail สำหรับแสดงผล ---
