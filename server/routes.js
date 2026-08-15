@@ -12,7 +12,7 @@ import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ACHIEVEMENTS, SECRET_ACHIEVEMENTS,
 } from './data.js';
 import {
-  computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn,
+  computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
@@ -412,7 +412,8 @@ router.get('/camp', (req, res) => {
   let stock = db.prepare('SELECT item_id, qty FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   if (!stock.length) {
     db.prepare('DELETE FROM camp_shop WHERE character_id = ?').run(c.id); // ล้าง stock ค่ายเก่า
-    const pool = SHOP_STOCK.filter((i) => i.type === 'consumable' || (i.lvl || 1) <= c.level + 1);
+    // ขายเฉพาะของที่คลาสนี้ใช้ได้ (ไม่ขายอุปกรณ์เฉพาะคลาสอื่นให้รก)
+    const pool = SHOP_STOCK.filter((i) => i.type === 'consumable' || ((i.lvl || 1) <= c.level + 1 && (!i.classReq || i.classReq.includes(c.class))));
     // สินค้า 3–5 ชิ้น: ยา 1–2 + อุปกรณ์ 2–3 (สุ่มจำนวนด้วย)
     const nConsumable = 1 + Math.floor(Math.random() * 2);
     const nGear = 2 + Math.floor(Math.random() * 2);
@@ -592,6 +593,9 @@ router.post('/inventory/equip', (req, res) => {
   if (!inv) return res.status(400).json({ error: 'ไม่มีไอเทมนี้' });
   const item = ITEM_BY_ID[itemId];
   if (!item || item.type === 'consumable') return res.status(400).json({ error: 'ไอเทมนี้ใช้ไม่ได้กับช่องสวมใส่' });
+  // ข้อจำกัด: เลเวล / เฉพาะคลาส / ค่าสถานะขั้นต่ำ
+  const block = equipBlockReason(c, item);
+  if (block) return res.status(400).json({ error: `สวมไม่ได้: ${block}` });
 
   const slot = pickEquipSlot(c, item, (id) => addItem(c.id, id, 1));
   if (!slot) return res.status(400).json({ error: 'ถืออาวุธสองมืออยู่ — ถอดอาวุธออกก่อนถึงจะถือโล่ได้' });
@@ -786,12 +790,13 @@ router.get('/weekly-summary', (req, res) => {
   const achMap = new Map([...ACHIEVEMENTS, ...SECRET_ACHIEVEMENTS].map((a) => [a.id, a]));
 
   const summarize = (start, end, utcStart, utcEnd) => {
+    // end แบบ inclusive (<=) — กัน session ที่จบในวินาทีเดียวกับที่เปิดหน้าสถิติหายไป
     const row = db.prepare(`SELECT COUNT(*) AS sessions, COALESCE(SUM(focus_sec),0) AS focus_sec,
       COALESCE(SUM(xp),0) AS xp, COALESCE(SUM(gold),0) AS gold
-      FROM log WHERE character_id=? AND type='session_done' AND created_at>=? AND created_at<?`).get(c.id, start, end);
-    const counts = db.prepare(`SELECT type, COUNT(*) AS n FROM log WHERE character_id=? AND type IN ('boss_win','battle_win') AND created_at>=? AND created_at<? GROUP BY type`).all(c.id, start, end);
-    const cities = db.prepare(`SELECT DISTINCT city FROM log WHERE character_id=? AND type='session_summary' AND city IS NOT NULL AND created_at>=? AND created_at<?`).all(c.id, start, end).map((r) => r.city);
-    const achRows = db.prepare(`SELECT achievement_id FROM achievement_unlock WHERE character_id=? AND unlocked_at>=? AND unlocked_at<?`).all(c.id, utcStart, utcEnd);
+      FROM log WHERE character_id=? AND type='session_done' AND created_at>=? AND created_at<=?`).get(c.id, start, end);
+    const counts = db.prepare(`SELECT type, COUNT(*) AS n FROM log WHERE character_id=? AND type IN ('boss_win','battle_win') AND created_at>=? AND created_at<=? GROUP BY type`).all(c.id, start, end);
+    const cities = db.prepare(`SELECT DISTINCT city FROM log WHERE character_id=? AND type='session_summary' AND city IS NOT NULL AND created_at>=? AND created_at<=?`).all(c.id, start, end).map((r) => r.city);
+    const achRows = db.prepare(`SELECT achievement_id FROM achievement_unlock WHERE character_id=? AND unlocked_at>=? AND unlocked_at<=?`).all(c.id, utcStart, utcEnd);
     return {
       sessions: row.sessions, focusSec: row.focus_sec, xp: row.xp, gold: row.gold,
       bossWins: counts.find((x) => x.type === 'boss_win')?.n || 0,

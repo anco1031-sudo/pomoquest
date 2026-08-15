@@ -89,7 +89,7 @@ export function randomRewardItem(c) {
     return pool[Math.floor(Math.random() * pool.length)];
   }
   const pool = Object.values(ITEM_BY_ID).filter(
-    (i) => !i.exclusive && (i.type === 'consumable' ? [2, 4].includes(i.id) : (i.lvl || 1) <= c.level + 1)
+    (i) => !i.exclusive && (i.type === 'consumable' ? [2, 4].includes(i.id) : (i.lvl || 1) <= c.level + 1 && (!i.classReq || i.classReq.includes(c.class)))
   );
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -157,7 +157,7 @@ export function claimDailyAll(c) {
     const pool = Object.values(ITEM_BY_ID).filter((i) => i.exclusive);
     item = pool[Math.floor(Math.random() * pool.length)];
   } else if (roll < 0.65) {
-    const equips = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && (i.lvl || 1) <= c.level + 1);
+    const equips = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && (i.lvl || 1) <= c.level + 1 && (!i.classReq || i.classReq.includes(c.class)));
     item = equips[Math.floor(Math.random() * equips.length)];
   } else {
     item = ITEM_BY_ID[4];

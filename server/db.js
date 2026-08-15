@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ITEMS } from './data.js';
+import { ITEMS, ITEM_BY_ID } from './data.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, 'data');
@@ -288,7 +288,11 @@ export const getInventory = (charId) => db.prepare(`
          item.use_xp, item.use_gold, item.exclusive, item.handed, item.learn_skill
   FROM inventory inv JOIN item ON item.id = inv.item_id
   WHERE inv.character_id = ? AND inv.qty > 0
-  ORDER BY item.type, item.id`).all(charId);
+  ORDER BY item.type, item.id`).all(charId).map((r) => {
+  // ข้อมูล static ในโค้ด (lvl / ข้อจำกัดการสวม) — merge ให้ client ใช้เช็คได้
+  const def = ITEM_BY_ID[r.item_id] || {};
+  return { ...r, lvl: def.lvl || 1, classReq: def.classReq, statReq: def.statReq };
+});
 
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);

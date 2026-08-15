@@ -1,3 +1,5 @@
+import { CLASSES } from '../../server/data.js';
+
 // แปลงค่า stat ของไอเทมเป็นรายการสำหรับแสดง (chips / tooltip)
 export function itemStatParts(i) {
   const p = [];
@@ -15,13 +17,45 @@ export function itemStatParts(i) {
   return p;
 }
 
+// ข้อจำกัดการสวมใส่ (🔒 เลเวล/เฉพาะคลาส/ค่าสถานะ) — ใช้กับอุปกรณ์เท่านั้น
+const REQ_ICON = { atk: '⚔️', def: '🛡️', spd: '👟', mp: '💧', crit: '🎯' };
+export function itemReqParts(i) {
+  const p = [];
+  if (!i) return p;
+  const gear = i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll';
+  if (!gear) return p;
+  if ((i.lvl || 1) > 1) p.push({ icon: '🔒', text: `เลเวล ${i.lvl}+` });
+  if (i.classReq?.length) {
+    const names = i.classReq.map((k) => CLASSES[k]?.name || k).join('/');
+    p.push({ icon: '🎭', text: `เฉพาะ ${names}` });
+  }
+  for (const [k, v] of Object.entries(i.statReq || {})) {
+    p.push({ icon: REQ_ICON[k] || '🔒', text: `${k.toUpperCase()} ${v}+` });
+  }
+  return p;
+}
+
+// ข้อจำกัดของไอเทมนี้ที่ตัวละครยังไม่ผ่าน (ใช้ disable ปุ่มสวม) — คืน array ของเหตุผล
+export function itemReqMissing(i, character) {
+  if (!i || !character) return [];
+  const gear = i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll';
+  if (!gear) return [];
+  const out = [];
+  if ((i.lvl || 1) > character.level) out.push(`ต้องเลเวล ${i.lvl} ขึ้นไป`);
+  if (i.classReq && !i.classReq.includes(character.class)) out.push(`เฉพาะคลาส ${i.classReq.map((k) => CLASSES[k]?.name || k).join('/')}`);
+  for (const [k, v] of Object.entries(i.statReq || {})) {
+    if ((character[k] ?? 0) < v) out.push(`${k.toUpperCase()} ${v}+`);
+  }
+  return out;
+}
+
 export default function ItemStatChips({ item }) {
-  const parts = itemStatParts(item);
+  const parts = [...itemStatParts(item), ...itemReqParts(item)];
   if (!parts.length) return null;
   return (
     <span className="item-stat-chips">
       {parts.map((p, idx) => (
-        <span key={idx} className="item-stat-chip">{p.icon} {p.text}</span>
+        <span key={idx} className={`item-stat-chip ${p.icon === '🔒' || p.icon === '🎭' ? 'req' : ''}`}>{p.icon} {p.text}</span>
       ))}
     </span>
   );

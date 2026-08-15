@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { Panel, StatRow } from './ui.jsx';
-import ItemStatChips from './ItemStats.jsx';
+import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
 
 export function StatAllocator({ onDone }) {
   const { character, post } = useGame();
@@ -197,27 +197,36 @@ export default function CharacterSheet() {
         {inventory.length === 0 ? (
           <p className="hint">ยังไม่มีไอเทม — ออกผจญภัยเพื่อหาของ!</p>
         ) : (
-          inventory.map((i) => (
-            <div className="inv-row" key={i.item_id}>
-              <span className="inv-icon">{i.icon}</span>
-              <div className="inv-info">
-                <div className="inv-name">{i.name} {i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
-                <ItemStatChips item={i} />
-                <div className="inv-desc">{i.desc}</div>
+          inventory.map((i) => {
+            const blocked = itemReqMissing(i, character);
+            const isGear = i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll';
+            return (
+              <div className="inv-row" key={i.item_id}>
+                <span className="inv-icon">{i.icon}</span>
+                <div className="inv-info">
+                  <div className="inv-name">{i.name} {i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
+                  <ItemStatChips item={i} />
+                  <div className="inv-desc">{i.desc}</div>
+                  {isGear && blocked.length > 0 && (
+                    <div className="inv-req-block">🔒 สวมไม่ได้: {blocked.join(' · ')}</div>
+                  )}
+                </div>
+                <div className="inv-actions">
+                  {i.type === 'consumable' ? (
+                    <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
+                  ) : i.type === 'scroll' ? (
+                    <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>
+                  ) : i.type === 'junk' ? (
+                    <span className="junk-note">ขายได้ที่แคมป์</span>
+                  ) : (
+                    <button className="btn btn-sm" onClick={() => equipItem(i)} disabled={blocked.length > 0} title={blocked.length ? blocked.join(' · ') : ''}>
+                      สวม
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="inv-actions">
-                {i.type === 'consumable' ? (
-                  <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
-                ) : i.type === 'scroll' ? (
-                  <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>
-                ) : i.type === 'junk' ? (
-                  <span className="junk-note">ขายได้ที่แคมป์</span>
-                ) : (
-                  <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
-                )}
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </Panel>
     </>

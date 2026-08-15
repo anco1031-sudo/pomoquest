@@ -85,6 +85,28 @@ export function computeStats(c) {
 
 const itemOf = (id) => (id ? ITEM_BY_ID[id] || null : null);
 
+// ข้อจำกัดการสวมใส่ — คืนเหตุผล (string) ถ้าใส่ไม่ได้, null ถ้าใส่ได้
+// เช็ค: เลเวล / เฉพาะคลาส (classReq) / ค่าสถานะขั้นต่ำ (statReq — เทียบกับค่าที่รวมอุปกรณ์แล้ว)
+const REQ_LABEL = { atk: '⚔️ ATK', def: '🛡️ DEF', spd: '👟 SPD', mp: '💧 MP', crit: '🎯 CRIT' };
+export function equipBlockReason(c, item) {
+  if (!item) return 'ไอเทมไม่พบ';
+  if (item.type === 'consumable' || item.type === 'junk' || item.type === 'scroll') return null;
+  // เรียง: เฉพาะคลาส (ข้ามไม่ได้) → เลเวล (อัปได้เร็วสุด) → ค่าสถานะ (ต้องสะสม)
+  if (item.classReq && !item.classReq.includes(c.class)) {
+    const names = item.classReq.map((k) => CLASSES[k]?.name || k).join('/');
+    return `เฉพาะคลาส ${names}`;
+  }
+  if ((item.lvl || 1) > c.level) return `ต้องเลเวล ${item.lvl} ขึ้นไป`;
+  if (item.statReq) {
+    const stats = computeStats(c);
+    const missing = Object.entries(item.statReq)
+      .filter(([k, v]) => (stats[k] ?? 0) < v)
+      .map(([k, v]) => `${REQ_LABEL[k] || k.toUpperCase()} ${v}+ (ตอนนี้ ${stats[k] ?? 0})`);
+    if (missing.length) return `ต้องมี ${missing.join(' และ ')}`;
+  }
+  return null;
+}
+
 // ----- ระบบเลเวลสกิล -----
 // สกิลสะสม XP ทุกครั้งที่ใช้ (สู้บอส/event อัตโนมัติ) — อัพเลเวลแล้วแรงขึ้น (+10% ต่อเลเวล)
 export const SKILL_MAX_LEVEL = 5;
@@ -330,7 +352,8 @@ export function rollEvent(c, forceKey = null) {
       } else if (roll < 0.21) {
         item = ITEM_BY_ID[pick(RARE_JUNK)]; // ของขวัญหายาก — ดรอปยาก (ออกทางนี้ทางเดียว)
       } else {
-        const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
+        // เกียร์ที่เจอต้องสวมได้กับคลาสนี้ (ไม่ดรอปของคลาสอื่นให้รกกระเป๋า)
+        const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (!i.classReq || i.classReq.includes(c.class)) && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
         // น้ำหนัก: ขยะที่วันนี้ขายถูก (พ่อค้าไม่ต้องการ) x4 — ของแพง/เป็นที่ต้องการเจอยากกว่า
         const dayKey = today();
         const weighted = [];

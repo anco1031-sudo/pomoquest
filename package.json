@@ -14,7 +14,8 @@
     "test:achievements": "node scripts/test-achievements.mjs",
     "test:daily": "node scripts/test-daily.mjs",
     "test:llm": "node scripts/test-llm.mjs",
-    "test:events": "node scripts/test-events.mjs"
+    "test:events": "node scripts/test-events.mjs",
+    "test:api": "node scripts/test-api.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

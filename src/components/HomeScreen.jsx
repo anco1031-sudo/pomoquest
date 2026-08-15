@@ -27,6 +27,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const [muted, setMutedState] = useState(isMuted());
   const [showDev, setShowDev] = useState(false);
   const [showImportNote, setShowImportNote] = useState(false); // modal แจ้งรีสตาร์ทหลัง import
+  const [showOnboard, setShowOnboard] = useState(() => !localStorage.getItem('pomoquest-onboarded')); // วิธีเล่นครั้งแรก
   const [notifyOn, setNotifyOn] = useState(isNotifyEnabled());
   const [notifyPerm, setNotifyPerm] = useState(() => {
     try {
@@ -331,6 +332,27 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
       </main>
 
       {showDev && <DevPanel onClose={() => setShowDev(false)} />}
+
+      {/* วิธีเล่น — โชว์ครั้งแรกครั้งเดียว (กดปิดแล้วไม่โผล่อีก) */}
+      {showOnboard && (
+        <div className="modal-backdrop" onClick={() => setShowOnboard(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>🗺️ วิธีเล่น PomoQuest</h2>
+            <div className="guide-row"><span className="guide-num">1</span><span><b>⏱️ โฟกัสงานตามเวลา</b> — จบ work 1 รอบ = ตัวละครผจญภัย 1 session (ได้ XP / ทอง / ไอเทม และเจอเหตุการณ์สุ่ม)</span></div>
+            <div className="guide-row"><span className="guide-num">2</span><span><b>☕ พักสั้น</b> — ทำภารกิจย่อย ไปซื้อของที่ร้านค่าย หรือพักฟื้นพลัง</span></div>
+            <div className="guide-row"><span className="guide-num">3</span><span><b>🔁 ครบ 4 session</b> — ได้สู้บอส! ใช้สกิล (⚔️ 🛡️ 💥) เลือกท่าให้ถูก — สกิลอัพเลเวลได้ทุกครั้งที่ใช้</span></div>
+            <div className="guide-row"><span className="guide-num">4</span><span><b>🎒 สวมอุปกรณ์</b> — บางชิ้นจำกัดคลาส/เลเวล/ค่าสถานะ (ดู 🔒 ที่ไอเทม) — สลับตัวละคร/ดูตรา/สถิติได้จากแท็บด้านบน</span></div>
+            <div className="guide-row"><span className="guide-num">5</span><span><b>⚙️ ตั้งค่า</b> — ปรับเวลางาน/พัก เสียง แจ้งเตือนเบราว์เซอร์ และ backup ข้อมูลได้ที่แท็บตั้งค่า</span></div>
+            <p className="hint">ทุก 25 นาทีที่คุณโฟกัส = ตัวละครของคุณผจญภัย 1 ครั้ง — ยิ่งโฟกัส ยิ่งแข็งแกร่ง!</p>
+            <button
+              className="btn btn-primary btn-big"
+              onClick={() => { localStorage.setItem('pomoquest-onboarded', '1'); setShowOnboard(false); sfx.click(); }}
+            >
+              🚀 เข้าใจแล้ว เริ่มผจญภัย!
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* หลัง import สำเร็จ — ต้องรีสตาร์ท server ถึงจะเห็นข้อมูลใหม่ */}
       {showImportNote && (
