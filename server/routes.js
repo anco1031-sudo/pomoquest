@@ -9,18 +9,17 @@ import {
   getSkillRow, learnSkill,
 } from './db.js';
 import {
-  CLASSES, ITEMS, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RARE_JUNK, BOSSES,
+  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID,
   ACHIEVEMENTS, SECRET_ACHIEVEMENTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
-  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, seededRng,
+  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
 import { llmChat, llmEnabled } from './llm.js';
 import { WRITABLE_TABLES, exportJsonData, restoreFromJson, checkDbSchema } from './data-io.js';
-import { isBmForced } from './dev.js';
 
 const router = Router();
 
@@ -406,29 +405,7 @@ const pickRandom = (arr, n) => {
   return a.slice(0, Math.min(n, a.length));
 };
 
-// ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
-// รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%)
-const BM_OPEN_CHANCE = 0.25;
-// dev: บังคับให้เจอตลาดมืดทุกค่ายพัก (isBmForced อยู่ในหน่วยความจำ — รีสตาร์ทแล้วหาย)
-const blackMarketOpen = (visit) => (isBmForced() ? true : seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE);
-const bmDisc = (item, mult) => ({ bmPrice: Math.max(1, Math.round(item.price * mult)), bmNormal: item.price });
-function blackMarketStock(visit) {
-  if (!visit || !blackMarketOpen(visit)) return null;
-  const rng = seededRng(`bm-stock-${visit}`);
-  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
-  const scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
-  const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
-  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll');
-  const spec = pick(specPool);
-  // ของพิเศษ exclusive หลุดมาจาก daily quest (ยกเว้น ถุงเงินนำโชค id 40 — กันวนซื้อแล้วใช้ +150 ทอง)
-  const bmExclusive = pick(ITEMS.filter((i) => i.exclusive && i.id !== 40));
-  return [
-    { ...scroll, ...bmDisc(scroll, 0.85), bmTag: 'คัมภีร์หายาก' },
-    { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
-    { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
-    { ...bmExclusive, ...bmDisc(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
-  ];
-}
+// ตลาดมืด: logic อยู่ที่ server/game.js (blackMarketStock/BM_JUNK_MULT) — ใช้ร่วมกัน routes + dev preview
 
 // ----- ค่ายพัก (short break) -----
 // ร้านค่ายพัก: สินค้าสุ่มใหม่ทุกค่ายพัก (visit ต่างกัน = ค่ายพักใหม่) และซื้อได้ครั้งเดียวต่อค่ายพัก
@@ -477,7 +454,7 @@ router.get('/camp', (req, res) => {
   const inventory = getInventory(c.id);
   const sellPrices = Object.fromEntries(inventory.map((inv) => {
     const sp = campSellPrice(inv, dayKey);
-    if (bm && inv.type === 'junk') sp.price = Math.round(sp.price * 1.25);
+    if (bm && inv.type === 'junk') sp.price = Math.round(sp.price * BM_JUNK_MULT);
     return [inv.item_id, sp];
   }));
   res.json({
@@ -485,7 +462,7 @@ router.get('/camp', (req, res) => {
     inventory,
     sellPrices,
     shop,
-    blackMarket: bm ? { items: shop.filter((s) => s.bm), junkMult: 1.25 } : null,
+    blackMarket: bm ? { items: shop.filter((s) => s.bm), junkMult: BM_JUNK_MULT } : null,
     quests: rollQuests(c.level, 3),
   });
 });
@@ -540,7 +517,7 @@ router.post('/shop/sell', (req, res) => {
   // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25%
   const bmOpen = req.body.visit ? blackMarketOpen(req.body.visit) : false;
   const toBm = bmOpen && inv.type === 'junk';
-  const price = toBm ? Math.round(sell.price * 1.25) : sell.price;
+  const price = toBm ? Math.round(sell.price * BM_JUNK_MULT) : sell.price;
   const gain = price * qty;
   c.gold += gain;
   db.prepare('UPDATE inventory SET qty = qty - ? WHERE character_id = ? AND item_id = ?').run(qty, c.id, itemId);

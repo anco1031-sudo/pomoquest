@@ -1,4 +1,4 @@
-import { CLASSES, ITEM_BY_ID, CITIES, BOSSES, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS } from './data.js';
+import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -21,6 +21,36 @@ const mulberry32 = (a) => () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
+
+// ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
+// รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%), ของพิเศษ exclusive (ลด 10%)
+export const BM_OPEN_CHANCE = 0.25;
+export const BM_JUNK_MULT = 1.25;
+export const blackMarketOpen = (visit) => seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE;
+const bmDisc = (item, mult) => ({ bmPrice: Math.max(1, Math.round(item.price * mult)), bmNormal: item.price });
+
+// stock ของตลาดมืด (ไม่เช็คว่าเจอหรือเปล่า — ใช้ preview ได้) — deterministic จาก visit
+export function bmStockFor(visit) {
+  const rng = seededRng(`bm-stock-${visit}`);
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+  const scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
+  const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
+  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll');
+  const spec = pick(specPool);
+  // ของพิเศษ exclusive หลุดมาจาก daily quest (ยกเว้น ถุงเงินนำโชค id 40 — กันวนซื้อแล้วใช้ +150 ทอง)
+  const bmExclusive = pick(ITEMS.filter((i) => i.exclusive && i.id !== 40));
+  return [
+    { ...scroll, ...bmDisc(scroll, 0.85), bmTag: 'คัมภีร์หายาก' },
+    { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
+    { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
+    { ...bmExclusive, ...bmDisc(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
+  ];
+}
+
+export function blackMarketStock(visit) {
+  if (!visit || !blackMarketOpen(visit)) return null;
+  return bmStockFor(visit);
+}
 
 // PRNG deterministic จาก string — ใช้สุ่มของที่ต้อง "เหมือนเดิมทุกครั้งที่เปิดหน้าเดิม" (ตลาดมืด)
 export function seededRng(str) {

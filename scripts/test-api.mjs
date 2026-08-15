@@ -217,13 +217,19 @@ try {
     const devLogs = db.prepare("SELECT COUNT(*) n FROM log WHERE type = 'dev'").get().n;
     expect('dev: ไม่มี log dev เข้า DB', devLogs === 0);
 
-    // --- dev: บังคับตลาดมืด (ทดสอบที่ค่ายพัก) ---
-    r = await devPost('/dev/black-market', { on: true });
-    expect('dev bm: เปิดการบังคับตลาดมืด', r.status === 200 && r.json.blackMarketForced === true, r.json.error || '');
-    r = await api(`/camp?visit=bm-force-${Date.now()}`);
-    expect('dev bm: ค่ายพักถัดไปเจอตลาดมืดแน่นอน', r.status === 200 && !!r.json.blackMarket, r.json.error || '');
-    r = await devPost('/dev/black-market', { on: false });
-    expect('dev bm: ปิดการบังคับได้', r.status === 200 && r.json.blackMarketForced === false, r.json.error || '');
+    // --- dev: ตัวอย่างตลาดมืด (preview ล้วน — ไม่มีผลกับเกมจริง) ---
+    const bmVisit = `bm-preview-${Date.now()}`;
+    r = await devPost('/dev/black-market', { visit: bmVisit });
+    expect('dev bm: คืนรายการสินค้า 4 ชิ้น (preview)', r.status === 200 && Array.isArray(r.json.items) && r.json.items.length === 4, JSON.stringify(r.json.items || []).slice(0, 80));
+    const bmItems = r.json.items;
+    expect('dev bm: ทุกชิ้นมีราคาลด (bmPrice) + tag', bmItems.every((i) => i.bmPrice > 0 && i.bmNormal > i.bmPrice && i.bmTag), '');
+    expect('dev bm: junkMult = 1.25', r.json.junkMult === 1.25, String(r.json.junkMult));
+    // deterministic: เรียกซ้ำ visit เดียวกัน → ของเหมือนเดิม
+    const r2 = await devPost('/dev/black-market', { visit: bmVisit });
+    expect('dev bm: deterministic จาก visit (เรียกซ้ำได้ของเดิม)', JSON.stringify(r2.json.items.map((i) => i.id)) === JSON.stringify(bmItems.map((i) => i.id)), '');
+    // ไม่มีผลกับเกมจริง: ค่ายพักนี้ไม่บังคับให้เจอตลาดมืด
+    const campR = await api(`/camp?visit=${bmVisit}`);
+    expect('dev bm: ค่ายพักจริงไม่ถูกบังคับ (ตลาดมืดยังสุ่มตามปกติ)', campR.status === 200, campR.json.error || '');
   }
 
   // --- export/backup ---

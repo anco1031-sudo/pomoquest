@@ -3,6 +3,22 @@ import { useGame } from '../context.jsx';
 import { apiDevPost } from '../api.js';
 import { sfx } from '../sound.js';
 
+// ราคา/โบนัสของไอเทมสำหรับแสดงในตัวอย่างตลาดมืด
+function bmItemParts(i) {
+  const p = [];
+  if (i.atk_bonus) p.push(`⚔️ ATK +${i.atk_bonus}`);
+  if (i.def_bonus) p.push(`🛡️ DEF +${i.def_bonus}`);
+  if (i.hp_bonus) p.push(`❤️ HP +${i.hp_bonus}`);
+  if (i.mp_bonus) p.push(`💧 MP +${i.mp_bonus}`);
+  if (i.spd_bonus) p.push(`👟 SPD +${i.spd_bonus}`);
+  if (i.crit_bonus) p.push(`🎯 CRIT +${i.crit_bonus}%`);
+  if (i.heal_pct) p.push(`🧪 HP ${Math.round(i.heal_pct * 100)}%`);
+  if (i.mana_pct) p.push(`🔮 MP ${Math.round(i.mana_pct * 100)}%`);
+  if (i.use_gold) p.push(`💰 +${i.use_gold} ทอง`);
+  if (i.use_xp) p.push(`✨ +${i.use_xp} XP`);
+  return p;
+}
+
 const EVENT_KEYS = [
   { key: 'monster', label: '🐺 มอนสเตอร์' },
   { key: 'treasure', label: '🎁 สมบัติ' },
@@ -22,6 +38,7 @@ export default function DevPanel({ onClose }) {
   const [itemId, setItemId] = useState(1);
   const [achieveId, setAchieveId] = useState('first_step');
   const [busy, setBusy] = useState(false);
+  const [bmPreview, setBmPreview] = useState(null);
 
   const toast = (msg) => showToast(msg);
 
@@ -49,15 +66,24 @@ export default function DevPanel({ onClose }) {
     try {
       const d = await apiDevPost(path, body);
       toast(d?.message || fallbackMsg || 'เรียบร้อย');
+      return d;
     } catch (e) {
       toast(e.message);
       if (/เข้าสู่ระบบ/.test(e.message)) {
         setToken('');
         localStorage.removeItem(DEV_KEY);
       }
+      return null;
     } finally {
       setBusy(false);
     }
+  };
+
+  // ดูตัวอย่างตลาดมืด — preview ล้วน (ไม่มีผลกับเกมจริง)
+  const showBmPreview = async () => {
+    sfx.click();
+    const d = await dev('/dev/black-market', {});
+    if (d?.items) setBmPreview(d);
   };
 
   // เรียก endpoint ปกติของเกม (ทดสอบระบบจริง)
@@ -132,8 +158,7 @@ export default function DevPanel({ onClose }) {
               <button className="btn" onClick={() => dev('/dev/tale', {})} disabled={busy}>📖 เรื่องราวทดสอบ</button>
               <button className="btn" onClick={() => dev('/dev/heal', {})} disabled={busy}>💖 เติม HP/MP เต็ม</button>
               <button className="btn" onClick={() => dev('/dev/next-city', {})} disabled={busy}>🗺️ เมืองถัดไป</button>
-              <button className="btn" onClick={() => dev('/dev/black-market', { on: true }, '🖤 บังคับตลาดมืดแล้ว')} disabled={busy}>🖤 บังคับตลาดมืด</button>
-              <button className="btn" onClick={() => dev('/dev/black-market', { on: false }, '🌙 ปิดการบังคับตลาดมืด')} disabled={busy}>🌙 ปิดบังคับตลาดมืด</button>
+              <button className="btn" onClick={showBmPreview} disabled={busy}>🖤 ดูตัวอย่างตลาดมืด</button>
             </div>
 
             <div className="dev-section">⚡ สกิล (เลเวล/คัมภีร์)</div>
@@ -170,6 +195,31 @@ export default function DevPanel({ onClose }) {
             <p className="hint">💡 ดู id ไอเทม/ตราได้ใน server/data.js — ระบบ dev รีสตาร์ท server แล้วต้อง login ใหม่</p>
             <button className="btn btn-big" onClick={onClose}>ปิด</button>
           </>
+        )}
+
+        {bmPreview && (
+          <div className="modal-backdrop" onClick={() => setBmPreview(null)}>
+            <div className="modal dev-panel" onClick={(e) => e.stopPropagation()}>
+              <h2>🖤 ตัวอย่างตลาดมืด</h2>
+              <p className="dev-sub" style={{ color: '#fcd34d' }}>preview เท่านั้น — ไม่มีผลกับเกมจริง · รับซื้อขยะ (junk) +{Math.round((bmPreview.junkMult - 1) * 100)}%</p>
+              <div className="bm-preview-list">
+                {bmPreview.items.map((i, idx) => (
+                  <div className="bm-preview-item" key={idx}>
+                    <span className="bm-preview-icon">{i.icon}</span>
+                    <div className="bm-preview-info">
+                      <div className="bm-preview-name">{i.name} <span className="bm-preview-tag">{i.bmTag}</span></div>
+                      <div className="bm-preview-parts">{bmItemParts(i).join(' · ')}</div>
+                      <div className="bm-preview-price">
+                        <b>{i.bmPrice} ทอง</b>
+                        {i.bmNormal !== i.bmPrice && <s className="bm-preview-normal">{i.bmNormal} ทอง</s>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="btn btn-big" onClick={() => setBmPreview(null)}>ปิด</button>
+            </div>
+          </div>
         )}
       </div>
     </div>

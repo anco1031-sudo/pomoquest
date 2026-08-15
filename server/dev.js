@@ -6,16 +6,13 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { db, getCharacter, getProgress, getInventory, addItem, addLog, updateCharacter, bumpDaily, getSkillRow, learnSkill } from './db.js';
 import { ITEM_BY_ID, CITIES, ACHIEVEMENTS, SECRET_ACHIEVEMENTS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID } from './data.js';
-import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSkills, grantSkillXp } from './game.js';
+import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSkills, grantSkillXp, bmStockFor, BM_JUNK_MULT } from './game.js';
 import { checkAchievements } from './achievements.js';
 
 const DEV_USER = process.env.DEV_USER || 'admin';
 const DEV_PASS = process.env.DEV_PASS || 'admin';
 // token อยู่ในหน่วยความจำ — รีสตาร์ท server แล้วต้อง login ใหม่
 const tokens = new Set();
-// บังคับให้ตลาดมืดเจอทุกค่ายพัก (dev — อยู่ในหน่วยความจำ รีสตาร์ทแล้วหาย)
-let forceBm = false;
-export const isBmForced = () => forceBm;
 
 const router = Router();
 
@@ -62,12 +59,15 @@ const dryRun = (res, fn) => {
   return out;
 };
 
-// บังคับ/ปิด ตลาดมืด (ใช้ทดสอบ — ไม่ใช่การแก้ข้อมูลตัวละคร เลยไม่ dry-run)
+// ดูตัวอย่าง stock ตลาดมืด (preview เท่านั้น — ไม่มี flag, ไม่แตะ DB, ไม่มีผลกับเกมจริง)
+// ใช้ visit ปัจจุบันเป็น seed → deterministic กับของที่ค่ายพักนี้จะขาย (ถ้าเจอตลาดมืด)
 router.post('/dev/black-market', requireDev, (req, res) => {
-  forceBm = !!req.body?.on;
+  const visit = req.body?.visit || `v${Date.now()}`;
+  const items = bmStockFor(visit);
   res.json({
-    blackMarketForced: forceBm,
-    message: forceBm ? '🖤 บังคับตลาดมืดแล้ว — ค่ายพักถัดไปจะเจอตลาดมืดแน่นอน (จนกว่าจะปิด)' : '🌙 ปิดการบังคับตลาดมืดแล้ว — กลับเป็นสุ่ม ~25% เหมือนเดิม',
+    items,
+    junkMult: BM_JUNK_MULT,
+    message: `🖤 ตัวอย่างตลาดมืด (ค่ายพัก ${visit}) — ${items.length} ชิ้น · รับซื้อขยะ +${Math.round((BM_JUNK_MULT - 1) * 100)}% (preview — ไม่มีผลกับเกม)`,
   });
 });
 
