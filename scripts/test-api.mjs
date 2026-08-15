@@ -69,6 +69,28 @@ try {
   r = await api('/inventory/equip', { method: 'POST', body: { itemId: 22 } });
   expect('equip: เลเวล 3 + DEF 14 ผ่านเกณฑ์ → สวมเกราะเหล็กได้', r.status === 200 && r.json.character.equipment?.body?.id === 22, r.json.error || '');
 
+  // --- ไอเทมเฉพาะคลาสชุดใหม่: โจร + มีดอาบพิษ (id 204, คลาสโจร, ATK 15+) ---
+  await api('/character/create', { method: 'POST', body: { name: 'โจรเทสต์', class: 'rogue' } }); // สลับไปตัวโจร (active)
+  const rcid = (await api('/state')).json.character.id;
+  addItem(rcid, 204, 1);
+  r = await api('/inventory/equip', { method: 'POST', body: { itemId: 204 } });
+  expect('equip: มีดอาบพิษ — โจร Lv.1 (ยังไม่ถึง lvl 4) สวมไม่ได้', r.status === 400 && r.json.error.includes('เลเวล 4'), r.json.error);
+  db.prepare('UPDATE character SET level = 4, atk = 18 WHERE id = ?').run(rcid); // ATK 18 ≥ 15
+  r = await api('/inventory/equip', { method: 'POST', body: { itemId: 204 } });
+  expect('equip: มีดอาบพิษ — โจร Lv.4 (ATK 18 ≥ 15) สวมได้', r.status === 200 && r.json.character.equipment?.weapon?.id === 204, r.json.error || '');
+  await api('/character/select', { method: 'POST', body: { id: cid } }); // กลับไปเล่น warrior (เทสต์ถัดไปอ้างอิงตัวนี้)
+
+  // --- data integrity: ไอเทมเฉพาะคลาส ---
+  {
+    const { ITEMS, CLASSES } = await import('../server/data.js');
+    const ids = ITEMS.map((i) => i.id);
+    expect('data: id ไอเทมไม่ซ้ำกัน', new Set(ids).size === ids.length);
+    const classItems = ITEMS.filter((i) => i.classReq);
+    const covered = new Set(classItems.flatMap((i) => i.classReq));
+    expect('data: มีไอเทมเฉพาะคลาสครบทั้ง 4 คลาส', covered.size === 4 && [...covered].every((k) => !!CLASSES[k]), [...covered].join(','));
+    expect('data: classReq ทุกอันเป็นคลาสจริง', classItems.every((i) => i.classReq.every((k) => !!CLASSES[k])));
+  }
+
   // --- equipBlockReason (logic ล้วน) ---
   const w = db.prepare('SELECT * FROM character WHERE id = ?').get(cid);
   expect('equipBlockReason: คทาจอมเวท (mage) → warrior ถูกบล็อก', (equipBlockReason(w, ITEM_BY_ID[17]) || '').includes('เฉพาะคลาส นักเวทย์'));

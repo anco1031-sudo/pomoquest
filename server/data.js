@@ -127,6 +127,16 @@ export const ITEMS = [
   { id: 36, name: 'แหวนคริติคอล', icon: '💍', type: 'accessory', crit_bonus: 5, price: 180, desc: 'แหวนแห่งโชคชะตา', lvl: 3 },
   { id: 37, name: 'เครื่องรางป้องกัน', icon: '🧿', type: 'accessory', def_bonus: 6, price: 300, desc: 'เครื่องรางโบราณกันอาถรรพ์', lvl: 5, statReq: { def: 15 } },
 
+  // ---- ไอเทมเฉพาะคลาส (classReq) — หาได้จากร้าน/ดรอป/รางวัลตามคลาสของตัวเองเท่านั้น ----
+  { id: 200, name: 'ขวานมังกรเพลิง',  icon: '🪓', type: 'weapon', atk_bonus: 16, price: 380, desc: 'ขวานสองมือแช่ในไฟมังกร ทำลายล้างที่สุด', lvl: 5, handed: 2, classReq: ['warrior'], statReq: { atk: 22 } },
+  { id: 201, name: 'เกราะไททัน',       icon: '🏛️', type: 'armor', def_bonus: 13, hp_bonus: 60, price: 380, desc: 'เกราะยักษ์โบราณ ทนทานที่สุดของนักรบ', lvl: 4, classReq: ['warrior'], statReq: { def: 15 } },
+  { id: 202, name: 'คทาแสงจันทร์',     icon: '🌙', type: 'weapon', atk_bonus: 12, mp_bonus: 35, price: 380, desc: 'คทาที่ชุ่มด้วยแสงจันทร์ เพิ่มพลังเวทมหาศาล', lvl: 5, handed: 2, classReq: ['mage'] },
+  { id: 203, name: 'เสื้อคลุมเวทมนตร์', icon: '🧥', type: 'armor', mp_bonus: 30, def_bonus: 5, price: 300, desc: 'เสื้อคลุมถักด้วยเส้นใยเวท ซึมซับมานา', lvl: 4, classReq: ['mage'] },
+  { id: 204, name: 'มีดอาบพิษ',        icon: '🗡️', type: 'weapon', atk_bonus: 10, crit_bonus: 6, price: 280, desc: 'มีดคมกริบอาบพิษร้าย คริติคอลถี่', lvl: 4, handed: 1, classReq: ['rogue'], statReq: { atk: 15 } },
+  { id: 205, name: 'ชุดเงา',            icon: '🥷', type: 'armor', spd_bonus: 5, def_bonus: 5, price: 280, desc: 'ชุดดำบางเบา ขยับตัวไร้เสียง', lvl: 4, classReq: ['rogue'] },
+  { id: 206, name: 'ค้อนศักดิ์สิทธิ์',   icon: '🔨', type: 'weapon', atk_bonus: 8, mp_bonus: 18, price: 280, desc: 'ค้อนที่อวยพรด้วยแสงศักดิ์สิทธิ์', lvl: 4, handed: 1, classReq: ['cleric'] },
+  { id: 207, name: 'ชุดนักบวช',        icon: '👘', type: 'armor', def_bonus: 8, hp_bonus: 30, mp_bonus: 12, price: 300, desc: 'ชุดพิธีกรรมโบราณ ปกป้องและหล่อเลี้ยงพลัง', lvl: 4, classReq: ['cleric'] },
+
   // ---- ไอเทมพิเศษเฉพาะ Daily Quest (exclusive: true — หาซื้อตามร้านไม่ได้) ----
   { id: 40, name: 'ถุงเงินนำโชค',     icon: '🧧', type: 'consumable', use_gold: 150, price: 80, exclusive: true, desc: '✦ พิเศษ — ใช้แล้วได้ทอง 150 ทันที' },
   { id: 41, name: 'คัมภีร์ประสบการณ์', icon: '📜', type: 'consumable', use_xp: 120, price: 80, exclusive: true, desc: '✦ พิเศษ — ใช้แล้วได้ XP 120 ทันที' },
