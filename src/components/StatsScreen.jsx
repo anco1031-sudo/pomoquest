@@ -268,6 +268,22 @@ export default function StatsScreen() {
         </div>
       </Panel>
 
+      {(data.bmStats?.buys > 0 || data.bmStats?.sells > 0) && (
+        <Panel title="🖤 สถิติตลาดมืด">
+          <div className="stat-grid">
+            <div className="stat-box"><b>{data.bmStats.buys}</b><span>ซื้อของจากตลาดมืด</span></div>
+            <div className="stat-box"><b>{data.bmStats.sells}</b><span>ขายของให้ตลาดมืด</span></div>
+            <div className="stat-box"><b>{data.bmStats.buyGold.toLocaleString()}</b><span>ทองที่ใช้ซื้อ</span></div>
+            <div className="stat-box"><b>{data.bmStats.sellGold.toLocaleString()}</b><span>ทองที่ได้จากการขาย</span></div>
+            <div className={`stat-box ${data.bmStats.profit >= 0 ? '' : 'stat-box-neg'}`}>
+              <b>{data.bmStats.profit >= 0 ? '+' : ''}{data.bmStats.profit.toLocaleString()}</b>
+              <span>กำไรสุทธิจากการค้า</span>
+            </div>
+          </div>
+          <p className="hint">🖤 เจอตลาดมืดที่ค่ายพัก (สุ่ม ~25%) — ขายของขวัญแพงกว่า +25% และซื้อของหายากลดราคา</p>
+        </Panel>
+      )}
+
       <Panel title="🐾 คู่มือล่า (ของที่ดรอป)">
         <div className="guide-table">
           <div className="guide-table-title">🐺 มอนสเตอร์ — ชนะมีโอกาส ~40% ได้ของประจำตัว</div>

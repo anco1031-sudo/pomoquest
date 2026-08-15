@@ -927,6 +927,11 @@ router.get('/stats', (req, res) => {
   // เมืองที่ชนะบอสมาแล้ว (จาก log boss_win)
   const cityLogs = db.prepare("SELECT detail FROM log WHERE character_id = ? AND type = 'boss_win' ORDER BY id").all(c.id);
 
+  // สถิติการค้าตลาดมืด (จาก log: ซื้อ title '🖤 ซื้อของตลาดมืด' · ขาย detail มีคำว่า 'ตลาดมืด')
+  const bmBuys = db.prepare("SELECT COUNT(*) n, COALESCE(SUM(-gold),0) AS gold FROM log WHERE character_id=? AND type='shop' AND title='🖤 ซื้อของตลาดมืด'").get(c.id);
+  const bmSells = db.prepare("SELECT COUNT(*) n, COALESCE(SUM(gold),0) AS gold FROM log WHERE character_id=? AND type='shop' AND title='💰 ขายของ' AND detail LIKE '%ตลาดมืด%'").get(c.id);
+  const bmStats = { buys: bmBuys.n, buyGold: bmBuys.gold, sells: bmSells.n, sellGold: bmSells.gold, profit: bmSells.gold - bmBuys.gold };
+
   // เวลาพักเบรกย้อนหลัง 7 วัน (จาก log break_done)
   const breakRaw = db.prepare(`
     SELECT date(created_at) AS d, COALESCE(SUM(break_sec), 0) AS break_sec, COALESCE(SUM(break_overrun_sec), 0) AS overrun_sec
@@ -961,6 +966,7 @@ router.get('/stats', (req, res) => {
     breakDays,
     heatmap,
     cityLogs,
+    bmStats,
     achievements: { unlocked: ach.unlocked, total: ach.total },
     settings: getSettings(),
   });

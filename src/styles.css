@@ -203,6 +203,7 @@ body {
   text-align: center;
 }
 .stat-box b { display: block; font-size: 17px; color: var(--gold); }
+.stat-box-neg b { color: #f87171; } /* กำไรติดลบ */
 .stat-box span { font-size: 11px; color: var(--muted); }
 
 /* ---------- settings ---------- */

@@ -177,6 +177,11 @@ try {
     expect('black market: ขาย junk ให้ตลาดมืดแพงกว่า +25%', r.status === 200 && r.json.character.gold === goldBefore2 + expected, `expect +${expected}, got +${r.json.character.gold - goldBefore2}`);
     const trades = db.prepare("SELECT value FROM daily_counter WHERE character_id = ? AND date = ? AND key = 'bm_trades'").get(cid, db.prepare("SELECT date('now','localtime') AS d").get().d)?.value || 0;
     expect('daily quest: bm_trades นับ 2 (ซื้อ + ขายตลาดมืด)', trades === 2, `bm_trades=${trades}`);
+    // สถิติในหน้า Stats: ซื้อ 1 (เสียทอง) + ขาย 1 (ได้ทอง) → กำไร = ได้ - เสีย
+    r = await api('/stats');
+    const bs = r.json.bmStats;
+    expect('stats: bmStats นับซื้อ 1 / ขาย 1', bs?.buys === 1 && bs?.sells === 1, JSON.stringify(bs));
+    expect('stats: bmStats กำไร = รายได้ขาย - ทองที่ใช้ซื้อ', bs?.profit === bs.sellGold - bs.buyGold && bs.sellGold > 0 && bs.buyGold > 0, JSON.stringify(bs));
   }
 
   // --- loot มอนสเตอร์ → นับ daily quest "คนเก็บขยะ" (ขาย junk เพิ่ม counter) ---
