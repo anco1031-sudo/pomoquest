@@ -9,7 +9,7 @@ import {
   getSkillRow, learnSkill,
 } from './db.js';
 import {
-  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID,
+  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ACHIEVEMENTS, SECRET_ACHIEVEMENTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn,
@@ -770,6 +770,44 @@ router.post('/boss/retreat', (req, res) => {
   updateCharacter(c);
   addLog(c.id, { type: 'boss_lose', title: '💨 ถอยทัพ', detail: 'สู้ไม่ไหว ถอยกลับไปพักก่อน…' });
   res.json({ ...serialize(c), message: 'ถอยกลับแคมป์ พลังเสียไปเล็กน้อย' });
+});
+
+// ----- สรุปรายสัปดาห์: 7 วันล่าสุด เทียบ 7 วันก่อนหน้า -----
+router.get('/weekly-summary', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const t = (expr) => db.prepare(`SELECT datetime(${expr}) AS t`).get().t;
+  const now = t("'now','localtime'");
+  const t7 = t("'now','localtime','-7 days'");
+  const t14 = t("'now','localtime','-14 days'");
+  // unlocked_at ของ achievement เก็บเป็น UTC — ต้องเทียบขอบเขต UTC แยก
+  const utcNow = t("'now'");
+  const utc7 = t("'now','-7 days'");
+  const utc14 = t("'now','-14 days'");
+  const achMap = new Map([...ACHIEVEMENTS, ...SECRET_ACHIEVEMENTS].map((a) => [a.id, a]));
+
+  const summarize = (start, end, utcStart, utcEnd) => {
+    const row = db.prepare(`SELECT COUNT(*) AS sessions, COALESCE(SUM(focus_sec),0) AS focus_sec,
+      COALESCE(SUM(xp),0) AS xp, COALESCE(SUM(gold),0) AS gold
+      FROM log WHERE character_id=? AND type='session_done' AND created_at>=? AND created_at<?`).get(c.id, start, end);
+    const counts = db.prepare(`SELECT type, COUNT(*) AS n FROM log WHERE character_id=? AND type IN ('boss_win','battle_win') AND created_at>=? AND created_at<? GROUP BY type`).all(c.id, start, end);
+    const cities = db.prepare(`SELECT DISTINCT city FROM log WHERE character_id=? AND type='session_summary' AND city IS NOT NULL AND created_at>=? AND created_at<?`).all(c.id, start, end).map((r) => r.city);
+    const achRows = db.prepare(`SELECT achievement_id FROM achievement_unlock WHERE character_id=? AND unlocked_at>=? AND unlocked_at<?`).all(c.id, utcStart, utcEnd);
+    return {
+      sessions: row.sessions, focusSec: row.focus_sec, xp: row.xp, gold: row.gold,
+      bossWins: counts.find((x) => x.type === 'boss_win')?.n || 0,
+      monsterWins: counts.find((x) => x.type === 'battle_win')?.n || 0,
+      cities,
+      achievements: achRows.map((r) => {
+        const a = achMap.get(r.achievement_id);
+        return a ? { id: a.id, name: a.name, icon: a.icon } : { id: r.achievement_id, name: r.achievement_id, icon: '🏅' };
+      }),
+    };
+  };
+
+  res.json({
+    thisWeek: summarize(t7, now, utc7, utcNow),
+    lastWeek: summarize(t14, t7, utc14, utc7),
+  });
 });
 
 // ----- สถิติละเอียด (หน้า Stats) -----

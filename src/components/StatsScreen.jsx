@@ -14,15 +14,33 @@ const heatLevel = (focusSec) => {
   return 4;
 };
 
+// เปอร์เซ็นต์เทียบสัปดาห์ก่อน: 'new' (ไม่มีสัปดาห์ก่อน) / 'same' / 'upX' / 'downX'
+const weekDelta = (now, prev) => {
+  if (prev <= 0) return now > 0 ? 'new' : 'same';
+  if (now <= 0) return 'down100';
+  const d = ((now - prev) / prev) * 100;
+  if (Math.abs(d) < 1) return 'same';
+  return d > 0 ? `up${Math.round(d)}` : `down${Math.round(Math.abs(d))}`;
+};
+const DeltaBadge = ({ delta }) => {
+  if (delta === 'new') return <span className="week-delta new">ใหม่</span>;
+  if (delta === 'same') return <span className="week-delta same">=</span>;
+  if (delta.startsWith('up')) return <span className="week-delta up">↑ {delta.slice(2)}%</span>;
+  if (delta.startsWith('down')) return <span className="week-delta down">↓ {delta.slice(4)}%</span>;
+  return null;
+};
+
 export default function StatsScreen() {
   const { get } = useGame();
   const [data, setData] = useState(null);
+  const [week, setWeek] = useState(null);
   const [monthMetric, setMonthMetric] = useState('sessions'); // 'sessions' | 'focus' — สลับมุมมองกราฟ 30 วัน
 
   useEffect(() => {
     (async () => {
-      const d = await get('/stats');
+      const [d, w] = await Promise.all([get('/stats'), get('/weekly-summary')]);
       if (d) setData(d);
+      if (w) setWeek(w);
     })();
   }, [get]);
 
@@ -62,6 +80,41 @@ export default function StatsScreen() {
           <div className="stat-box"><b>{data.achievements.unlocked}/{data.achievements.total}</b><span>ตราที่ปลดล็อก</span></div>
         </div>
       </div>
+
+      {week && (() => {
+        const t = week.thisWeek;
+        const p = week.lastWeek;
+        const newCities = t.cities.filter((c) => !p.cities.includes(c));
+        const newAch = t.achievements.filter((a) => !p.achievements.some((x) => x.id === a.id));
+        const rows = [
+          { label: '⚔️ session', now: t.sessions, prev: p.sessions, fmt: (v) => `${v}` },
+          { label: '⏱️ เวลาโฟกัส', now: t.focusSec, prev: p.focusSec, fmt: (v) => fmtDuration(v) },
+          { label: '✨ XP ที่ได้', now: t.xp, prev: p.xp, fmt: (v) => `${v}` },
+          { label: '💰 ทองที่ได้', now: t.gold, prev: p.gold, fmt: (v) => `${v}` },
+          { label: '👹 บอสที่ชนะ', now: t.bossWins, prev: p.bossWins, fmt: (v) => `${v}` },
+          { label: '🗡️ มอนสเตอร์', now: t.monsterWins, prev: p.monsterWins, fmt: (v) => `${v}` },
+          { label: '🗺️ เมืองที่ไป', now: t.cities.length, prev: p.cities.length, fmt: (v) => `${v}` },
+          { label: '🏅 ตราที่ปลดล็อก', now: t.achievements.length, prev: p.achievements.length, fmt: (v) => `${v}` },
+        ];
+        return (
+          <Panel title="📋 สรุปรายสัปดาห์ (เทียบสัปดาห์ก่อน)">
+            <div className="week-grid">
+              {rows.map((r) => (
+                <div className="week-item" key={r.label}>
+                  <div className="week-label">{r.label}</div>
+                  <div className="week-now">{r.fmt(r.now)}</div>
+                  <DeltaBadge delta={weekDelta(r.now, r.prev)} />
+                </div>
+              ))}
+            </div>
+            {newCities.length > 0 && <div className="week-extra">🆕 เมืองใหม่: {newCities.join(' · ')}</div>}
+            {newAch.length > 0 && <div className="week-extra">🆕 ตราใหม่: {newAch.map((a) => `${a.icon} ${a.name}`).join(' · ')}</div>}
+            {t.sessions === 0 && p.sessions === 0 && (
+              <p className="hint">ยังไม่มี session ใน 2 สัปดาห์นี้ — เริ่มโฟกัสเพื่อสร้างสถิติ!</p>
+            )}
+          </Panel>
+        );
+      })()}
 
       <Panel title="📅 โฟกัสย้อนหลัง 7 วัน">
         <div className="chart">
