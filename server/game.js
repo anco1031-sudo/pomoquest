@@ -440,6 +440,7 @@ export function generateBoss(level, cityIndex) {
   return {
     name: boss.name,
     icon: boss.icon,
+    loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
     maxHp,
     hp: maxHp,
     atk: 9 + Math.round(2.5 * level),

@@ -125,6 +125,24 @@ try {
   const st = await api('/state');
   expect('settings: บันทึก work_min 40 ได้', st.json.settings?.work_min === 40, String(st.json.settings?.work_min));
 
+  // --- ของรางวัลบอส: ทุกบอสมี loot เป็นขยะ + generateBoss ส่ง loot ต่อ ---
+  {
+    const { BOSSES } = await import('../server/data.js');
+    const { generateBoss } = await import('../server/game.js');
+    expect('data: บอสทุกตัวมี loot เป็นขยะจริง', BOSSES.every((b) => { const i = ITEM_BY_ID[b.loot]; return i && i.type === 'junk' && i.price > 0; }));
+    expect('generateBoss: บอสเมืองแรกมี loot 130 (ตราโจรป่า)', generateBoss(5, 0).loot === 130);
+  }
+
+  // --- loot มอนสเตอร์ → นับ daily quest "คนเก็บขยะ" (ขาย junk เพิ่ม counter) ---
+  {
+    addItem(cid, 122, 1); // ขนหมาป่า (loot ของหมาป่าเถื่อน)
+    r = await api('/shop/sell', { method: 'POST', body: { itemId: 122, qty: 1 } });
+    expect('sell: ขายขนหมาป่า (loot มอนสเตอร์) ได้', r.status === 200, r.json.error || '');
+    const d = db.prepare("SELECT date('now','localtime') AS d").get().d;
+    const counter = db.prepare("SELECT value FROM daily_counter WHERE character_id = ? AND date = ? AND key = 'junk_sold'").get(cid, d);
+    expect('daily quest: junk_sold นับ +1 เมื่อขาย loot มอนสเตอร์', counter?.value === 1, JSON.stringify(counter));
+  }
+
   // --- export/backup ---
   const backupRes = await fetch(`${base}/api/backup`);
   const buf = Buffer.from(await backupRes.arrayBuffer());

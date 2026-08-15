@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { Panel, fmtDuration } from './ui.jsx';
+import { MONSTERS, BOSSES, ITEM_BY_ID } from '../../server/data.js';
 
 const DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 
@@ -265,6 +266,34 @@ export default function StatsScreen() {
           <div className="stat-box"><b>{p.break_extended}</b><span>ครั้งที่ต่อเวลาพัก</span></div>
           <div className="stat-box"><b>{fmtDuration(p.break_overrun_sec)}</b><span>เวลาที่เลยพักทั้งหมด</span></div>
         </div>
+      </Panel>
+
+      <Panel title="🐾 คู่มือล่า (ของที่ดรอป)">
+        <div className="guide-table">
+          <div className="guide-table-title">🐺 มอนสเตอร์ — ชนะมีโอกาส ~40% ได้ของประจำตัว</div>
+          {MONSTERS.map((m) => {
+            const loot = ITEM_BY_ID[m.loot];
+            return (
+              <div className="guide-row-lite" key={m.name}>
+                <span className="guide-mob">{m.icon} {m.name}</span>
+                <span className="guide-mob-power">พลัง {m.power}</span>
+                <span className="guide-mob-loot">{loot ? `${loot.icon} ${loot.name} (${loot.price} ทอง)` : '—'}</span>
+              </div>
+            );
+          })}
+          <div className="guide-table-title">👹 บอส — ชนะมีโอกาส ~50% ได้ของรางวัลประจำตัว (ขายแพง)</div>
+          {BOSSES.map((b) => {
+            const loot = ITEM_BY_ID[b.loot];
+            return (
+              <div className="guide-row-lite" key={b.name}>
+                <span className="guide-mob">{b.icon} {b.name}</span>
+                <span className="guide-mob-power" />
+                <span className="guide-mob-loot">{loot ? `${loot.icon} ${loot.name} (${loot.price} ทอง)` : '—'}</span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="hint">💡 ของที่ดรอปเป็นของขวัญ (junk) — ขายได้ที่แคมป์ และนับรวมในเควสประจำวัน "คนเก็บขยะ"</p>
       </Panel>
 
       {data.cityLogs.length > 0 && (

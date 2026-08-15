@@ -741,7 +741,16 @@ router.post('/boss/act', (req, res) => {
     c.city_index = (c.city_index + 1) % CITIES.length;
     updateCharacter(c);
     fights.delete(c.id);
-    addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} และเดินทางสู่ ${CITIES[c.city_index].name}!`, xp: result.xp, gold: result.gold });
+    // ของรางวัลเฉพาะบอส — โอกาส ~50% ได้ของขวัญหายากประจำตัว (ขายได้ที่แคมป์)
+    let lootNote = '';
+    if (fight.boss.loot && Math.random() < 0.5) {
+      const loot = ITEM_BY_ID[fight.boss.loot];
+      if (loot) {
+        addItem(c.id, loot.id);
+        lootNote = ` และได้ ${loot.icon} ${loot.name}!`;
+      }
+    }
+    addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} และเดินทางสู่ ${CITIES[c.city_index].name}!${lootNote}`, xp: result.xp, gold: result.gold });
     ach = checkAchievements(c, prog, {
       bossWin: {
         hp: c.hp,
