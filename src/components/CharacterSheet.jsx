@@ -118,12 +118,6 @@ export default function CharacterSheet() {
     if (d) showToast(d.message || 'สวมแล้ว');
   };
 
-  const sellItem = async (i) => {
-    if (!window.confirm(`ขาย ${i.name} x1?`)) return;
-    const d = await post('/shop/sell', { itemId: i.item_id, qty: 1 });
-    if (d) showToast(d.message || 'ขายแล้ว');
-  };
-
   return (
     <>
       <Panel title={`🛡️ ${character.name} · ${character.className} Lv.${character.level}`}>
@@ -177,7 +171,6 @@ export default function CharacterSheet() {
                 ) : (
                   <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
                 )}
-                <button className="btn btn-sm btn-danger-soft" onClick={() => sellItem(i)}>ขาย</button>
               </div>
             </div>
           ))
