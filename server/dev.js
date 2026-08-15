@@ -1,4 +1,4 @@
-// server/dev.js — ระบบ dev test: เข้าสู่ระบบด้วย admin/adminlouis แล้วทดสอบทุกระบบได้
+// server/dev.js — ระบบ dev test: เข้าสู่ระบบด้วย admin/admin แล้วทดสอบทุกระบบได้
 // ตั้งค่า user/pass ผ่าน env: DEV_USER, DEV_PASS
 import { Router } from 'express';
 import crypto from 'node:crypto';
@@ -8,7 +8,7 @@ import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSki
 import { checkAchievements } from './achievements.js';
 
 const DEV_USER = process.env.DEV_USER || 'admin';
-const DEV_PASS = process.env.DEV_PASS || 'adminlouis';
+const DEV_PASS = process.env.DEV_PASS || 'admin';
 // token อยู่ในหน่วยความจำ — รีสตาร์ท server แล้วต้อง login ใหม่
 const tokens = new Set();
 
@@ -47,6 +47,27 @@ router.post('/dev/grant-item', requireDev, (req, res) => {
   addItem(c.id, itemId, 1);
   addLog(c.id, { type: 'dev', title: '🎁 ให้ไอเทม (dev)', detail: `${item.icon} ${item.name}` });
   res.json({ message: `🎁 ได้ ${item.icon} ${item.name} x1` });
+});
+
+// เติม HP/MP เต็ม (ทดสอบระบบสู้ / สถานะ)
+router.post('/dev/heal', requireDev, (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const stats = computeStats(c);
+  c.hp = stats.maxHp;
+  c.mp = stats.maxMp;
+  updateCharacter(c);
+  addLog(c.id, { type: 'dev', title: '💖 เติมพลัง (dev)', detail: `HP/MP เต็มแล้ว (${stats.maxHp}/${stats.maxMp})` });
+  res.json({ ...serializeCharacter(c), message: `💖 HP/MP เต็มแล้ว (${stats.maxHp}/${stats.maxMp})` });
+});
+
+// ย้ายเมืองถัดไป (ทดสอบรอบเมือง / วัฏจักร)
+router.post('/dev/next-city', requireDev, (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const next = (c.city_index + 1) % CITIES.length;
+  c.city_index = next;
+  updateCharacter(c);
+  addLog(c.id, { type: 'dev', title: '🗺️ ย้ายเมือง (dev)', detail: `เดินทางสู่ ${CITIES[next].name}!` });
+  res.json({ ...serializeCharacter(c), message: `🗺️ ย้ายไป ${CITIES[next].name} แล้ว` });
 });
 
 // ให้ทอง

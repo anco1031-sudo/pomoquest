@@ -17,6 +17,7 @@ const heatLevel = (focusSec) => {
 export default function StatsScreen() {
   const { get } = useGame();
   const [data, setData] = useState(null);
+  const [monthMetric, setMonthMetric] = useState('sessions'); // 'sessions' | 'focus' — สลับมุมมองกราฟ 30 วัน
 
   useEffect(() => {
     (async () => {
@@ -29,6 +30,12 @@ export default function StatsScreen() {
 
   const p = data.progress;
   const maxFocus = Math.max(1, ...data.days.map((d) => d.focusSec));
+  const maxSessions = Math.max(1, ...data.days.map((d) => d.sessions));
+  const monthDays = data.monthDays || [];
+  const maxMonthSessions = Math.max(1, ...monthDays.map((d) => d.sessions));
+  const maxMonthFocus = Math.max(1, ...monthDays.map((d) => d.focusSec));
+  const totalMonthSessions = monthDays.reduce((a, d) => a + d.sessions, 0);
+  const totalMonthMinutes = Math.round(monthDays.reduce((a, d) => a + d.focusSec, 0) / 60);
   const maxBreak = Math.max(1, ...data.breakDays.map((d) => d.breakSec));
 
   // heatmap 91 วัน → จัดเป็นคอลัมน์รายสัปดาห์ (ขึ้นต้นวันจันทร์ เติมช่องว่างก่อนหน้าให้เต็มสัปดาห์)
@@ -70,6 +77,70 @@ export default function StatsScreen() {
                 </div>
                 <div className="chart-label">{DAY_NAMES[dow]}</div>
                 <div className="chart-sessions">{d.sessions > 0 ? `x${d.sessions}` : ''}</div>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      <Panel title="🎯 จำนวน Session ย้อนหลัง 7 วัน">
+        <div className="chart">
+          {data.days.map((d) => {
+            const h = Math.max(4, (d.sessions / maxSessions) * 100);
+            const dow = new Date(d.date + 'T12:00:00').getDay();
+            return (
+              <div className="chart-col" key={d.date}>
+                <div className="chart-value">{d.sessions > 0 ? `x${d.sessions}` : ''}</div>
+                <div className="chart-bar-wrap">
+                  <div className="chart-bar chart-bar-session" style={{ height: `${h}%` }} />
+                </div>
+                <div className="chart-label">{DAY_NAMES[dow]}</div>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      <Panel
+        title={`📅 30 วัน — ${
+          monthMetric === 'sessions'
+            ? `จำนวน Session (${totalMonthSessions})`
+            : `เวลาโฟกัส (${totalMonthMinutes} นาที)`
+        }`}
+      >
+        <div className="chart-toggle">
+          <button
+            className={`chart-toggle-btn ${monthMetric === 'sessions' ? 'active' : ''}`}
+            onClick={() => setMonthMetric('sessions')}
+          >
+            🎯 จำนวน Session
+          </button>
+          <button
+            className={`chart-toggle-btn ${monthMetric === 'focus' ? 'active' : ''}`}
+            onClick={() => setMonthMetric('focus')}
+          >
+            ⏱️ เวลาโฟกัส
+          </button>
+        </div>
+        <div className="chart chart-dense">
+          {monthDays.map((d) => {
+            const isSession = monthMetric === 'sessions';
+            const val = isSession ? d.sessions : Math.round(d.focusSec / 60);
+            const max = isSession ? maxMonthSessions : maxMonthFocus;
+            const h = Math.max(2, (val / max) * 100);
+            return (
+              <div
+                className="chart-col"
+                key={d.date}
+                title={`${d.date} · ${isSession ? `${d.sessions} session` : `${Math.round(d.focusSec / 60)} นาที`}`}
+              >
+                <div className="chart-bar-wrap">
+                  <div
+                    className={`chart-bar ${isSession ? 'chart-bar-session' : ''}`}
+                    style={{ height: `${h}%` }}
+                  />
+                </div>
+                <div className="chart-label">{d.date.slice(8)}</div>
               </div>
             );
           })}

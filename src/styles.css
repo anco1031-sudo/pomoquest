@@ -303,17 +303,21 @@ body {
 }
 .session-log-title { font-size: 12.5px; font-weight: 800; color: var(--gold); margin-bottom: 6px; }
 .session-log-item {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+}
+.session-log-item:last-child { border-bottom: none; }
+.session-log-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 4px 10px;
-  padding: 5px 0;
-  border-bottom: 1px dashed var(--border);
-  font-size: 13px;
 }
-.session-log-item:last-child { border-bottom: none; }
 .session-log-event { font-weight: 600; }
+.session-log-detail { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.45; }
+.session-log-time { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 4px; }
 .session-log-reward { color: var(--muted); font-size: 12px; }
 
 /* ---------- creation ---------- */
@@ -473,6 +477,46 @@ body {
 .bar-label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
 .bar { height: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+
+/* ---------- session history ---------- */
+.session-search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.session-search .input { flex: 1; min-width: 0; }
+.session-search input[type='date'] { flex: 0 0 auto; width: 140px; }
+.session-search select { flex: 0 0 auto; width: auto; max-width: 45%; }
+.session-history { display: flex; flex-direction: column; gap: 8px; }
+.session-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.session-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.session-card-head:hover { background: var(--panel); }
+.session-card-title { font-weight: 800; color: var(--gold); }
+.session-card-date { color: var(--muted); font-size: 12px; margin-left: auto; }
+.session-card-toggle { color: var(--muted); }
+.session-card-body { padding: 0 12px 12px; border-top: 1px dashed var(--border); }
+.session-card-detail { font-size: 12.5px; color: var(--muted); padding: 10px 0 4px; white-space: pre-line; }
+.session-card-events { margin-top: 6px; }
+.session-card-events-title { font-size: 12px; font-weight: 800; color: var(--gold); margin-bottom: 2px; }
+.session-card-event {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.session-card-event:last-child { border-bottom: none; }
 
 /* ---------- adventure log ---------- */
 .log-list { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; padding-right: 4px; }
@@ -718,6 +762,19 @@ body {
 .dev-input { width: 90px; flex: 0 0 auto; }
 .story-icon { font-size: 44px; }
 .story-title { font-size: 20px; font-weight: 900; color: var(--gold); margin: 8px 0 12px; }
+/* สรุป session (โชว์ตอนจบ session) */
+.session-summary {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-align: left;
+}
+.session-summary-title { font-size: 12.5px; font-weight: 800; color: var(--gold); margin-bottom: 6px; }
+.session-summary-rewards { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 700; }
+.session-summary-items { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12.5px; }
+
 .story-text { font-size: 14.5px; line-height: 1.6; color: var(--text); background: var(--bg); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left; white-space: pre-line; /* รองรับสรุปเหตุการณ์หลายบรรทัด */ }
 
 /* level up modal */
@@ -727,12 +784,20 @@ body {
 .levelup-sub { margin: 8px 0 16px; }
 .levelup-modal .alloc-box { text-align: left; }
 
-/* ---------- toast ---------- */
-.toast {
+/* ---------- toast (แบบคิว — โชว์เรียงกันหลายอัน) ---------- */
+.toast-stack {
   position: fixed;
   left: 50%;
   bottom: calc(24px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 60;
+  pointer-events: none;
+}
+.toast {
   background: var(--panel2);
   border: 1px solid var(--purple);
   color: var(--text);
@@ -741,7 +806,6 @@ body {
   font-size: 14px;
   font-weight: 600;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  z-index: 60;
   animation: popIn 0.2s ease;
   max-width: 90vw;
   text-align: center;
@@ -917,6 +981,29 @@ body {
   transition: height 0.4s ease;
 }
 .chart-bar-break { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+.chart-bar-session { background: linear-gradient(180deg, #fbbf24, #b45309); }
+/* สลับมุมมองกราฟ 30 วัน */
+.chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+.chart-toggle-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chart-toggle-btn.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1a1205;
+}
+/* กราฟ 30 วัน — แท่งแน่น ๆ ซ่อนตัวเลข (ดู tooltip แทน) */
+.chart-dense { gap: 2px; height: 140px; }
+.chart-dense .chart-value { display: none; }
+.chart-dense .chart-label { font-size: 9px; }
+.chart-dense .chart-bar-wrap { max-width: 14px; height: 90px; }
 .chart-label { font-size: 11px; color: var(--muted); }
 .chart-sessions { font-size: 10px; color: var(--gold); height: 13px; }
 

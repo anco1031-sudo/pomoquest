@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useGame } from './context.jsx';
 import { sfx } from './sound.js';
 import { fmtTime, fmtDuration } from './components/ui.jsx';
@@ -54,6 +54,7 @@ export default function Game() {
   const [mounted, setMounted] = useState(false);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [sessionEvents, setSessionEvents] = useState([]); // เหตุการณ์ที่เจอใน session นี้ (ดูย้อนหลังตอนพัก)
+  const [sessionKey, setSessionKey] = useState(null); // id ของ session ปัจจุบัน — ใช้จับกลุ่มเหตุการณ์ในหน้าประวัติ session
   const [breakVisit, setBreakVisit] = useState(null); // id ค่ายพักปัจจุบัน — ใช้ล็อก stock ร้านค้า (ซื้อครั้งเดียวต่อค่ายพัก)
   const [story, setStory] = useState(null); // เรื่องราว LLM หลังจบ session (modal)
   const [storyDone, setStoryDone] = useState(false); // เรื่องราวจบแล้ว (โชว์+ปิดแล้ว หรือไม่มีเรื่อง) — ถึงจะถามพัก/ข้าม
@@ -65,7 +66,22 @@ export default function Game() {
   const [breakExtends, setBreakExtends] = useState(0); // ต่อเวลาพักกี่ครั้ง
   const [breakStartedAt, setBreakStartedAt] = useState(null); // เริ่มพักเมื่อไหร่ (ms) — ใช้คำนวณเวลาพักจริง
 
+  // สรุปรวมของรางวัลจากเหตุการณ์ใน session นี้ (โชว์ตอนจบ session)
+  const sessionSummary = useMemo(() => {
+    const s = { xp: 0, gold: 0, hpLoss: 0, mp: 0, items: [], count: sessionEvents.length };
+    for (const ev of sessionEvents) {
+      s.xp += ev.xp || 0;
+      s.gold += ev.gold || 0;
+      if (ev.hpChange < 0) s.hpLoss += Math.abs(ev.hpChange);
+      if (ev.mpChange > 0) s.mp += ev.mpChange;
+      if (ev.item) s.items.push(ev.item);
+    }
+    return s;
+  }, [sessionEvents]);
+
   const eventBusyRef = useRef(false);
+  const sessionKeyRef = useRef(null);
+  sessionKeyRef.current = sessionKey;
   const endedRef = useRef(false);
   const phaseRef = useRef(phase);
   const sessionIdxRef = useRef(sessionIdx);
@@ -106,6 +122,7 @@ export default function Game() {
     endedRef.current = false;
     setMounted(true);
     setSessionEvents([]);
+    setSessionKey(null);
     setBreakVisit(null);
     setStory(null);
     setStoryDone(false);
@@ -123,6 +140,7 @@ export default function Game() {
       setElapsed(t.elapsed || 0);
       setNextEventIn(t.nextEventIn ?? randomEventDelay());
       setSessionEvents(t.sessionEvents || []);
+      setSessionKey(t.sessionKey || null);
       setBreakVisit(t.breakVisit || null);
       setAwaitingBreak(t.awaitingBreak || false);
       setBreakOver(t.breakOver || false);
@@ -176,12 +194,12 @@ export default function Game() {
   useEffect(() => {
     if (!mounted || !character) return;
     const t = {
-      phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, breakVisit,
+      phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
       awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome,
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -217,7 +235,13 @@ export default function Game() {
   const completeWork = async () => {
     sfx.complete();
     // ส่งเหตุการณ์ใน session นี้ไปด้วย — LLM แต่งเรื่องจาก log จริง, ถ้า LLM ไม่ทำงาน server จะสรุป log นี้แทน
-    const res = await post('/adventure/complete', { focusSec: elapsedRef.current, events: sessionEvents });
+    const res = await post('/adventure/complete', {
+      focusSec: elapsedRef.current,
+      events: sessionEvents,
+      sessionIdx: sessionIdxRef.current,
+      sessionsPerCycle: settings.sessions_per_cycle,
+      sessionKey: sessionKeyRef.current,
+    });
     if (!res) { setPhase('idle'); return; }
     setStoryDone(false); // เริ่มรอเรื่องราว — เรื่องต้องโชว์ก่อนถึงจะถามพัก/ข้าม
     setAwaitingBreak(true);
@@ -244,6 +268,7 @@ export default function Game() {
     setElapsed(0);
     setNextEventIn(randomEventDelay());
     setSessionEvents([]); // session ใหม่ → ล้าง log เหตุการณ์เดิม
+    setSessionKey(String(Date.now())); // session ใหม่ → id ใหม่ (จับกลุ่มเหตุการณ์ในหน้าประวัติ)
     setPausedAtHome(false); // เริ่ม session ใหม่ = เลิกสถานะพักไว้ที่หน้าหลัก
     setPhase('work');
     setRunning(true);
@@ -314,7 +339,7 @@ export default function Game() {
     if (phase !== 'work' || !running || nextEventIn > 0 || eventBusyRef.current) return;
     eventBusyRef.current = true;
     (async () => {
-      const res = await post('/adventure/event');
+      const res = await post('/adventure/event', sessionKeyRef.current ? { sessionKey: sessionKeyRef.current } : {});
       eventBusyRef.current = false;
       const remainNow = remainRef.current;
       // เหลือน้อยกว่า 30 วิ → ไม่สุ่ม event ใหม่ (session ใกล้จบ) กัน event ซ้อนที่ท้าย session
@@ -325,11 +350,13 @@ export default function Game() {
   }, [nextEventIn, phase, running]);
 
   // ---- เก็บเหตุการณ์ที่เจอใน session นี้ (ไว้ดูย้อนหลังตอนพักเบรก) ----
+  // ระหว่างโฟกัส (running): กิน event เงียบ ๆ ไม่เด้ง modal รบกวน — ดูจาก toast + session log
   useEffect(() => {
-    if (phase !== 'work' || eventQueue.length === 0) return;
-    const last = eventQueue[eventQueue.length - 1];
-    setSessionEvents((prev) => (prev[prev.length - 1] === last ? prev : [...prev, last]));
-  }, [eventQueue, phase]);
+    if (phase !== 'work' || !running || eventQueue.length === 0) return;
+    const first = eventQueue[0];
+    setSessionEvents((prev) => (prev[prev.length - 1] === first ? prev : [...prev, { ...first, at: Date.now() }]));
+    closeEvent();
+  }, [eventQueue, phase, running]);
 
   // ---- เรื่องราวการผจญภัย (LLM) หลังจบ session — poll จนเจอเรื่องใหม่แล้วเด้ง modal ----
   // เมื่อเรื่องจบ (โชว์แล้วถูกปิด หรือไม่มีเรื่องเลย) → storyDone=true ถึงจะถามพัก/ข้าม
@@ -448,7 +475,7 @@ export default function Game() {
         />
       )}
 
-      {eventQueue.length > 0 && <EventModal event={eventQueue[0]} onClose={closeEvent} />}
+      {eventQueue.length > 0 && !inActiveWork && <EventModal event={eventQueue[0]} onClose={closeEvent} />}
 
       {achieveQueue.length > 0 && !inActiveWork && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
 
@@ -474,6 +501,24 @@ export default function Game() {
               โฟกัสครบแล้ว — จะพักเบรกสักหน่อย หรือลุยต่อเลย?
               {sessionIdx >= settings.sessions_per_cycle ? ' (ครบรอบแล้ว — พักใหญ่จะได้สู้บอส! 👹)' : ''}
             </p>
+            {sessionEvents.length > 0 && (
+              <div className="session-summary">
+                <div className="session-summary-title">📜 สรุป session นี้ ({sessionSummary.count} เหตุการณ์)</div>
+                <div className="session-summary-rewards">
+                  {sessionSummary.xp > 0 && <span className="reward-xp">+{sessionSummary.xp} XP</span>}
+                  {sessionSummary.gold > 0 && <span className="reward-gold">+{sessionSummary.gold} ทอง</span>}
+                  {sessionSummary.hpLoss > 0 && <span className="reward-hp-loss">-{sessionSummary.hpLoss} HP</span>}
+                  {sessionSummary.mp > 0 && <span className="reward-mp">+{sessionSummary.mp} MP</span>}
+                </div>
+                {sessionSummary.items.length > 0 && (
+                  <div className="session-summary-items">
+                    {sessionSummary.items.map((it, i) => (
+                      <span key={i} className="reward-item">🎁 {it.icon} {it.name}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={chooseBreak}>
                 {sessionIdx >= settings.sessions_per_cycle

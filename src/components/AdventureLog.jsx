@@ -1,14 +1,14 @@
 import { useGame } from '../context.jsx';
 import { Panel } from './ui.jsx';
 
-const TYPE_ICON = {
+export const TYPE_ICON = {
   battle_win: '🗡️', battle_lose: '💨', treasure: '🎁', shrine: '⛩️', merchant: '🧙', trap: '⚠️',
-  session_done: '✅', abort: '💨', shop: '🛒', equip: '🔧', rest: '🔥',
+  session_done: '✅', session_summary: '📋', abort: '💨', shop: '🛒', equip: '🔧', rest: '🔥',
   quest_win: '📜', quest_fail: '📜', boss_win: '🏆', boss_lose: '💨', system: '🎒',
   achievement: '🏅',
 };
 
-function fmtLogTime(iso) {
+export function fmtLogTime(iso) {
   // server เก็บเวลาแบบ localtime (ไม่มี Z) — ถ้ามี Z แปลว่า UTC
   const d = iso.endsWith('Z') ? new Date(iso) : new Date(iso.replace(' ', 'T'));
   const now = Date.now();
@@ -21,7 +21,7 @@ function fmtLogTime(iso) {
 
 export default function AdventureLog({ limit = 20 }) {
   const { log } = useGame();
-  const items = (log || []).slice(0, limit);
+  const items = [...(log || [])].sort((a, b) => b.id - a.id).slice(0, limit); // ล่าสุดก่อนเสมอ
 
   return (
     <Panel title={`📜 บันทึกการผจญภัย (${(log || []).length})`}>
@@ -35,10 +35,12 @@ export default function AdventureLog({ limit = 20 }) {
               <div className="log-body">
                 <div className="log-title">{l.title} <span className="log-time">{fmtLogTime(l.created_at)}</span></div>
                 <div className="log-detail">{l.detail}</div>
-                {(l.xp > 0 || l.gold > 0) && (
+                {(l.xp > 0 || l.gold > 0 || l.hp_change < 0 || l.mp_change > 0) && (
                   <div className="log-rewards">
                     {l.xp > 0 && <span className="reward-xp">+{l.xp} XP</span>}
                     {l.gold > 0 && <span className="reward-gold">+{l.gold} ทอง</span>}
+                    {l.hp_change < 0 && <span className="reward-hp-loss">-{Math.abs(l.hp_change)} HP</span>}
+                    {l.mp_change > 0 && <span className="reward-mp">+{l.mp_change} MP</span>}
                   </div>
                 )}
               </div>

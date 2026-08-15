@@ -17,16 +17,16 @@ export function GameProvider({ children }) {
     log: [],
     daily: null,
   });
-  const [toast, setToast] = useState(null);
+  // toast แบบคิว — โชว์เรียงกัน ไม่ทับ/ไม่หายเมื่อมี toast ใหม่ (แต่ละอันหายเองหลัง 3.5 วิ)
+  const [toasts, setToasts] = useState([]);
   const [eventQueue, setEventQueue] = useState([]);
   const [achieveQueue, setAchieveQueue] = useState([]);
   const [levelUpQueue, setLevelUpQueue] = useState([]);
-  const toastTimer = useRef(null);
 
   const showToast = useCallback((msg) => {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3500);
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, msg }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   }, []);
 
   // นำข้อมูลจาก response ไป merge เข้า state รวม
@@ -48,7 +48,18 @@ export function GameProvider({ children }) {
       if (d.levelUps && d.levelUps.levels > 0) {
         setLevelUpQueue((q) => [...q, { levels: d.levelUps.levels, statPoints: d.levelUps.statPoints }]);
       }
-      if (d.event) setEventQueue((q) => [...q, d.event]);
+      if (d.event) {
+        setEventQueue((q) => [...q, d.event]);
+        // toast สรุปของรางวัล — เด้งแล้วหายเอง ไม่ต้องเปิด modal ก็รู้ผล
+        const ev = d.event;
+        const parts = [];
+        if (ev.xp > 0) parts.push(`+${ev.xp} XP`);
+        if (ev.gold > 0) parts.push(`+${ev.gold} ทอง`);
+        if (ev.hpChange < 0) parts.push(`-${Math.abs(ev.hpChange)} HP`);
+        if (ev.mpChange > 0) parts.push(`+${ev.mpChange} MP`);
+        if (ev.item) parts.push(`${ev.item.icon} ${ev.item.name}`);
+        if (parts.length) showToast(`🎲 ${ev.title} — ${parts.join(' · ')}`);
+      }
       if (d.achievements && d.achievements.length) setAchieveQueue((q) => [...q, ...d.achievements]);
       if (d.message) showToast(d.message);
     },
@@ -108,7 +119,7 @@ export function GameProvider({ children }) {
 
   return (
     <Ctx.Provider
-      value={{ ...data, refresh, get, post, put, toast, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp }}
+      value={{ ...data, refresh, get, post, put, toasts, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp }}
     >
       {children}
     </Ctx.Provider>

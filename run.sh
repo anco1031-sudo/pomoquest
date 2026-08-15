@@ -7,6 +7,7 @@
 #   ./run.sh prod       # build + รัน production ที่ http://localhost:3001 (รันหน้าจอ)
 #   ./run.sh start      # รัน production แบบ background (daemon) — log ที่ /tmp/pomoquest.log
 #   ./run.sh stop       # หยุด server ที่รันอยู่
+#   ./run.sh reset      # RESET เกม: หยุด server → ลบฐานข้อมูล → รันใหม่ (ต้องพิมพ์ reset ยืนยัน, ใช้ -y ข้าม)
 #   ./run.sh status     # ดูสถานะ: server / LLM ที่ port 8080
 #   ./run.sh llm        # เช็คว่า LLM (localhost:8080) พร้อมใช้งานไหม
 #   ./run.sh help       # ดูวิธีใช้
@@ -70,6 +71,22 @@ case "${1:-dev}" in
     else
       echo "ℹ️  ไม่มี server รันอยู่"
     fi
+    ;;
+  reset)
+    echo "⚠️  RESET เกมทั้งหมด: จะลบตัวละคร/ไอเทม/ประวัติ session ทั้งหมด — กู้คืนไม่ได้!"
+    if [[ "${2:-}" != "-y" && "${2:-}" != "--yes" ]]; then
+      read -r -p "พิมพ์ 'reset' เพื่อยืนยัน: " confirm
+      [[ "$confirm" == "reset" ]] || { echo "🚫 ยกเลิก"; exit 1; }
+    fi
+    echo "🛑 หยุด server…"
+    pkill -f "node server/index.js" 2>/dev/null || true
+    sleep 1
+    echo "🗑️  ลบฐานข้อมูล…"
+    rm -f server/data/pomoquest.db server/data/pomoquest.db-wal server/data/pomoquest.db-shm
+    echo "🔨 build + รันใหม่แบบ background…"
+    npm run build
+    nohup npm start > /tmp/pomoquest.log 2>&1 &
+    echo "✅ reset เสร็จ — ข้อมูลเริ่มต้นใหม่แล้ว: http://localhost:${API_PORT}  (log: /tmp/pomoquest.log)"
     ;;
   status)
     status

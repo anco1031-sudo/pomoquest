@@ -6,6 +6,7 @@ import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
 import AchievementList from './AchievementList.jsx';
 import StatsScreen from './StatsScreen.jsx';
+import SessionHistory from './SessionHistory.jsx';
 import DailyQuests from './DailyQuests.jsx';
 import DevPanel from './DevPanel.jsx';
 
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
   { key: 'sheet', label: 'ตัวละคร', icon: '🛡️' },
   { key: 'log', label: 'บันทึก', icon: '📜' },
+  { key: 'sessions', label: 'Session', icon: '📅' },
   { key: 'achieve', label: 'ตรา', icon: '🏅' },
   { key: 'stats', label: 'สถิติ', icon: '📊' },
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
@@ -170,6 +172,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
 
         {tab === 'sheet' && <CharacterSheet />}
         {tab === 'log' && <AdventureLog limit={50} />}
+        {tab === 'sessions' && <SessionHistory />}
         {tab === 'achieve' && <AchievementList />}
         {tab === 'stats' && <StatsScreen />}
 

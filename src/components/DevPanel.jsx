@@ -25,9 +25,9 @@ export default function DevPanel({ onClose }) {
 
   const toast = (msg) => showToast(msg);
 
-  const login = async () => {
+  const login = async (u = user, p = pass) => {
     try {
-      const d = await apiDevPost('/dev/login', { user, pass });
+      const d = await apiDevPost('/dev/login', { user: u, pass: p });
       if (d?.token) {
         setToken(d.token);
         localStorage.setItem(DEV_KEY, d.token);
@@ -77,10 +77,12 @@ export default function DevPanel({ onClose }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal dev-panel" onClick={(e) => e.stopPropagation()}>
         <h2>🧪 Dev Test Panel</h2>
-        <p className="dev-sub">ทดสอบระบบต่าง ๆ ของเกม — ต้องเข้าสู่ระบบก่อน (admin/adminlouis)</p>
+        <p className="dev-sub">ทดสอบระบบต่าง ๆ ของเกม — ต้องเข้าสู่ระบบก่อน (admin/admin)</p>
 
         {!token ? (
           <div className="dev-login">
+            <button className="btn btn-primary btn-big" onClick={() => login('admin', 'admin')} disabled={busy}>⚡ เข้าสู่ระบบเร็ว (admin/admin)</button>
+            <span className="hint">หรือกรอกเอง (DEV_USER / DEV_PASS)</span>
             <input
               className="input"
               placeholder="user (admin)"
@@ -95,7 +97,7 @@ export default function DevPanel({ onClose }) {
               onChange={(e) => setPass(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && login()}
             />
-            <button className="btn btn-primary btn-big" onClick={login} disabled={busy}>🔓 เข้าสู่ระบบ dev</button>
+            <button className="btn btn-big" onClick={login} disabled={busy}>🔓 เข้าสู่ระบบ</button>
           </div>
         ) : (
           <>
@@ -127,6 +129,8 @@ export default function DevPanel({ onClose }) {
               <button className="btn" onClick={() => act(() => post('/shop/buy', { itemId: 1, visit: `dev-${Date.now()}` }), '🛒 ซื้อยา')} disabled={busy}>🛒 ซื้อของ (ยาบำบัดน้อย)</button>
               <button className="btn" onClick={() => dev('/dev/boss-win', {})} disabled={busy}>👹 ชนะบอสทันที</button>
               <button className="btn" onClick={() => dev('/dev/tale', {})} disabled={busy}>📖 เรื่องราวทดสอบ</button>
+              <button className="btn" onClick={() => dev('/dev/heal', {})} disabled={busy}>💖 เติม HP/MP เต็ม</button>
+              <button className="btn" onClick={() => dev('/dev/next-city', {})} disabled={busy}>🗺️ เมืองถัดไป</button>
             </div>
 
             <div className="dev-section">⚡ สกิล (เลเวล/คัมภีร์)</div>

@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 app.use('/api', routes);
-app.use('/api', devRoutes); // dev test (login: admin/adminlouis)
+app.use('/api', devRoutes); // dev test (login: admin/admin)
 
 // เสิร์ฟ frontend ที่ build แล้ว (production)
 const distDir = path.join(__dirname, '..', 'dist');

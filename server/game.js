@@ -281,10 +281,15 @@ export function rollEvent(c, forceKey = null) {
     if (skillUsed) {
       const powerMult = skillUsed.dmg ? 1 / (1 + skillUsed.dmg * 0.35) : 0.75; // ใช้สกิลโจมตี → มอนสเตอร์ต้านน้อยลง
       res = resolveCombat(c, { ...m, power: Math.round(m.power * powerMult) });
-      res.xp = Math.round(res.xp * 1.25);
-      res.gold = Math.round(res.gold * 1.25);
+      // โบนัสสกิล 25% — ต้องเครดิตจริงให้ตรงกับที่แสดง (resolveCombat เครดิตค่าฐานไปแล้ว)
+      const xpBonus = Math.round(res.xp * 0.25);
+      const goldBonus = Math.round(res.gold * 0.25);
+      res.xp += xpBonus;
+      res.gold += goldBonus;
+      c.gold += goldBonus;
+      res.ups = (res.ups || 0) + gainXp(c, xpBonus);
       const sk = grantSkillXp(c, skillUsed.id, 15); // event อัตโนมัติก็สะสม XP ให้สกิล
-      res.detail = `${skillUsed.icon} ${c.name} ใช้สกิล ${skillUsed.name}! ${res.detail}`;
+      res.detail = `${skillUsed.icon} ${c.name} ใช้สกิล ${skillUsed.name}! ${res.detail} (โบนัสสกิล +${xpBonus} XP, +${goldBonus} ทอง)`;
       if (sk.levelUp) res.detail += ` ⭐ สกิล ${skillUsed.name} เลเวลขึ้นเป็น Lv.${sk.level}!`;
     } else {
       res = resolveCombat(c, m);

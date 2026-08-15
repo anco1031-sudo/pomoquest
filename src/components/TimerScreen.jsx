@@ -1,8 +1,26 @@
+import { useEffect, useRef } from 'react';
 import { useGame } from '../context.jsx';
 import { fmtTime } from './ui.jsx';
 
+// เวลาสัมพัทธ์ (ms) — ใช้กับ `at` ที่เก็บตอน event เกิด
+function fmtAgo(ms) {
+  if (!ms) return '';
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return 'เมื่อกี้';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} นาทีที่แล้ว`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} ชม.ที่แล้ว`;
+  return new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+}
+
 export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [] }) {
   const { character } = useGame();
+  const logRef = useRef(null);
+
+  // เหตุการณ์ใหม่ → เลื่อนไปโชว์เหตุการณ์ล่าสุด (เรียงล่าสุดบนสุด)
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = 0;
+  }, [sessionEvents.length]);
+
   if (!character) return null;
   const city = character.city;
   const pct = total > 0 ? (remain / total) * 100 : 0;
@@ -51,9 +69,9 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
       <p className="hint">โฟกัสงานของคุณไปเรื่อย ๆ — ตัวละครจะจัดการมอนสเตอร์เอง!</p>
 
       {sessionEvents.length > 0 && (
-        <div className="session-log">
+        <div className="session-log" ref={logRef}>
           <div className="session-log-title">📜 เหตุการณ์ที่เจอใน session นี้ ({sessionEvents.length})</div>
-          {sessionEvents.map((ev, i) => {
+          {[...sessionEvents].reverse().map((ev, i) => {
             const parts = [];
             if (ev.xp > 0) parts.push(`+${ev.xp} XP`);
             if (ev.gold > 0) parts.push(`+${ev.gold} ทอง`);
@@ -62,8 +80,11 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
             if (ev.item) parts.push(`${ev.item.icon} ${ev.item.name}`);
             return (
               <div key={i} className="session-log-item">
-                <span className="session-log-event">{ev.title}</span>
-                {parts.length > 0 && <span className="session-log-reward">{parts.join(' · ')}</span>}
+                <div className="session-log-head">
+                  <span className="session-log-event">{ev.title} <span className="session-log-time">{fmtAgo(ev.at)}</span></span>
+                  {parts.length > 0 && <span className="session-log-reward">{parts.join(' · ')}</span>}
+                </div>
+                {ev.detail && <div className="session-log-detail">{ev.detail}</div>}
               </div>
             );
           })}

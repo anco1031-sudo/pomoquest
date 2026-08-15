@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test:achievements": "node scripts/test-achievements.mjs",
     "test:daily": "node scripts/test-daily.mjs",
-    "test:llm": "node scripts/test-llm.mjs"
+    "test:llm": "node scripts/test-llm.mjs",
+    "test:events": "node scripts/test-events.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

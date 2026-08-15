@@ -157,11 +157,11 @@ router.post('/character/allocate', (req, res) => {
 router.post('/adventure/event', (req, res) => {
   const c = requireChar(res); if (!c) return;
   // key (optional) = บังคับ event ให้เกิดตาม key — ใช้ใน dev test
-  const { key } = req.body || {};
+  const { key, sessionKey } = req.body || {};
   const ev = rollEvent(c, key || null);
   if (!ev) return res.status(400).json({ error: 'event ไม่พบ' });
   updateCharacter(c);
-  addLog(c.id, { type: ev.logType || ev.key, title: ev.title, detail: ev.detail, xp: ev.xp, gold: ev.gold });
+  addLog(c.id, { type: ev.logType || ev.key, title: ev.title, detail: ev.detail, xp: ev.xp, gold: ev.gold, hpChange: ev.hpChange || 0, mpChange: ev.mpChange || 0, sessionKey });
   if (ev.item) addItem(c.id, ev.item.id);
   // อัปเดต counter สถิติ (รวมตัวที่ใช้ตรวจตราลับ)
   const prog = getProgress(c.id);
@@ -187,7 +187,7 @@ router.post('/adventure/event', (req, res) => {
 
 router.post('/adventure/complete', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { focusSec = 1500, events = [] } = req.body || {};
+  const { focusSec = 1500, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null } = req.body || {};
   const prog = getProgress(c.id);
 
   prog.streak += 1;
@@ -225,6 +225,32 @@ router.post('/adventure/complete', (req, res) => {
   const sessionEvents = (Array.isArray(events) ? events : [])
     .filter((e) => e && (e.detail || e.title))
     .slice(-12);
+
+  // บันทึกสรุป session กำกับ label "Session X/Y @ HH:MM" — ดูย้อนหลังได้ในบันทึกการผจญภัย (1 แถว/session)
+  if (sessionEvents.length > 0) {
+    const TYPE_LABEL = { battle_win: 'ชนะมอนสเตอร์', battle_lose: 'หนีมอนสเตอร์', treasure: 'พบสมบัติ', shrine: 'ศาลเจ้า', merchant: 'พ่อค้า', trap: 'กับดัก' };
+    const counts = {};
+    let sXp = 0, sGold = 0, sHp = 0, sMp = 0, sItems = 0;
+    for (const e of sessionEvents) {
+      const k = e.logType || e.key || 'event';
+      counts[k] = (counts[k] || 0) + 1;
+      sXp += e.xp || 0; sGold += e.gold || 0;
+      if (e.hpChange < 0) sHp += Math.abs(e.hpChange);
+      if (e.mpChange > 0) sMp += e.mpChange;
+      if (e.item) sItems += 1;
+    }
+    const parts = Object.entries(counts).map(([k, n]) => `${TYPE_LABEL[k] || k} x${n}`);
+    const hhmm = db.prepare("SELECT strftime('%H:%M','now','localtime') AS t").get().t;
+    const sessCity = CITIES[c.city_index % CITIES.length]; // เมืองที่ผจญภัยใน session นี้ — ใช้ค้นหาในหน้าประวัติ session
+    addLog(c.id, {
+      type: 'session_summary',
+      title: `📋 Session ${sessionIdx}/${sessionsPerCycle} @ ${hhmm} · ${sessCity.icon} ${sessCity.name}`,
+      detail: [parts.join(' · '), `รวม: +${sXp} XP · +${sGold} ทอง${sHp ? ` · เสีย ${sHp} HP` : ''}${sMp ? ` · +${sMp} MP` : ''}${sItems ? ` · ไอเทม ${sItems} ชิ้น` : ''}`].join('\n'),
+      xp: sXp, gold: sGold,
+      sessionKey,
+      city: sessCity.name,
+    });
+  }
 
   // สรุปจาก log เหตุการณ์จริง — ใช้เมื่อ LLM ไม่ได้เรื่อง (ปิด / พัง / ตอบไม่ได้)
   const fallbackTale = () => {
@@ -275,6 +301,42 @@ router.get('/adventure/story', (req, res) => {
   const after = parseInt(req.query.after, 10) || 0;
   const tale = db.prepare(`SELECT * FROM log WHERE character_id = ? AND type = 'llm_tale' AND id > ? ORDER BY id LIMIT 1`).get(c.id, after);
   res.json({ story: tale || null, pending: llmEnabled() });
+});
+
+// ประวัติ session — สรุป session (session_summary) + เหตุการณ์ทั้งหมดที่อยู่ใน session นั้น (จับกลุ่มด้วย session_key)
+router.get('/session-history', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const summaries = db.prepare("SELECT * FROM log WHERE character_id = ? AND type = 'session_summary' ORDER BY id DESC LIMIT 200").all(c.id);
+  // backfill: session เก่า (ก่อนมีคอลัมน์ city) — ดึงเมืองจาก title "· 🏰 แอสการ์ด" แล้วบันทึกถาวร
+  const backfillCity = db.prepare('UPDATE log SET city = ? WHERE id = ?');
+  for (const s of summaries) {
+    if (!s.city) {
+      const fromTitle = CITIES.find((c) => (s.title || '').includes(`${c.icon} ${c.name}`))?.name || null;
+      if (fromTitle) {
+        backfillCity.run(fromTitle, s.id);
+        s.city = fromTitle;
+      }
+    }
+  }
+  const keys = summaries.map((s) => s.session_key).filter(Boolean);
+  let eventsByKey = {};
+  if (keys.length) {
+    const events = db.prepare(`
+      SELECT * FROM log WHERE character_id = ? AND session_key IN (${keys.map(() => '?').join(',')})
+      AND type NOT IN ('session_summary', 'session_done', 'llm_tale') ORDER BY id
+    `).all(c.id, ...keys);
+    for (const e of events) {
+      (eventsByKey[e.session_key] ||= []).push(e);
+    }
+  }
+  // เมืองที่เคยผจญภัย (จาก session summary) — เรียงตาม session แรกที่เจอ — ใช้ dropdown กรองเมือง
+  const cityRows = db.prepare(
+    "SELECT city, MIN(id) AS first_id FROM log WHERE character_id = ? AND type = 'session_summary' AND city IS NOT NULL GROUP BY city ORDER BY first_id"
+  ).all(c.id);
+  res.json({
+    sessions: summaries.map((s) => ({ ...s, events: eventsByKey[s.session_key] || [] })),
+    cities: cityRows.map((r) => r.city),
+  });
 });
 
 router.post('/adventure/abort', (req, res) => {
@@ -724,6 +786,19 @@ router.get('/stats', (req, res) => {
     days.push({ date, sessions: row?.sessions || 0, focusSec: row?.focus_sec || 0 });
   }
 
+  // session + เวลาโฟกัสย้อนหลัง 30 วัน (กราฟรายเดือน)
+  const monthRaw = db.prepare(`
+    SELECT date(created_at) AS d, COUNT(*) AS sessions, COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'session_done'
+      AND created_at >= datetime('now', 'localtime', '-29 days')
+    GROUP BY d`).all(c.id);
+  const monthDays = [];
+  for (let i = 29; i >= 0; i--) {
+    const date = db.prepare(`SELECT date('now','localtime','-${i} day') AS d`).get().d;
+    const row = monthRaw.find((r) => r.d === date);
+    monthDays.push({ date, sessions: row?.sessions || 0, focusSec: row?.focus_sec || 0 });
+  }
+
   // เมืองที่ชนะบอสมาแล้ว (จาก log boss_win)
   const cityLogs = db.prepare("SELECT detail FROM log WHERE character_id = ? AND type = 'boss_win' ORDER BY id").all(c.id);
 
@@ -757,6 +832,7 @@ router.get('/stats', (req, res) => {
     character: serializeCharacter(c),
     progress: prog,
     days,
+    monthDays,
     breakDays,
     heatmap,
     cityLogs,
