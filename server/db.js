@@ -165,6 +165,8 @@ function ensureColumn(table, column, def) {
 }
 ensureColumn('progress', 'quests_completed', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'daily_streak', 'INTEGER DEFAULT 0');
+// จำนวนครั้งที่ซื้อของจากตลาดมืด (ตรา "สายค้าตลาดมืด")
+ensureColumn('progress', 'bm_buys', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'last_focus_date', 'TEXT');
 ensureColumn('progress', 'boss_potions', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'shrines', 'INTEGER DEFAULT 0');

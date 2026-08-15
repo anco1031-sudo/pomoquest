@@ -74,6 +74,12 @@ db.prepare('UPDATE character SET weapon_id = NULL, armor_id = NULL WHERE id = ?'
 const c3 = db.prepare('SELECT * FROM character WHERE id = ?').get(c.id);
 expect('class_set ถอดแล้วไม่ปลดล็อก', checkAchievements(c3, prog), []);
 
+// --- ตราตลาดมืด: ซื้อของจากตลาดมืด ---
+setProg({ bm_buys: 3 });
+expect('bm_deal (ซื้อตลาดมืด 3 ครั้ง)', checkAchievements(c, prog), ['bm_deal']);
+setProg({ bm_buys: 10 });
+expect('bm_king (ซื้อตลาดมืด 10 ครั้ง — bm_deal ปลดไปแล้วจากเคสก่อน)', checkAchievements(c, prog), ['bm_king']);
+
 // --- จ้าวแห่งการโฟกัส (ต้องปลดล็อกตราปกติครบ 25) ---
 for (const a of ACHIEVEMENTS) {
   db.prepare('INSERT OR IGNORE INTO achievement_unlock (character_id, achievement_id) VALUES (?,?)').run(c.id, a.id);

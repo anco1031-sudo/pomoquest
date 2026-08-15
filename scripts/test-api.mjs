@@ -163,6 +163,8 @@ try {
     const goldBefore = r.json.character.gold;
     r = await api('/shop/buy', { method: 'POST', body: { itemId: scroll.id, visit: bmVisit } });
     expect('black market: ซื้อคัมภีร์ราคาลดได้', r.status === 200 && r.json.character.gold === goldBefore - scroll.price, r.json.error || '');
+    const bb = db.prepare('SELECT bm_buys FROM progress WHERE character_id = ?').get(cid)?.bm_buys || 0;
+    expect('black market: นับ bm_buys +1 หลังซื้อ (ตรา)', bb === 1, `bm_buys=${bb}`);
     r = await api('/shop/buy', { method: 'POST', body: { itemId: scroll.id, visit: bmVisit } });
     expect('black market: ซื้อซ้ำไม่ได้ (ครั้งเดียวต่อค่ายพัก)', r.status === 400);
 
@@ -173,6 +175,8 @@ try {
     r = await api('/shop/sell', { method: 'POST', body: { itemId: 123, qty: 1, visit: bmVisit } });
     const expected = Math.round(normalPrice * 1.25);
     expect('black market: ขาย junk ให้ตลาดมืดแพงกว่า +25%', r.status === 200 && r.json.character.gold === goldBefore2 + expected, `expect +${expected}, got +${r.json.character.gold - goldBefore2}`);
+    const trades = db.prepare("SELECT value FROM daily_counter WHERE character_id = ? AND date = ? AND key = 'bm_trades'").get(cid, db.prepare("SELECT date('now','localtime') AS d").get().d)?.value || 0;
+    expect('daily quest: bm_trades นับ 2 (ซื้อ + ขายตลาดมืด)', trades === 2, `bm_trades=${trades}`);
   }
 
   // --- loot มอนสเตอร์ → นับ daily quest "คนเก็บขยะ" (ขาย junk เพิ่ม counter) ---

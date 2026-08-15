@@ -310,6 +310,7 @@ export const DAILY_QUESTS = [
   { id: 'dq_potion',        name: 'นักเล่นแร่แปรธาตุ', icon: '🧪', key: 'potions', target: (lvl) => 3 + (lvl >= 10 ? 2 : 0), desc: 'ใช้ยา {n} ขวดวันนี้', unit: 'count' },
   { id: 'dq_junk',          name: 'คนเก็บขยะ',       icon: '🗑️', key: 'junk_sold', target: (lvl) => 5 + (lvl >= 10 ? 2 : 0), desc: 'ขายของขวัญ {n} ชิ้นวันนี้ (จากมอนสเตอร์/บอส/สมบัติ — วันไหนพ่อค้าต้องการ ขายได้แพงขึ้น!)', unit: 'count' },
   { id: 'dq_shop',          name: 'ลูกค้าประจำ',      icon: '🛒', key: 'items_bought', target: (lvl) => 3 + (lvl >= 8 ? 2 : 0), desc: 'ซื้อของ {n} ชิ้นวันนี้', unit: 'count' },
+  { id: 'dq_bm',            name: 'ลูกค้าตลาดมืด',    icon: '🖤', key: 'bm_trades', target: () => 1, desc: 'ค้าขายกับตลาดมืด {n} ครั้งวันนี้ (ซื้อหรือขาย — เจอตลาดมืดที่ค่ายพักแล้วใช้โอกาสนี้!)', unit: 'count' },
   { id: 'dq_focus_min',     name: 'มาราธอนรายวัน',    icon: '⏳', key: 'focus_sec', target: (lvl) => 50 * 60 + (lvl >= 10 ? 10 * 60 : 0), desc: 'โฟกัสครบ {n} นาทีวันนี้', unit: 'min' },
 ];
 
@@ -325,6 +326,8 @@ export const ACHIEVEMENTS = [
   { id: 'streak_3',    name: 'คอมโบเริ่มต้น',    icon: '🧵', stat: 'streak',    target: 3,    reward: { gold: 30 }, desc: 'คอมโบโฟกัส 3 session ติดต่อ' },
   { id: 'equip_all',   name: 'พร้อมรบเต็มยศ',   icon: '🔧', stat: 'equip',     target: 1,    reward: { gold: 50 }, desc: 'สวมเกราะครบทั้ง 5 ชิ้น (หัว/ตัว/แขน/ขา/เท้า)' },
   { id: 'class_set',   name: 'เต็มยศประจำคลาส', icon: '🎭', stat: 'classSet',  target: 2,    reward: { gold: 150 }, desc: 'สวมอุปกรณ์เฉพาะคลาส 2 ชิ้นพร้อมกัน (ดูป้ายสี 🎭 ที่ไอเทม)' },
+  { id: 'bm_deal',     name: 'สายค้าตลาดมืด',   icon: '🖤', stat: 'bm_buys',   target: 3,    reward: { gold: 100 }, desc: 'ซื้อของจากตลาดมืด 3 ครั้ง' },
+  { id: 'bm_king',     name: 'ราชาตลาดมืด',     icon: '👑', stat: 'bm_buys',   target: 10,   reward: { gold: 300 }, desc: 'ซื้อของจากตลาดมืด 10 ครั้ง' },
   { id: 'focus_5h',    name: 'ห้าชั่วโมงแห่งโฟกัส', icon: '⏳', stat: 'focus_sec', target: 18000, reward: { gold: 100 }, desc: 'โฟกัสรวม 5 ชั่วโมง' },
   { id: 'gold_1000',   name: 'เศรษฐีน้อย',      icon: '🏦', stat: 'gold_earned', target: 1000, reward: { gold: 50 }, desc: 'สะสมทองรวม 1,000' },
 

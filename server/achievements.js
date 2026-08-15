@@ -15,6 +15,7 @@ export function achievementValues(c, prog) {
     streak: prog.best_streak,
     gold_earned: prog.gold_earned,
     wanted_sales: prog.wanted_sales || 0,
+    bm_buys: prog.bm_buys || 0,
     level: c.level,
     gold: c.gold,
     equip: c.head_id && c.armor_id && c.arms_id && c.legs_id && c.feet_id ? 1 : 0,

@@ -516,7 +516,16 @@ router.post('/shop/buy', (req, res) => {
   updateCharacter(c);
   addLog(c.id, { type: 'shop', title: fromBm ? '🖤 ซื้อของตลาดมืด' : '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)${fromBm ? ' (ตลาดมืด)' : ''}`, gold: -price });
   bumpDaily(c.id, 'items_bought', 1);
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, ...dailyPayload(c) });
+  let ach = { fresh: [], ups: 0 };
+  if (fromBm) {
+    // นับการค้ากับตลาดมืด (ตรา "สายค้าตลาดมืด" + เควสประจำวัน)
+    bumpDaily(c.id, 'bm_trades', 1);
+    const prog = getProgress(c.id);
+    prog.bm_buys = (prog.bm_buys || 0) + 1;
+    db.prepare('UPDATE progress SET bm_buys = ? WHERE id = ?').run(prog.bm_buys, prog.id);
+    ach = checkAchievements(c, prog);
+  }
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, achievements: ach.fresh, ...dailyPayload(c) });
 });
 
 router.post('/shop/sell', (req, res) => {
@@ -540,8 +549,9 @@ router.post('/shop/sell', (req, res) => {
       ? `ขาย ${inv.icon} ${inv.name} x${qty} ให้พ่อค้าที่ต้องการของ (+${gain} ทอง)`
       : `ขาย ${inv.icon} ${inv.name} x${qty} (+${gain} ทอง)`;
   addLog(c.id, { type: 'shop', title: '💰 ขายของ', detail, gold: gain });
-  // เควสประจำวัน "คนเก็บขยะ" — ขายของขวัญ (junk) นับชิ้น
+  // เควสประจำวัน "คนเก็บขยะ" — ขายของขวัญ (junk) นับชิ้น · ตลาดมืด — ขายให้ตลาดมืดนับการค้า
   if (inv.type === 'junk') bumpDaily(c.id, 'junk_sold', qty);
+  if (toBm) bumpDaily(c.id, 'bm_trades', qty);
   // นับจำนวนที่ขายให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
   let ach = { fresh: [], ups: 0 };
   if (sell.wanted) {
