@@ -321,6 +321,14 @@ export function rollEvent(c, forceKey = null) {
     } else {
       res = resolveCombat(c, m);
     }
+    // ชนะ → มีโอกาส ~40% ได้ loot ประจำตัวมอนสเตอร์ (ขยะราคาไม่สูง — ขายได้ที่แคมป์)
+    let loot = null;
+    if (res.win && m.loot) {
+      if (Math.random() < 0.4) {
+        loot = ITEM_BY_ID[m.loot];
+        res.detail += ` และได้ ${loot.icon} ${loot.name}!`;
+      }
+    }
     return {
       ...base,
       flavor: ev.flavor.replace('{monster}', `${m.icon} ${m.name} (พลัง ${m.power})`),
@@ -328,6 +336,7 @@ export function rollEvent(c, forceKey = null) {
       detail: res.detail,
       skill: skillUsed ? { id: skillUsed.id, name: skillUsed.name, icon: skillUsed.icon } : null,
       monster: { name: m.name, icon: m.icon, win: res.win },
+      item: loot ? { id: loot.id, name: loot.name, icon: loot.icon, lvl: loot.lvl || 1, type: loot.type } : null,
       logType: res.win ? 'battle_win' : 'battle_lose',
       ups: res.ups,
     };

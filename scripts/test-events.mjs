@@ -3,7 +3,7 @@ process.env.POMOQUEST_DB = `/tmp/pq-test-events-${Date.now()}.db`;
 
 const { db } = await import('../server/db.js');
 const { rollEvent } = await import('../server/game.js');
-const { CLASSES } = await import('../server/data.js');
+const { CLASSES, MONSTERS } = await import('../server/data.js');
 const { addLog, getLog } = await import('../server/db.js');
 
 // สร้างตัวละคร
@@ -89,6 +89,25 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
     "SELECT city, MIN(id) AS first_id FROM log WHERE character_id = ? AND type = 'session_summary' AND city IS NOT NULL GROUP BY city ORDER BY first_id"
   ).all(c.id).map((r) => r.city);
   expect('session_summary เก็บเมือง + รวมรายชื่อเมืองตามลำดับ session แรก', JSON.stringify(cities) === JSON.stringify(['แอสการ์ด', 'ปราสาทมังกร']), cities.join(','));
+}
+
+// --- monster loot: ชนะมอนสเตอร์มีโอกาส ~40% ได้ของประจำตัว (ขยะราคาต่ำ) ---
+{
+  let wins = 0, dropped = 0, bad = 0;
+  for (let i = 0; i < 400; i++) {
+    const ev = rollEvent(c, 'monster');
+    if (!ev.monster?.win) continue;
+    wins++;
+    if (ev.item) {
+      dropped++;
+      const lootId = MONSTERS.find((m) => m.name === ev.monster.name)?.loot;
+      // ของที่ดรอปต้องเป็น loot ของมอนสเตอร์ตัวนั้น + เป็นขยะ + ระบุในรายละเอียด
+      if (ev.item.id !== lootId || ev.item.type !== 'junk' || !ev.detail.includes('และได้')) bad++;
+    } else if (ev.detail.includes('และได้')) {
+      bad++; // ไม่มีของแต่รายงานว่ามี
+    }
+  }
+  expect('monster loot: ดรอปเฉพาะตอนชนะ + เป็นของประจำตัวมอนสเตอร์', wins > 0 && dropped > 0 && bad === 0, `win=${wins}, drop=${dropped}`);
 }
 
 // --- dodgeChance (SPD → โอกาสหลบโจมตีบอส) ---

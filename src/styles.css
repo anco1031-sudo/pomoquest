@@ -412,6 +412,11 @@ body {
   border-color: rgba(251, 191, 36, 0.4);
   color: #fcd34d;
 }
+/* ป้ายเฉพาะคลาส — สีประจำคลาส */
+.item-stat-chip.cls-warrior { background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.45); color: #fca5a5; }
+.item-stat-chip.cls-mage    { background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.45); color: #93c5fd; }
+.item-stat-chip.cls-rogue   { background: rgba(148, 163, 184, 0.14); border-color: rgba(148, 163, 184, 0.45); color: #cbd5e1; }
+.item-stat-chip.cls-cleric  { background: rgba(74, 222, 128, 0.12); border-color: rgba(74, 222, 128, 0.45); color: #86efac; }
 .inv-req-block {
   font-size: 11.5px;
   color: #fca5a5;

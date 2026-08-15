@@ -1,5 +1,5 @@
-import { ACHIEVEMENTS, SECRET_ACHIEVEMENTS } from './data.js';
-import { gainXp } from './game.js';
+import { ACHIEVEMENTS, SECRET_ACHIEVEMENTS, ITEM_BY_ID } from './data.js';
+import { gainXp, SLOT_COLS } from './game.js';
 import { db, addLog, updateCharacter } from './db.js';
 
 // แปลง stat key -> ค่าปัจจุบัน (อ่านจาก character + progress)
@@ -18,6 +18,11 @@ export function achievementValues(c, prog) {
     level: c.level,
     gold: c.gold,
     equip: c.head_id && c.armor_id && c.arms_id && c.legs_id && c.feet_id ? 1 : 0,
+    // จำนวนอุปกรณ์เฉพาะคลาส (classReq รวมคลาสตัวเอง) ที่สวมอยู่
+    classSet: SLOT_COLS.filter((col) => {
+      const id = c[col];
+      return id && ITEM_BY_ID[id]?.classReq?.includes(c.class);
+    }).length,
   };
 }
 

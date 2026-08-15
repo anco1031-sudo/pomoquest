@@ -156,6 +156,16 @@ export const ITEMS = [
   { id: 101, name: 'แจกันโบราณ',     icon: '🏺', type: 'junk', price: 230, desc: 'แจกันลายครามเก่าแก่ ตัวจริงของนักสะสม' },
   { id: 102, name: 'หน้ากากพิธีกรรม', icon: '🎭', type: 'junk', price: 340, desc: 'หน้ากากจากพิธีกรรมโบราณ ล้ำค่ามาก' },
 
+  // ---- ของจากการล่ามอนสเตอร์ (loot เฉพาะตัว — ดรอปบ่อยตอนชนะ แต่ราคาไม่สูง) ----
+  { id: 120, name: 'ฟันหนูยักษ์',   icon: '🦷', type: 'junk', price: 6,  desc: 'ฟันแหลมคมของหนูยักษ์ พ่อค้ารับซื้อ' },
+  { id: 121, name: 'ปีกค้างคาว',    icon: '🦇', type: 'junk', price: 8,  desc: 'ปีกบาง ๆ ของค้างคาวปีศาจ เอาไปทำยาได้' },
+  { id: 122, name: 'ขนหมาป่า',      icon: '🐺', type: 'junk', price: 10, desc: 'ขนหนานุ่มของหมาป่าเถื่อน ขายได้นิดหน่อย' },
+  { id: 123, name: 'เจลสไลม์',      icon: '🟢', type: 'junk', price: 9,  desc: 'เจลเหนียวของสไลม์พิษ พ่อค้ารับซื้อ' },
+  { id: 124, name: 'เศษหินโกเลม',   icon: '🗿', type: 'junk', price: 12, desc: 'เศษหินแข็งจากโกเลมดิน ใช้ทำเครื่องมือได้' },
+  { id: 125, name: 'ไม้กวาดแม่มด',  icon: '🧹', type: 'junk', price: 14, desc: 'ไม้กวาดหักของแม่มดน้อย ของแปลกขายได้ราคา' },
+  { id: 126, name: 'เขาอสูร',       icon: '👤', type: 'junk', price: 16, desc: 'เขาสีดำของอสูรเงา พ่อค้าชอบของแปลก' },
+  { id: 127, name: 'เกล็ดมังกรน้อย', icon: '🐲', type: 'junk', price: 22, desc: 'เกล็ดแวววาวจากมังกรน้อย ขายได้ราคาดี' },
+
   // ---- คัมภีร์สกิลหายาก (type: scroll) — เจอจากกล่องสมบัติเท่านั้น (โอกาสน้อยมาก) ----
   // ใช้แล้วเรียนรู้สกิล (learn_skill) — ถ้าเรียนไปแล้วใช้ไม่ได้
   { id: 110, name: 'คัมภีร์: ลูกไฟใหญ่', icon: '📜', type: 'scroll', learn_skill: 'sc_fireball', price: 260, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🔥 ลูกไฟใหญ่ (ทุกคลาสเรียนได้)' },
@@ -216,15 +226,16 @@ export const BOSS_LOADOUTS = [
 ];
 
 // มอนสเตอร์ที่เจอระหว่างผจญภัย (power_mult คูณพลังมอนสเตอร์ตามเลเวล)
+// loot = ไอเทมขยะประจำตัว (id ใน ITEMS) — ดรอปตอนชนะ (โอกาส ~40%)
 export const MONSTERS = [
-  { name: 'หนูยักษ์',     icon: '🐀', power: 0.7, xp: 14, gold: 8 },
-  { name: 'ค้างคาวปีศาจ', icon: '🦇', power: 0.85, xp: 18, gold: 10 },
-  { name: 'หมาป่าเถื่อน', icon: '🐺', power: 1.0, xp: 24, gold: 14 },
-  { name: 'สไลม์พิษ',    icon: '🟢', power: 0.9, xp: 20, gold: 12 },
-  { name: 'โกเลมดิน',    icon: '🗿', power: 1.15, xp: 30, gold: 18 },
-  { name: 'แม่มดน้อย',   icon: '🧙‍♀️', power: 1.25, xp: 36, gold: 22 },
-  { name: 'อสูรเงา',     icon: '👤', power: 1.35, xp: 42, gold: 26 },
-  { name: 'มังกรน้อย',   icon: '🐲', power: 1.5, xp: 55, gold: 35 },
+  { name: 'หนูยักษ์',     icon: '🐀', power: 0.7, xp: 14, gold: 8,  loot: 120 },
+  { name: 'ค้างคาวปีศาจ', icon: '🦇', power: 0.85, xp: 18, gold: 10, loot: 121 },
+  { name: 'หมาป่าเถื่อน', icon: '🐺', power: 1.0, xp: 24, gold: 14, loot: 122 },
+  { name: 'สไลม์พิษ',    icon: '🟢', power: 0.9, xp: 20, gold: 12, loot: 123 },
+  { name: 'โกเลมดิน',    icon: '🗿', power: 1.15, xp: 30, gold: 18, loot: 124 },
+  { name: 'แม่มดน้อย',   icon: '🧙‍♀️', power: 1.25, xp: 36, gold: 22, loot: 125 },
+  { name: 'อสูรเงา',     icon: '👤', power: 1.35, xp: 42, gold: 26, loot: 126 },
+  { name: 'มังกรน้อย',   icon: '🐲', power: 1.5, xp: 55, gold: 35, loot: 127 },
 ];
 
 // เหตุการณ์สุ่มระหว่าง session ผจญภัย (weight = โอกาส)
@@ -302,6 +313,7 @@ export const ACHIEVEMENTS = [
   { id: 'quest_5',     name: 'นักทำภารกิจ',     icon: '📜', stat: 'quests',    target: 5,    reward: { gold: 50 }, desc: 'ทำภารกิจสำเร็จ 5 ครั้ง' },
   { id: 'streak_3',    name: 'คอมโบเริ่มต้น',    icon: '🧵', stat: 'streak',    target: 3,    reward: { gold: 30 }, desc: 'คอมโบโฟกัส 3 session ติดต่อ' },
   { id: 'equip_all',   name: 'พร้อมรบเต็มยศ',   icon: '🔧', stat: 'equip',     target: 1,    reward: { gold: 50 }, desc: 'สวมเกราะครบทั้ง 5 ชิ้น (หัว/ตัว/แขน/ขา/เท้า)' },
+  { id: 'class_set',   name: 'เต็มยศประจำคลาส', icon: '🎭', stat: 'classSet',  target: 2,    reward: { gold: 150 }, desc: 'สวมอุปกรณ์เฉพาะคลาส 2 ชิ้นพร้อมกัน (ดูป้ายสี 🎭 ที่ไอเทม)' },
   { id: 'focus_5h',    name: 'ห้าชั่วโมงแห่งโฟกัส', icon: '⏳', stat: 'focus_sec', target: 18000, reward: { gold: 100 }, desc: 'โฟกัสรวม 5 ชั่วโมง' },
   { id: 'gold_1000',   name: 'เศรษฐีน้อย',      icon: '🏦', stat: 'gold_earned', target: 1000, reward: { gold: 50 }, desc: 'สะสมทองรวม 1,000' },
 

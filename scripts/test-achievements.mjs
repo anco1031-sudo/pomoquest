@@ -65,6 +65,15 @@ expect('explorer (ครบ 8 เมือง) + ตราปกติ traveler'
 expect('asgard_slayer (ชนะบอสที่แอสการ์ด)', checkAchievements(c, prog, { bossWin: { cityIndex: 7 } }), ['asgard_slayer']);
 expect('asgard_slayer เมืองอื่นไม่ปลดล็อก', checkAchievements(c, prog, { bossWin: { cityIndex: 2 } }), []);
 
+// --- ตราใหม่: เต็มยศประจำคลาส (สวมอุปกรณ์เฉพาะคลาส 2 ชิ้น) ---
+db.prepare('UPDATE character SET weapon_id = 200, armor_id = 201 WHERE id = ?').run(c.id); // ขวานมังกรเพลิง + เกราะไททัน (ของนักรบ)
+const c2 = db.prepare('SELECT * FROM character WHERE id = ?').get(c.id);
+expect('class_set (สวมของนักรบ 2 ชิ้น)', checkAchievements(c2, prog), ['class_set']);
+
+db.prepare('UPDATE character SET weapon_id = NULL, armor_id = NULL WHERE id = ?').run(c.id);
+const c3 = db.prepare('SELECT * FROM character WHERE id = ?').get(c.id);
+expect('class_set ถอดแล้วไม่ปลดล็อก', checkAchievements(c3, prog), []);
+
 // --- จ้าวแห่งการโฟกัส (ต้องปลดล็อกตราปกติครบ 25) ---
 for (const a of ACHIEVEMENTS) {
   db.prepare('INSERT OR IGNORE INTO achievement_unlock (character_id, achievement_id) VALUES (?,?)').run(c.id, a.id);

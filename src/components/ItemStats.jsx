@@ -27,7 +27,7 @@ export function itemReqParts(i) {
   if ((i.lvl || 1) > 1) p.push({ icon: '🔒', text: `เลเวล ${i.lvl}+` });
   if (i.classReq?.length) {
     const names = i.classReq.map((k) => CLASSES[k]?.name || k).join('/');
-    p.push({ icon: '🎭', text: `เฉพาะ ${names}` });
+    p.push({ icon: '🎭', text: `เฉพาะ ${names}`, cls: i.classReq[0] });
   }
   for (const [k, v] of Object.entries(i.statReq || {})) {
     p.push({ icon: REQ_ICON[k] || '🔒', text: `${k.toUpperCase()} ${v}+` });
@@ -55,7 +55,7 @@ export default function ItemStatChips({ item }) {
   return (
     <span className="item-stat-chips">
       {parts.map((p, idx) => (
-        <span key={idx} className={`item-stat-chip ${p.icon === '🔒' || p.icon === '🎭' ? 'req' : ''}`}>{p.icon} {p.text}</span>
+        <span key={idx} className={`item-stat-chip ${p.icon === '🔒' || p.icon === '🎭' ? 'req' : ''} ${p.cls ? `cls-${p.cls}` : ''}`}>{p.icon} {p.text}</span>
       ))}
     </span>
   );
