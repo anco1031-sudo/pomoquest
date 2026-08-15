@@ -162,6 +162,21 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('session_key: จับกลุ่มเหตุการณ์ของ session ได้ (ไม่รวมสรุป/คนละกลุ่ม)', rows.length === 2 && rows[0].type === 'battle_win' && rows[1].type === 'treasure', `count=${rows.length}`);
 }
 
+// --- จัดสรรแต้มอัตโนมัติ (src/alloc.js): น้ำหนักตามคลาส + ปรับตามอุปกรณ์ ---
+{
+  const { CLASS_WEIGHTS, gearAdjustedWeights, allocatePoints } = await import('../src/alloc.js');
+  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+  const a = allocatePoints(10, CLASS_WEIGHTS.warrior);
+  expect('alloc: แจกครบจำนวนที่กำหนด', sum(a) === 10, JSON.stringify(a));
+  expect('alloc: warrior เน้น HP/ATK > DEF > SPD > MP', a.hp >= a.def && a.atk >= a.def && a.def >= a.spd && a.spd >= a.mp, JSON.stringify(a));
+  const wAdj = gearAdjustedWeights('warrior', { hp: 0, mp: 0, atk: 6, def: 0, spd: 0 }, { hp: 120, mp: 20, atk: 14, def: 10, spd: 8 });
+  expect('alloc: สวมเกียร์ ATK → น้ำหนัก ATK ลดลง', wAdj.atk < CLASS_WEIGHTS.warrior.atk, `atk ${wAdj.atk}`);
+  expect('alloc: เกียร์ไม่มีผลกับ HP → น้ำหนัก HP เท่าเดิม', wAdj.hp === CLASS_WEIGHTS.warrior.hp);
+  const plain = allocatePoints(25, CLASS_WEIGHTS.warrior);
+  const geared = allocatePoints(25, wAdj);
+  expect('alloc: เกียร์ ATK → แต้ม ATK น้อยลง ไป DEF แทน', geared.atk <= plain.atk && geared.def >= plain.def, `plain=${JSON.stringify(plain)} gear=${JSON.stringify(geared)}`);
+}
+
 // --- ทุก event ต้องมี title/flavor/detail สำหรับแสดงผล ---
 for (const key of ['monster', 'treasure', 'shrine', 'merchant', 'trap']) {
   const ev = rollEvent(c, key);

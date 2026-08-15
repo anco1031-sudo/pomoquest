@@ -3,6 +3,7 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { Panel, StatRow } from './ui.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
+import { CLASS_WEIGHTS, AUTO_KEYS, gearAdjustedWeights, allocatePoints } from '../alloc.js';
 
 export function StatAllocator({ onDone }) {
   const { character, post } = useGame();
@@ -15,30 +16,31 @@ export function StatAllocator({ onDone }) {
     setAlloc((a) => ({ ...a, [k]: next }));
   };
 
-  // น้ำหนักการจัดสรรอัตโนมัติตามคลาส — แต่ละคลาสเน้นค่าไม่เหมือนกัน (ดูก่อนว่าเป็นคลาสอะไร)
-  const CLASS_WEIGHTS = {
-    warrior: { hp: 3, atk: 3, def: 2, spd: 1.5, mp: 0.5 },   // นักรบ: เลือดหนา + บุกหนัก + ทน
-    mage:    { mp: 3, atk: 2.5, spd: 1.5, hp: 1.5, def: 0.5 }, // นักเวทย์: มานา (ใช้สกิลเวท) + โจมตีเวท
-    rogue:   { spd: 3, atk: 2.5, hp: 1.5, def: 1, mp: 0.5 },  // โจร: ว่องไว (หลบ + พลัง) + คริติคอล
-    cleric:  { hp: 2.5, mp: 2.5, def: 2, atk: 1.5, spd: 1 }, // นักบวช: สมดุล ทน + มานาฟื้นพลัง
-  };
   const w = CLASS_WEIGHTS[character.class] || CLASS_WEIGHTS.warrior;
-  const AUTO_KEYS = ['hp', 'mp', 'atk', 'def', 'spd'];
   const priorityHint = [...AUTO_KEYS].sort((a, b) => w[b] - w[a]).map((k) => ({ hp: 'HP', mp: 'MP', atk: 'ATK', def: 'DEF', spd: 'SPD' }[k])).join(' > ');
 
+  // คำนวณน้ำหนักตามคลาส + ปรับด้วยอุปกรณ์ที่สวม (stat ที่เกียร์ให้เยอะ → ลดน้ำหนัก ไปเติม stat ที่ขาด)
+  const eq = character.equipment || {};
+  const gearBonus = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 };
+  for (const i of [eq.weapon, eq.offhand, eq.head, eq.body, eq.arms, eq.legs, eq.feet, ...(eq.accessories || [])].filter(Boolean)) {
+    gearBonus.hp += i.hp_bonus || 0;
+    gearBonus.mp += i.mp_bonus || 0;
+    gearBonus.atk += i.atk_bonus || 0;
+    gearBonus.def += i.def_bonus || 0;
+    gearBonus.spd += i.spd_bonus || 0;
+  }
+  const base = {
+    hp: character.maxHp - gearBonus.hp,
+    mp: character.maxMp - gearBonus.mp,
+    atk: character.atk - gearBonus.atk,
+    def: character.def - gearBonus.def,
+    spd: character.spd - gearBonus.spd,
+  };
+  const weights = gearAdjustedWeights(character.class, gearBonus, base);
+  const hasGearAdjust = AUTO_KEYS.some((k) => Math.abs(weights[k] - w[k]) > 0.001);
+
   const auto = () => {
-    const total = character.statPoints;
-    const sum = AUTO_KEYS.reduce((a, k) => a + w[k], 0);
-    const raw = {};
-    for (const k of AUTO_KEYS) raw[k] = (total * w[k]) / sum;
-    const a = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 };
-    let used = 0;
-    for (const k of AUTO_KEYS) { a[k] = Math.floor(raw[k]); used += a[k]; }
-    // แจกแต้มที่เหลือให้ stat ที่มีเศษมากที่สุดก่อน (จัดสรรตามสัดส่วนพอดี)
-    const order = AUTO_KEYS.map((k) => [k, raw[k] - a[k]]).sort((x, y) => y[1] - x[1]);
-    let i = 0;
-    while (used < total) { a[order[i % order.length][0]] += 1; used += 1; i += 1; }
-    setAlloc(a);
+    setAlloc(allocatePoints(character.statPoints, weights));
     sfx.click();
   };
 
@@ -66,7 +68,7 @@ export function StatAllocator({ onDone }) {
         <span>🪙 แต้มสถานะคงเหลือ: <b>{remaining}</b></span>
         <button className="btn btn-sm" onClick={auto} title={`เน้นตามคลาส: ${priorityHint}`}>✨ จัดอัตโนมัติ (ตามคลาส)</button>
       </div>
-      <div className="alloc-hint">🎯 {character.className} ควรเน้น: <b>{priorityHint}</b> — จัดอัตโนมัติกระจายตามสัดส่วนนี้</div>
+      <div className="alloc-hint">🎯 {character.className} ควรเน้น: <b>{priorityHint}</b> — จัดอัตโนมัติกระจายตามสัดส่วนนี้{hasGearAdjust ? ' · 🔧 ปรับตามอุปกรณ์ที่สวม (เติม stat ที่ขาด)' : ''}</div>
       {rows.map((r) => (
         <div className="alloc-row" key={r.k}>
           <span className="alloc-label">{r.label}</span>
