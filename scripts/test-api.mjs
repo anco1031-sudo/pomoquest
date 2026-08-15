@@ -289,6 +289,35 @@ try {
     expect('challenge: survival ของในกระเป๋าลดลง (เสียของสุ่ม)', invAfter < invBefore, `before=${invBefore} after=${invAfter}`);
   }
 
+  // --- เปลี่ยนโหมดท้าทายระหว่างเล่น (เสียค่าปรับทอง + คอมโบรีเซ็ต) ---
+  {
+    r = await api('/character/create', { method: 'POST', body: { name: 'สลับโหมด', class: 'warrior' } });
+    const swId = r.json.character.id;
+    r = await api('/character/select', { method: 'POST', body: { id: swId } });
+    // ทำ session ครบให้มีคอมโบ
+    await api('/adventure/complete', { method: 'POST', body: { focusSec: 2400 } });
+    const stateBefore = await api('/state');
+    const goldBefore = stateBefore.json.character.gold;
+    const streakBefore = stateBefore.json.progress.streak;
+    const cost = 50 + 30 * stateBefore.json.character.level; // Lv.1 → 80
+    r = await api('/character/challenge', { method: 'POST', body: { mode: 'hard' } });
+    expect('challenge-switch: เปลี่ยนเป็น hard ได้', r.status === 200 && r.json.character.challengeMode === 'hard', r.json.error || '');
+    const goldAfter = (await api('/state')).json.character.gold;
+    expect('challenge-switch: เสียค่าปรับทอง (50+30×เลเวล)', goldAfter === goldBefore - cost, `before=${goldBefore} after=${goldAfter} cost=${cost}`);
+    const streakAfter = (await api('/state')).json.progress.streak;
+    expect('challenge-switch: คอมโบรีเซ็ตเป็น 0', streakBefore > 0 && streakAfter === 0, `before=${streakBefore} after=${streakAfter}`);
+    r = await api('/character/challenge', { method: 'POST', body: { mode: 'hard' } });
+    expect('challenge-switch: เปลี่ยนเป็นโหมดเดิม → reject', r.status === 400, r.json.error || '');
+    r = await api('/character/challenge', { method: 'POST', body: { mode: 'xx' } });
+    expect('challenge-switch: โหมดไม่ถูกต้อง → reject', r.status === 400, r.json.error || '');
+    // เติมทองให้พอค่าปรับ (เปลี่ยนอีกครั้ง)
+    db.prepare('UPDATE character SET gold = 500 WHERE id = ?').run(swId);
+    r = await api('/character/challenge', { method: 'POST', body: { mode: 'survival' } });
+    expect('challenge-switch: เปลี่ยนโหมดซ้ำได้ (เสียค่าปรับอีก)', r.status === 200 && r.json.character.challengeMode === 'survival', r.json.error || '');
+    // กลับเป็นปกติ — reset ตอนท้ายเทสต์
+    await api('/character/challenge', { method: 'POST', body: { mode: '' } });
+  }
+
   // --- export/backup ---
   const backupRes = await fetch(`${base}/api/backup`);
   const buf = Buffer.from(await backupRes.arrayBuffer());

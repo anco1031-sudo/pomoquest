@@ -27,6 +27,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const [muted, setMutedState] = useState(isMuted());
   const [showDev, setShowDev] = useState(false);
   const [showImportNote, setShowImportNote] = useState(false); // modal แจ้งรีสตาร์ทหลัง import
+  const [showChallenge, setShowChallenge] = useState(false); // modal เปลี่ยนโหมดท้าทาย
   const [showOnboard, setShowOnboard] = useState(() => !localStorage.getItem('pomoquest-onboarded')); // วิธีเล่นครั้งแรก
   const [notifyOn, setNotifyOn] = useState(isNotifyEnabled());
   const [notifyPerm, setNotifyPerm] = useState(() => {
@@ -157,6 +158,9 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                 {character.challengeMode === 'hard' && <span className="challenge-badge">⚔️ โหมดโหด</span>}
                 {character.challengeMode === 'marathon' && <span className="challenge-badge">⏱️ มาราธอน</span>}
                 {character.challengeMode === 'survival' && <span className="challenge-badge">🩸 เอาชีวิตรอด</span>}
+                <button className="btn btn-sm challenge-switch" onClick={() => { setShowChallenge(true); sfx.click(); }} title="เปลี่ยนโหมดท้าทาย (เสียค่าปรับ)">
+                  🔄 เปลี่ยนโหมด
+                </button>
               </div>
             </div>
             <div className="hero-city">
@@ -370,6 +374,40 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
             <pre className="code-block">./run.sh stop && ./run.sh start</pre>
             <p className="hint">(หรือ Ctrl+C แล้วรันใหม่ — หลังรีสตาร์ทแล้วเปิดหน้านี้อีกครั้ง)</p>
             <button className="btn btn-primary btn-big" onClick={() => setShowImportNote(false)}>รับทราบ</button>
+          </div>
+        </div>
+      )}
+
+      {/* เปลี่ยนโหมดท้าทาย — เสียค่าปรับทอง + คอมโบรีเซ็ต */}
+      {showChallenge && (
+        <div className="modal-backdrop" onClick={() => setShowChallenge(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>🔥 เปลี่ยนโหมดท้าทาย</h2>
+            <p className="hint">เปลี่ยนได้ทุกเมื่อ — แต่เสียค่าปรับ <b>{50 + 30 * character.level} ทอง</b> + คอมโบโฟกัสรีเซ็ต (กันสลับโหมดไปมาเก็บโบนัส x1.5 โดยไม่เสี่ยง)</p>
+            <div className="challenge-grid">
+              {[
+                { key: '', name: '🎮 ปกติ', desc: 'สมดุล เหมาะกับเริ่มเล่น', detail: 'มอนสเตอร์/บอส/ราคาปกติ · พักแคมป์ฟรี · พักระหว่างโฟกัสได้' },
+                { key: 'hard', name: '⚔️ โหมดโหด', desc: 'ศัตรูแรงขึ้น ของยากขึ้น ของแพงขึ้น', detail: 'ศัตรู +30% · ดรอป -40% · ราคา +30% · รางวัล x1.5' },
+                { key: 'marathon', name: '⏱️ โหมดมาราธอน', desc: 'ห้ามพักระหว่างโฟกัส', detail: 'พัก = เสีย session · โฟกัสครบได้ x1.5' },
+                { key: 'survival', name: '🩸 โหมดเอาชีวิตรอด', desc: 'พักแคมป์ไม่ฟื้นพลัง ใกล้ตายเสียของ', detail: 'ใช้ยาเท่านั้น · HP=1 ตอนจบ session เสียของสุ่ม · x1.5' },
+              ].map((ch) => (
+                <button
+                  key={ch.key || 'normal'}
+                  className={`challenge-card ${character.challengeMode === ch.key ? 'selected' : ''}`}
+                  disabled={character.challengeMode === ch.key}
+                  onClick={async () => {
+                    sfx.click();
+                    const d = await post('/character/challenge', { mode: ch.key });
+                    if (d) { setShowChallenge(false); }
+                  }}
+                >
+                  <div className="challenge-name">{ch.name}{character.challengeMode === ch.key ? ' ✓' : ''}</div>
+                  <div className="challenge-desc">{ch.desc}</div>
+                  {ch.detail && <div className="challenge-detail">{ch.detail}</div>}
+                </button>
+              ))}
+            </div>
+            <button className="btn btn-big" onClick={() => setShowChallenge(false)}>ปิด</button>
           </div>
         </div>
       )}

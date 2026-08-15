@@ -15,7 +15,7 @@ import {
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT,
-  rewardMult, dropMult, priceMult, challengeOf,
+  rewardMult, dropMult, priceMult, challengeOf, CHALLENGES,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -107,6 +107,27 @@ router.post('/character/select', (req, res) => {
   if (!target) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
   setActiveCharacter(id);
   res.json({ ok: true, activeCharacterId: id, ...charsPayload() });
+});
+
+// เปลี่ยนโหมดท้าทายระหว่างเล่น — เสียค่าปรับทอง (50 + 30×เลเวล) + คอมโบหาย + ต้องไม่มี session กำลังรอ
+// (กันสลับโหมดไปมาเก็บรางวัล x1.5 โดยไม่เสี่ยง — เปลี่ยนได้แต่ต้องจ่าย)
+router.post('/character/challenge', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { mode } = req.body || {};
+  const valid = ['', 'hard', 'marathon', 'survival'];
+  if (!valid.includes(mode)) return res.status(400).json({ error: 'โหมดไม่ถูกต้อง' });
+  if ((c.challenge_mode || '') === mode) return res.status(400).json({ error: 'กำลังเล่นโหมดนี้อยู่แล้ว' });
+  const cost = 50 + 30 * c.level;
+  if (c.gold < cost) return res.status(400).json({ error: `ทองไม่พอ — เปลี่ยนโหมดต้องจ่าย ${cost} ทอง` });
+  c.gold -= cost;
+  c.challenge_mode = mode;
+  const prog = getProgress(c.id);
+  prog.streak = 0; // เปลี่ยนโหมด = เริ่มคอมโบใหม่
+  updateCharacter(c);
+  db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
+  const from = CHALLENGES[c.challenge_mode] ? CHALLENGES[c.challenge_mode].label : '🎮 ปกติ';
+  addLog(c.id, { type: 'challenge', title: '🔥 เปลี่ยนโหมดท้าทาย', detail: `สลับจาก ${from} → ${mode ? CHALLENGES[mode].label : '🎮 ปกติ'} (-${cost} ทอง, คอมโบรีเซ็ต)` });
+  res.json({ ...serialize(c), progress: getProgress(c.id), message: `เปลี่ยนโหมดแล้ว (-${cost} ทอง, คอมโบรีเซ็ต)` });
 });
 
 router.post('/character/rename', (req, res) => {
