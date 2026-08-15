@@ -197,6 +197,18 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('allocateWithGoals: แต้มไม่พอ → เอาไปเติมเป้าหมายที่ใกล้ที่สุดก่อน', small.atk === 3, JSON.stringify(small));
 }
 
+// --- ชิปข้อจำกัดไอเทม (src/itemreq.js): แสดง "ขาด X" เมื่อ stat ยังไม่ถึงเกณฑ์ ---
+{
+  const { itemReqParts } = await import('../src/itemreq.js');
+  const sword = { type: 'weapon', statReq: { atk: 20 }, lvl: 1 };
+  const weak = itemReqParts(sword, { atk: 14, def: 10 });
+  expect('itemReq: stat ไม่ถึงเกณฑ์ → แสดง "ขาด X"', weak.some((p) => p.text.includes('ATK 20+ (ขาด 6)')), JSON.stringify(weak));
+  const strong = itemReqParts(sword, { atk: 22, def: 10 });
+  expect('itemReq: stat ถึงเกณฑ์แล้ว → ไม่โชว์ "ขาด"', strong.some((p) => p.text === 'ATK 20+'), JSON.stringify(strong));
+  const noChar = itemReqParts(sword, null);
+  expect('itemReq: ไม่มี character → ไม่โชว์ "ขาด" (แบบเดิม)', noChar.some((p) => p.text === 'ATK 20+'), JSON.stringify(noChar));
+}
+
 // --- ทุก event ต้องมี title/flavor/detail สำหรับแสดงผล ---
 for (const key of ['monster', 'treasure', 'shrine', 'merchant', 'trap']) {
   const ev = rollEvent(c, key);

@@ -126,7 +126,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       <div className="inv-name">
                         {i.name} <span className="bm-tag">{i.bmTag}</span>
                       </div>
-                      <ItemStatChips item={i} />
+                      <ItemStatChips item={i} character={character} />
                       <div className="inv-desc">{i.desc}</div>
                       {i.bmNormal > 0 && (
                         <div className="bm-normal">ปกติ {i.bmNormal} ทอง → <b>{i.price} ทอง</b></div>
@@ -159,7 +159,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       {i.name} {twoHandTag(i)}
                       {i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
                     </div>
-                    <ItemStatChips item={i} />
+                    <ItemStatChips item={i} character={character} />
                     <div className="inv-desc">{i.desc}</div>
                   </div>
                   {i.bought ? (
@@ -230,7 +230,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       {sp.wanted ? <span className="wanted-tag">🔥 พ่อค้าต้องการ!</span> : null}
                       {blackMarket && i.type === 'junk' ? <span className="bm-tag">🖤 ตลาดมืดรับซื้อ +25%</span> : null}
                     </div>
-                    <ItemStatChips item={i} />
+                    <ItemStatChips item={i} character={character} />
                     <div className="inv-desc">{i.desc}</div>
                   </div>
                   <div className="inv-actions">

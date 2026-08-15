@@ -199,7 +199,7 @@ export default function CharacterSheet() {
             ) : s.item ? (
               <span className="slot-item">
                 <span>{s.item.icon} {s.item.name}{s.item.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null}</span>
-                <ItemStatChips item={s.item} />
+                <ItemStatChips item={s.item} character={character} />
               </span>
             ) : (
               <span className="slot-empty">— ว่าง —</span>
@@ -230,7 +230,7 @@ export default function CharacterSheet() {
                 <span className="inv-icon">{i.icon}</span>
                 <div className="inv-info">
                   <div className="inv-name">{i.name} {i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
-                  <ItemStatChips item={i} />
+                  <ItemStatChips item={i} character={character} />
                   <div className="inv-desc">{i.desc}</div>
                   {isGear && blocked.length > 0 && (
                     <div className="inv-req-block">🔒 สวมไม่ได้: {blocked.join(' · ')}</div>
