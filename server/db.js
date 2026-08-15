@@ -188,6 +188,8 @@ ensureColumn('log', 'session_key', 'TEXT');
 // เมืองที่ผจญภัยใน session (สำหรับหน้า session summary) — ใช้กรองเมืองในหน้าประวัติ session
 ensureColumn('log', 'city', 'TEXT');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
+// ตลาดมืด (black market) — สินค้าที่ขายในค่ายพักนี้ ระบุแหล่งที่มา ('camp' = ร้านปกติ, 'black' = ตลาดมืด)
+ensureColumn('camp_shop', 'market', "TEXT DEFAULT 'camp'");
 // ช่องสวมใส่ใหม่ (ระบบ RPG — กัน DB เก่าใช้งานได้)
 ensureColumn('character', 'offhand_id', 'INTEGER');
 ensureColumn('character', 'head_id', 'INTEGER');

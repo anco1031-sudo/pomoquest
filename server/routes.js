@@ -9,11 +9,12 @@ import {
   getSkillRow, learnSkill,
 } from './db.js';
 import {
-  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ACHIEVEMENTS, SECRET_ACHIEVEMENTS,
+  CLASSES, ITEMS, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RARE_JUNK, BOSSES,
+  ACHIEVEMENTS, SECRET_ACHIEVEMENTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
-  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS,
+  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, seededRng,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -404,12 +405,32 @@ const pickRandom = (arr, n) => {
   return a.slice(0, Math.min(n, a.length));
 };
 
+// ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
+// รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%)
+const BM_OPEN_CHANCE = 0.25;
+const blackMarketOpen = (visit) => seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE;
+const bmDisc = (item, mult) => ({ bmPrice: Math.max(1, Math.round(item.price * mult)), bmNormal: item.price });
+function blackMarketStock(visit) {
+  if (!visit || !blackMarketOpen(visit)) return null;
+  const rng = seededRng(`bm-stock-${visit}`);
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+  const scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
+  const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
+  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll');
+  const spec = pick(specPool);
+  return [
+    { ...scroll, ...bmDisc(scroll, 0.85), bmTag: 'คัมภีร์หายาก' },
+    { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
+    { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
+  ];
+}
+
 // ----- ค่ายพัก (short break) -----
 // ร้านค่ายพัก: สินค้าสุ่มใหม่ทุกค่ายพัก (visit ต่างกัน = ค่ายพักใหม่) และซื้อได้ครั้งเดียวต่อค่ายพัก
 router.get('/camp', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const visit = req.query.visit || `v${Date.now()}`;
-  let stock = db.prepare('SELECT item_id, qty FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
+  let stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   if (!stock.length) {
     db.prepare('DELETE FROM camp_shop WHERE character_id = ?').run(c.id); // ล้าง stock ค่ายเก่า
     // ขายเฉพาะของที่คลาสนี้ใช้ได้ (ไม่ขายอุปกรณ์เฉพาะคลาสอื่นให้รก)
@@ -421,26 +442,40 @@ router.get('/camp', (req, res) => {
       ...pickRandom(pool.filter((i) => i.type === 'consumable'), nConsumable),
       ...pickRandom(pool.filter((i) => i.type !== 'consumable'), nGear),
     ];
-    const ins = db.prepare('INSERT OR IGNORE INTO camp_shop (character_id, visit, item_id, qty) VALUES (?, ?, ?, 0)');
-    for (const i of chosen) ins.run(c.id, visit, i.id);
-    stock = db.prepare('SELECT item_id, qty FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
+    const ins = db.prepare('INSERT OR IGNORE INTO camp_shop (character_id, visit, item_id, qty, market) VALUES (?, ?, ?, 0, ?)');
+    for (const i of chosen) ins.run(c.id, visit, i.id, 'camp');
+    // ตลาดมืด (ถ้าเจอ) — เพิ่มสินค้าเข้าร้านค่ายพักนี้ (market='black')
+    const bm = blackMarketStock(visit);
+    if (bm) for (const i of bm) ins.run(c.id, visit, i.id, 'black');
+    stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   }
   // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของไม่ดังลดราคา
   const dayKey = today();
+  const bm = blackMarketStock(visit);
   const shop = stock.map((s) => {
     const base = ITEM_BY_ID[s.item_id];
     if (!base) return null;
+    if (s.market === 'black') {
+      const b = bm?.find((x) => x.id === s.item_id);
+      return { ...base, price: b?.bmPrice ?? base.price, bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
+    }
     const m = marketPrice(base, dayKey);
     return { ...base, price: m.price, priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
   }).filter(Boolean);
   // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ — จังหวะรายวัน (พ่อค้าอยากได้ของบางชิ้น → แพงขึ้น, เปลี่ยนทุกวัน)
+  // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — ปรับราคาที่โชว์ให้ตรงกับที่จ่ายจริง
   const inventory = getInventory(c.id);
-  const sellPrices = Object.fromEntries(inventory.map((inv) => [inv.item_id, campSellPrice(inv, dayKey)]));
+  const sellPrices = Object.fromEntries(inventory.map((inv) => {
+    const sp = campSellPrice(inv, dayKey);
+    if (bm && inv.type === 'junk') sp.price = Math.round(sp.price * 1.25);
+    return [inv.item_id, sp];
+  }));
   res.json({
     ...serialize(c),
     inventory,
     sellPrices,
     shop,
+    blackMarket: bm ? { items: shop.filter((s) => s.bm), junkMult: 1.25 } : null,
     quests: rollQuests(c.level, 3),
   });
 });
@@ -452,17 +487,26 @@ router.post('/shop/buy', (req, res) => {
   if (!item) return res.status(400).json({ error: 'ไอเทมไม่มีอยู่' });
   if (item.type !== 'consumable' && (item.lvl || 1) > c.level + 1) return res.status(400).json({ error: 'เลเวลยังไม่พอจะใช้ของแบบนี้' });
   if (!visit) return res.status(400).json({ error: 'ต้องระบุค่ายพักก่อนซื้อ' });
-  const row = db.prepare('SELECT qty FROM camp_shop WHERE character_id = ? AND visit = ? AND item_id = ?').get(c.id, visit, itemId);
+  const row = db.prepare('SELECT qty, market FROM camp_shop WHERE character_id = ? AND visit = ? AND item_id = ?').get(c.id, visit, itemId);
   if (!row) return res.status(400).json({ error: 'สินค้านี้ไม่อยู่ในร้านค่ายพักนี้' });
   if (row.qty >= 1) return res.status(400).json({ error: 'ซื้อได้ครั้งเดียวต่อค่ายพัก — ขายหมดแล้ว' });
-  // ราคาตามวันนี้ (ตลาดขึ้น/ลด) — ราคาเดียวกับที่โชว์ใน /camp
-  const price = marketPrice(item, today()).price;
+  // ราคาตามแหล่งที่มา: ร้านปกติ = ราคาตลาดวันนี้ · ตลาดมืด = ราคาลดพิเศษ (เท่ากับที่โชว์ใน /camp)
+  let price, fromBm = false;
+  if (row.market === 'black') {
+    const bm = blackMarketStock(visit);
+    const bmItem = bm?.find((x) => x.id === itemId);
+    if (!bmItem) return res.status(400).json({ error: 'ของชิ้นนี้ไม่อยู่ในตลาดมืดค่ายนี้' });
+    price = bmItem.bmPrice;
+    fromBm = true;
+  } else {
+    price = marketPrice(item, today()).price;
+  }
   if (c.gold < price) return res.status(400).json({ error: `ทองไม่พอ! (ต้องใช้ ${price} ทอง)` });
   c.gold -= price;
   addItem(c.id, itemId, 1);
   db.prepare('UPDATE camp_shop SET qty = qty + 1 WHERE character_id = ? AND visit = ? AND item_id = ?').run(c.id, visit, itemId);
   updateCharacter(c);
-  addLog(c.id, { type: 'shop', title: '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)`, gold: -price });
+  addLog(c.id, { type: 'shop', title: fromBm ? '🖤 ซื้อของตลาดมืด' : '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)${fromBm ? ' (ตลาดมืด)' : ''}`, gold: -price });
   bumpDaily(c.id, 'items_bought', 1);
   res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, ...dailyPayload(c) });
 });
@@ -474,13 +518,19 @@ router.post('/shop/sell', (req, res) => {
   if (!inv || inv.qty < qty) return res.status(400).json({ error: 'ไม่มีไอเทมพอจะขาย' });
   // ราคาขายตามวันนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น) — ราคาเดียวกับที่โชว์ใน /camp
   const sell = campSellPrice(inv, today());
-  const gain = sell.price * qty;
+  // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25%
+  const bmOpen = req.body.visit ? blackMarketOpen(req.body.visit) : false;
+  const toBm = bmOpen && inv.type === 'junk';
+  const price = toBm ? Math.round(sell.price * 1.25) : sell.price;
+  const gain = price * qty;
   c.gold += gain;
   db.prepare('UPDATE inventory SET qty = qty - ? WHERE character_id = ? AND item_id = ?').run(qty, c.id, itemId);
   updateCharacter(c);
-  const detail = sell.wanted
-    ? `ขาย ${inv.icon} ${inv.name} x${qty} ให้พ่อค้าที่ต้องการของ (+${gain} ทอง)`
-    : `ขาย ${inv.icon} ${inv.name} x${qty} (+${gain} ทอง)`;
+  const detail = toBm
+    ? `ขาย ${inv.icon} ${inv.name} x${qty} ให้ตลาดมืด (+${gain} ทอง)`
+    : sell.wanted
+      ? `ขาย ${inv.icon} ${inv.name} x${qty} ให้พ่อค้าที่ต้องการของ (+${gain} ทอง)`
+      : `ขาย ${inv.icon} ${inv.name} x${qty} (+${gain} ทอง)`;
   addLog(c.id, { type: 'shop', title: '💰 ขายของ', detail, gold: gain });
   // เควสประจำวัน "คนเก็บขยะ" — ขายของขวัญ (junk) นับชิ้น
   if (inv.type === 'junk') bumpDaily(c.id, 'junk_sold', qty);
@@ -497,7 +547,7 @@ router.post('/shop/sell', (req, res) => {
     inventory: getInventory(c.id),
     achievements: ach.fresh,
     levelUps: { levels: ach.ups, statPoints: c.stat_points },
-    message: sell.wanted ? `🔥 พ่อค้าต้องการของชิ้นนี้! ได้ ${gain} ทอง` : `ขายได้ ${gain} ทอง`,
+    message: toBm ? `🖤 ตลาดมืดรับซื้อแพงกว่า! ได้ ${gain} ทอง` : sell.wanted ? `🔥 พ่อค้าต้องการของชิ้นนี้! ได้ ${gain} ทอง` : `ขายได้ ${gain} ทอง`,
   });
 });
 

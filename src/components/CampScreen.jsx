@@ -20,6 +20,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const [sellPrices, setSellPrices] = useState({}); // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น)
   const [doneQuests, setDoneQuests] = useState({});
   const [questResults, setQuestResults] = useState({});
+  const [blackMarket, setBlackMarket] = useState(null); // null = ไม่เจอตลาดมืดในค่ายนี้
 
   useEffect(() => {
     (async () => {
@@ -28,6 +29,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         setShop(d.shop || []);
         setQuests(d.quests || []);
         setSellPrices(d.sellPrices || {});
+        setBlackMarket(d.blackMarket || null);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,7 +66,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
 
   const sellItem = async (i) => {
     const sp = sellPrices[i.item_id] || {};
-    if (!window.confirm(`ขาย ${i.name} x1?${sp.wanted ? ' (พ่อค้าต้องการของชิ้นนี้ — ขายได้แพง!)' : ''}`)) return;
+    const bmNote = blackMarket && i.type === 'junk' ? ' (ตลาดมืดรับซื้อแพงกว่า +25%!)' : sp.wanted ? ' (พ่อค้าต้องการของชิ้นนี้ — ขายได้แพง!)' : '';
+    if (!window.confirm(`ขาย ${i.name} x1?${bmNote}`)) return;
     const d = await post('/shop/sell', { itemId: i.item_id, qty: 1, visit });
     if (d) showToast(d.message || 'ขายแล้ว');
   };
@@ -110,36 +113,72 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
       </div>
 
       {tab === 'shop' && (
-        <div className="panel">
-          <div className="panel-title">🛒 ร้านค้าของพ่อค้าเร่ร่อน</div>
-          <div className="shop-list">
-            {shop.map((i) => (
-              <div className="shop-row" key={i.id}>
-                <span className="inv-icon">{i.icon}</span>
-                <div className="inv-info">
-                  <div className="inv-name">
-                    {i.name} {twoHandTag(i)}
-                    {i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
+        <>
+          {blackMarket && (
+            <div className="panel bm-panel">
+              <div className="panel-title bm-title">🖤 ตลาดมืด (พ่อค้าเงาลึกลับ)</div>
+              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายากราคาลดพิเศษ — ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
+              <div className="shop-list">
+                {blackMarket.items.map((i) => (
+                  <div className="shop-row" key={i.id}>
+                    <span className="inv-icon">{i.icon}</span>
+                    <div className="inv-info">
+                      <div className="inv-name">
+                        {i.name} <span className="bm-tag">{i.bmTag}</span>
+                      </div>
+                      <ItemStatChips item={i} />
+                      <div className="inv-desc">{i.desc}</div>
+                      {i.bmNormal > 0 && (
+                        <div className="bm-normal">ปกติ {i.bmNormal} ทอง → <b>{i.price} ทอง</b></div>
+                      )}
+                    </div>
+                    {i.bought ? (
+                      <span className="sold-tag">ขายแล้ว</span>
+                    ) : (
+                      <button
+                        className="btn btn-sm bm-buy"
+                        disabled={character.gold < i.price}
+                        onClick={() => buy(i)}
+                      >
+                        🖤 {i.price}
+                      </button>
+                    )}
                   </div>
-                  <ItemStatChips item={i} />
-                  <div className="inv-desc">{i.desc}</div>
-                </div>
-                {i.bought ? (
-                  <span className="sold-tag">ขายแล้ว</span>
-                ) : (
-                  <button
-                    className="btn btn-sm"
-                    disabled={character.gold < i.price}
-                    onClick={() => buy(i)}
-                  >
-                    💰 {i.price}
-                  </button>
-                )}
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+          <div className="panel">
+            <div className="panel-title">🛒 ร้านค้าของพ่อค้าเร่ร่อน</div>
+            <div className="shop-list">
+              {shop.map((i) => (
+                <div className="shop-row" key={i.id}>
+                  <span className="inv-icon">{i.icon}</span>
+                  <div className="inv-info">
+                    <div className="inv-name">
+                      {i.name} {twoHandTag(i)}
+                      {i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
+                    </div>
+                    <ItemStatChips item={i} />
+                    <div className="inv-desc">{i.desc}</div>
+                  </div>
+                  {i.bought ? (
+                    <span className="sold-tag">ขายแล้ว</span>
+                  ) : (
+                    <button
+                      className="btn btn-sm"
+                      disabled={character.gold < i.price}
+                      onClick={() => buy(i)}
+                    >
+                      💰 {i.price}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="hint">ทองของคุณ: 💰 {character.gold} — ราคาตามตลาดวันนี้ (🔥 ขึ้น / 🏷️ ลด) สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
           </div>
-          <p className="hint">ทองของคุณ: 💰 {character.gold} — ราคาตามตลาดวันนี้ (🔥 ขึ้น / 🏷️ ลด) สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
-        </div>
+        </>
       )}
 
       {tab === 'quest' && (
@@ -189,6 +228,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       {i.name} {twoHandTag(i)} <span className="inv-qty">x{i.qty}</span>
                       {i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}
                       {sp.wanted ? <span className="wanted-tag">🔥 พ่อค้าต้องการ!</span> : null}
+                      {blackMarket && i.type === 'junk' ? <span className="bm-tag">🖤 ตลาดมืดรับซื้อ +25%</span> : null}
                     </div>
                     <ItemStatChips item={i} />
                     <div className="inv-desc">{i.desc}</div>
@@ -202,7 +242,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
                     )}
                     {i.type !== 'scroll' && (
-                      <button className={`btn btn-sm ${sp.wanted ? 'btn-wanted' : 'btn-danger-soft'}`} onClick={() => sellItem(i)}>
+                      <button className={`btn btn-sm ${blackMarket && i.type === 'junk' ? 'bm-buy' : sp.wanted ? 'btn-wanted' : 'btn-danger-soft'}`} onClick={() => sellItem(i)}>
                         💰 {sp.price ?? Math.round(i.price * 0.5)}
                       </button>
                     )}
@@ -211,7 +251,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
               );
             })
           )}
-          <p className="hint">ราคาขายเป็นราคาที่พ่อค้าแคมป์นี้รับซื้อ — ของที่พ่อค้า "ต้องการ" (🔥) ขายได้แพงขึ้น</p>
+          <p className="hint">ราคาขายเป็นราคาที่พ่อค้าแคมป์นี้รับซื้อ — ของที่พ่อค้า "ต้องการ" (🔥) ขายได้แพงขึ้น{blackMarket ? ' · 🖤 วันที่ตลาดมืดแวะมา รับซื้อของขวัญแพงกว่า +25%' : ''}</p>
         </div>
       )}
 

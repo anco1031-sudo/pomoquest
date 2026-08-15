@@ -133,14 +133,56 @@ try {
     expect('generateBoss: บอสเมืองแรกมี loot 130 (ตราโจรป่า)', generateBoss(5, 0).loot === 130);
   }
 
+  // --- ตลาดมืด: เจอสุ่ม ~25% (deterministic จาก visit) + ซื้อ/ขายราคาพิเศษ ---
+  {
+    const { seededRng, campSellPrice } = await import('../server/game.js');
+    const { today } = await import('../server/db.js');
+    // หา visit ที่ตลาดมืดเปิด / ไม่เปิด (deterministic — ลองจนเจอ)
+    let bmVisit = null, normalVisit = null;
+    for (let i = 0; i < 60 && (!bmVisit || !normalVisit); i++) {
+      const v = `bm-test-${i}`;
+      const open = seededRng(`bm-open-${v}`)() < 0.25;
+      if (open && !bmVisit) bmVisit = v;
+      if (!open && !normalVisit) normalVisit = v;
+    }
+    expect('black market: เจอ visit เปิด/ไม่เปิดตลาดมืด', !!bmVisit && !!normalVisit, `open=${bmVisit} closed=${normalVisit}`);
+
+    r = await api(`/camp?visit=${encodeURIComponent(normalVisit)}`);
+    expect('camp: ค่ายปกติไม่มีตลาดมืด', r.status === 200 && r.json.blackMarket === null);
+
+    db.prepare('UPDATE character SET gold = 5000 WHERE id = ?').run(cid);
+    r = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
+    const bm = r.json.blackMarket;
+    // response ใช้ field `price` (ราคาลดแล้ว) + `bmNormal` (ราคาปกติ)
+    expect('camp: ตลาดมืด 3 ชิ้น ราคาลดกว่าปกติ', !!bm && bm.items.length === 3 && bm.items.every((i) => i.price < i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.price, i.bmNormal])));
+    const r2 = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
+    expect('black market: เปิดหน้าเดิมซ้ำ ของ/ราคาเหมือนเดิม (deterministic)', JSON.stringify(r.json.shop) === JSON.stringify(r2.json.shop));
+
+    const scroll = bm.items.find((i) => i.type === 'scroll');
+    const goldBefore = r.json.character.gold;
+    r = await api('/shop/buy', { method: 'POST', body: { itemId: scroll.id, visit: bmVisit } });
+    expect('black market: ซื้อคัมภีร์ราคาลดได้', r.status === 200 && r.json.character.gold === goldBefore - scroll.price, r.json.error || '');
+    r = await api('/shop/buy', { method: 'POST', body: { itemId: scroll.id, visit: bmVisit } });
+    expect('black market: ซื้อซ้ำไม่ได้ (ครั้งเดียวต่อค่ายพัก)', r.status === 400);
+
+    // ขาย junk ให้ตลาดมืด = ราคาปกติ x1.25 (ใช้ item 123 — ไม่ชนกับเคส daily quest ที่ขาย 122)
+    addItem(cid, 123, 1);
+    const normalPrice = campSellPrice(ITEM_BY_ID[123], today()).price;
+    const goldBefore2 = (await api('/state')).json.character.gold;
+    r = await api('/shop/sell', { method: 'POST', body: { itemId: 123, qty: 1, visit: bmVisit } });
+    const expected = Math.round(normalPrice * 1.25);
+    expect('black market: ขาย junk ให้ตลาดมืดแพงกว่า +25%', r.status === 200 && r.json.character.gold === goldBefore2 + expected, `expect +${expected}, got +${r.json.character.gold - goldBefore2}`);
+  }
+
   // --- loot มอนสเตอร์ → นับ daily quest "คนเก็บขยะ" (ขาย junk เพิ่ม counter) ---
   {
     addItem(cid, 122, 1); // ขนหมาป่า (loot ของหมาป่าเถื่อน)
+    const d = db.prepare("SELECT date('now','localtime') AS d").get().d;
+    const before = db.prepare("SELECT value FROM daily_counter WHERE character_id = ? AND date = ? AND key = 'junk_sold'").get(cid, d)?.value || 0;
     r = await api('/shop/sell', { method: 'POST', body: { itemId: 122, qty: 1 } });
     expect('sell: ขายขนหมาป่า (loot มอนสเตอร์) ได้', r.status === 200, r.json.error || '');
-    const d = db.prepare("SELECT date('now','localtime') AS d").get().d;
     const counter = db.prepare("SELECT value FROM daily_counter WHERE character_id = ? AND date = ? AND key = 'junk_sold'").get(cid, d);
-    expect('daily quest: junk_sold นับ +1 เมื่อขาย loot มอนสเตอร์', counter?.value === 1, JSON.stringify(counter));
+    expect('daily quest: junk_sold เพิ่ม +1 เมื่อขาย loot มอนสเตอร์', counter?.value === before + 1, `before=${before}, after=${counter?.value}`);
   }
 
   // --- export/backup ---
