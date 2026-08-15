@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useGame } from './context.jsx';
 import { sfx } from './sound.js';
+import { notify, requestNotifyPermission } from './notify.js';
 import { fmtTime, fmtDuration } from './components/ui.jsx';
 import CharacterCreation from './components/CharacterCreation.jsx';
 import CharacterSelect from './components/CharacterSelect.jsx';
@@ -228,6 +229,10 @@ export default function Game() {
       // พักครบเวลา — ไม่เริ่มโฟกัสเอง ให้ user กดเอง (เวลายังนับต่อเป็น overrun)
       setBreakOver(true);
       sfx.complete();
+      notify(
+        p === 'long_break' ? '👹 ถึงเวลาสู้บอส!' : '☕ พักครบแล้ว',
+        p === 'long_break' ? 'พักใหญ่จบ — สู้บอสต่อ หรือเริ่มโฟกัส' : 'เริ่มโฟกัสต่อได้ หรือต่อเวลาพักเพิ่ม'
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remain, running]);
@@ -243,6 +248,9 @@ export default function Game() {
       sessionKey: sessionKeyRef.current,
     });
     if (!res) { setPhase('idle'); return; }
+    if (res.reward) {
+      notify('⏰ โฟกัสครบแล้ว!', `ได้ +${res.reward.xp} XP, +${res.reward.gold} ทอง — พักเบรกหรือลุยต่อ?`);
+    }
     setStoryDone(false); // เริ่มรอเรื่องราว — เรื่องต้องโชว์ก่อนถึงจะถามพัก/ข้าม
     setAwaitingBreak(true);
     // poll เสมอถ้ามี taleAfter — LLM ทำงานก็ได้เรื่องแต่ง, ไม่ทำงาน server ก็เขียนสรุปเหตุการณ์ให้ (pollStory หยุดเองเมื่อไม่มีเรื่อง)
@@ -263,6 +271,7 @@ export default function Game() {
   };
 
   const beginWork = (idx = 1) => {
+    requestNotifyPermission(); // ขออนุญาตแจ้งเตือนครั้งแรก (browser โชว์ prompt เอง — ถ้า grant/deny แล้วจะข้าม)
     setSessionIdx(idx);
     setRemain(settings.work_min * 60);
     setElapsed(0);
@@ -298,6 +307,7 @@ export default function Game() {
     setRunning(true);
     sfx.boss();
     fetchBoss();
+    notify('👹 ถึงเวลาสู้บอส!', 'โฟกัสครบ 4 session — บอสของเมืองนี้รออยู่ (พักใหญ่ 15 นาที)');
   };
 
   // ---- หลังจบ session: เลือกพักเบรก หรือข้ามไปโฟกัสต่อ ----

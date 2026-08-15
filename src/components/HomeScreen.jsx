@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, setMuted, isMuted } from '../sound.js';
+import { isNotifyEnabled, setNotifyEnabled, requestNotifyPermission } from '../notify.js';
 import { Bar, Panel, fmtDuration, fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
@@ -26,6 +27,14 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const [muted, setMutedState] = useState(isMuted());
   const [showDev, setShowDev] = useState(false);
   const [showImportNote, setShowImportNote] = useState(false); // modal แจ้งรีสตาร์ทหลัง import
+  const [notifyOn, setNotifyOn] = useState(isNotifyEnabled());
+  const [notifyPerm, setNotifyPerm] = useState(() => {
+    try {
+      return typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+    } catch {
+      return 'unsupported';
+    }
+  });
   const fileRef = useRef(null);
 
   if (!character) return null;
@@ -37,6 +46,19 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
     setMuted(m);
     setMutedState(m);
     localStorage.setItem('pomoquest-muted', m ? '1' : '0');
+  };
+
+  const toggleNotify = async () => {
+    const next = !notifyOn;
+    setNotifyOn(next);
+    setNotifyEnabled(next);
+    if (next) {
+      const granted = await requestNotifyPermission();
+      setNotifyPerm(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
+      showToast(granted ? '🔔 เปิดแจ้งเตือนแล้ว' : '⚠️ ไม่ได้รับอนุญาต — เปิดในตั้งค่าเบราว์เซอร์');
+    } else {
+      showToast('🔕 ปิดแจ้งเตือนแล้ว');
+    }
   };
 
 
@@ -265,6 +287,19 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               <label>🔊 เสียง</label>
               <button className="btn" onClick={toggleMute}>{muted ? 'ปิดอยู่' : 'เปิดอยู่'}</button>
             </div>
+            <div className="setting-row">
+              <label>🔔 แจ้งเตือนเบราว์เซอร์</label>
+              <button className="btn" onClick={toggleNotify}>{notifyOn ? 'เปิดอยู่' : 'ปิดอยู่'}</button>
+            </div>
+            {notifyOn && notifyPerm === 'denied' && (
+              <p className="hint">⚠️ ถูกบล็อกในเบราว์เซอร์ — เปิด Notifications ที่ตั้งค่าเว็บไซต์ แล้วกลับมาลองใหม่</p>
+            )}
+            {notifyOn && notifyPerm === 'default' && (
+              <p className="hint">🔔 จะขออนุญาตตอนเริ่มโฟกัสครั้งแรก (หรือกดเปิดเพื่อขอเลย)</p>
+            )}
+            {notifyOn && notifyPerm === 'unsupported' && (
+              <p className="hint">ℹ️ เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน (ต้อง https หรือ localhost)</p>
+            )}
             <p className="hint">💡 บนมือถือ กด "Add to Home Screen" เพื่อติดตั้ง PomoQuest เป็นแอพ!</p>
             <button className="btn" onClick={onManageCharacters}>👥 จัดการตัวละคร (เลือก / สร้าง / เปลี่ยนชื่อ / ลบ)</button>
           </div>
