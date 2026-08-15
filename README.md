@@ -46,7 +46,8 @@ PomoQuest ผสม **เทคนิค Pomodoro** เข้ากับ **เ�
 ./run.sh stop       # หยุด server
 ./run.sh reset      # RESET เกม: หยุด server → ลบฐานข้อมูล → รันใหม่ (พิมพ์ reset ยืนยัน, -y ข้าม)
 ./run.sh backup     # สำรองฐานข้อมูลไปที่ backups/ (snapshot สม่ำเสมอ — server รันอยู่ได้)
-./run.sh restore    # กู้คืนจาก backup (./run.sh restore backups/xxx.db) — พิมพ์ restore ยืนยัน
+./run.sh backup --json   # สำรองเป็น .json.gz (บีบอัด, อ่าน/แก้ได้ — import มีผลทันที)
+./run.sh restore    # กู้คืนจาก backup (.db หรือ .json.gz) — พิมพ์ restore ยืนยัน (เช็คเวอร์ชัน schema ก่อน)
 ./run.sh status     # ดูสถานะ server + LLM
 ./run.sh llm        # เช็คว่า LLM ที่ localhost:8080 พร้อมใช้ไหม
 ```
@@ -196,7 +197,7 @@ LLM_API_KEY=xxxx npm run dev       # มี key
 | PUT | `/api/settings` | ปรับเวลา Pomodoro |
 | GET | `/api/backup` | Export ข้อมูลทั้งหมดเป็นไฟล์ .db (ดาวน์โหลด) |
 | GET | `/api/export` | Export เป็น JSON บีบอัด gzip (.json.gz — อ่าน/แก้ได้ ไฟล์เล็ก) |
-| POST | `/api/restore` | Import — .json.gz มีผลทันที · .db ต้องรีสตาร์ท server |
+| POST | `/api/restore` | Import — .json.gz มีผลทันที · .db ต้องรีสตาร์ท server — ทั้งคู่เช็คเวอร์ชัน schema ก่อน (ไฟล์เวอร์ชันเก่าถูก reject พร้อมข้อความ) |
 | POST | `/api/reset` | ล้างข้อมูลเกมทั้งหมด (มีผลทันที) |
 
 ## 🧪 Dev Test Panel

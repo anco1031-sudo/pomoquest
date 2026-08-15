@@ -18,6 +18,7 @@ import {
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
 import { llmChat, llmEnabled } from './llm.js';
+import { WRITABLE_TABLES, exportJsonData, restoreFromJson, checkDbSchema } from './data-io.js';
 
 const router = Router();
 
@@ -861,9 +862,6 @@ router.put('/settings', (req, res) => {
 
 // ----- ข้อมูล: export / import / reset (แท็บตั้งค่า) -----
 
-// ตารางที่ export/import ได้ (item เป็น data สถิต — ไม่ export)
-const WRITABLE_TABLES = ['character', 'progress', 'inventory', 'log', 'achievement_unlock', 'daily_counter', 'daily_quest_done', 'daily_streak', 'camp_shop', 'character_skill', 'settings'];
-
 // Export .db — ดาวน์โหลด DB ทั้งหมดเป็นไฟล์ .db (snapshot สม่ำเสมอ — ใช้ได้กับ ./run.sh restore)
 router.get('/backup', (req, res) => {
   const buf = db.serialize();
@@ -875,35 +873,12 @@ router.get('/backup', (req, res) => {
 
 // Export JSON (.json.gz) — อ่าน/แก้ด้วยมือได้ บีบอัด gzip ให้ไฟล์เล็กลง
 router.get('/export', (req, res) => {
-  const data = { app: 'pomoquest', version: 1, exported_at: new Date().toISOString() };
-  for (const t of WRITABLE_TABLES) data[t] = db.prepare(`SELECT * FROM ${t}`).all();
-  const gz = zlib.gzipSync(Buffer.from(JSON.stringify(data)), { level: 9 });
+  const gz = zlib.gzipSync(Buffer.from(JSON.stringify(exportJsonData(db))), { level: 9 });
   const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
   res.setHeader('Content-Type', 'application/gzip');
   res.setHeader('Content-Disposition', `attachment; filename="pomoquest-backup-${ts}.json.gz"`);
   res.send(gz);
 });
-
-// กู้คืนจาก JSON (ต้องผ่านการตรวจ format แล้ว) — เขียนลงตารางทันที ไม่ต้องรีสตาร์ท
-const restoreFromJson = (data) => {
-  if (!data || data.app !== 'pomoquest' || !Array.isArray(data.character) || !Array.isArray(data.settings)) {
-    throw new Error('format ไม่ถูกต้อง');
-  }
-  db.transaction(() => {
-    for (const t of WRITABLE_TABLES) db.prepare(`DELETE FROM ${t}`).run();
-    db.prepare('DELETE FROM sqlite_sequence').run();
-    for (const t of WRITABLE_TABLES) {
-      const rows = Array.isArray(data[t]) ? data[t] : [];
-      if (!rows.length) continue;
-      // กรองคอลัมน์ตาม schema จริง (กัน SQL injection ผ่านชื่อคอลัมน์จากไฟล์)
-      const realCols = db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
-      const cols = Object.keys(rows[0]).filter((c) => realCols.includes(c));
-      if (!cols.length) continue;
-      const ins = db.prepare(`INSERT INTO ${t} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
-      for (const r of rows) ins.run(cols.map((c) => r[c]));
-    }
-  })();
-};
 
 // Import — รองรับ 2 แบบ:
 //  - .json.gz (export จากปุ่ม Export JSON) → เขียนลงตารางทันที ไม่ต้องรีสตาร์ท
@@ -918,28 +893,27 @@ router.post('/restore', (req, res) => {
     if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
       try {
         const json = JSON.parse(zlib.gunzipSync(buf).toString('utf8'));
-        restoreFromJson(json);
+        restoreFromJson(db, json);
         return res.json({ message: 'กู้คืนข้อมูลแล้ว (JSON) — ข้อมูลใหม่มีผลทันที', restart: false });
       } catch (e) {
-        return res.status(400).json({ error: 'ไฟล์ .json.gz ไม่ถูกต้อง' });
+        return res.status(400).json({ error: e.message || 'ไฟล์ .json.gz ไม่ถูกต้อง' });
       }
     }
-    // SQLite .db — ตรวจว่าเป็น DB ของ PomoQuest ก่อนแทนที่ไฟล์
+    // SQLite .db — ตรวจว่าเป็น DB ของ PomoQuest + เวอร์ชัน schema ก่อนแทนที่ไฟล์
     const tmp = path.join(path.dirname(DB_PATH), 'restore-pending.db');
     try {
       fs.writeFileSync(tmp, buf);
       const test = new Database(tmp, { readonly: true });
-      const tables = test.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name);
+      const schemaErr = checkDbSchema(test);
       test.close();
-      const need = ['character', 'item', 'log', 'progress', 'settings'];
-      if (!need.every((t) => tables.includes(t))) throw new Error('schema ไม่ตรง');
+      if (schemaErr) throw new Error(schemaErr);
       // แทนที่ไฟล์จริง + ลบ WAL/SHM เก่า (server ยังถือข้อมูลเก่าในความจำจนกว่าจะ restart)
       fs.renameSync(tmp, DB_PATH);
       for (const f of [DB_PATH + '-wal', DB_PATH + '-shm']) fs.rmSync(f, { force: true });
       res.json({ message: 'กู้คืนข้อมูลแล้ว (ไฟล์ .db) — รีสตาร์ท server เพื่อให้ข้อมูลใหม่มีผล (./run.sh start)', restart: true });
     } catch (e) {
       fs.rmSync(tmp, { force: true });
-      res.status(400).json({ error: 'ไฟล์ไม่ใช่ฐานข้อมูล PomoQuest ที่ถูกต้อง (รองรับ .json.gz หรือ .db)' });
+      res.status(400).json({ error: e.message || 'ไฟล์ไม่ใช่ฐานข้อมูล PomoQuest ที่ถูกต้อง (รองรับ .json.gz หรือ .db)' });
     }
   });
 });

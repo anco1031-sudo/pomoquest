@@ -91,6 +91,37 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('session_summary เก็บเมือง + รวมรายชื่อเมืองตามลำดับ session แรก', JSON.stringify(cities) === JSON.stringify(['แอสการ์ด', 'ปราสาทมังกร']), cities.join(','));
 }
 
+// --- export/import JSON (data-io) — roundtrip + เช็คเวอร์ชัน ---
+{
+  const { exportJsonData, restoreFromJson, SCHEMA_VERSION } = await import('../server/data-io.js');
+  // เตรียมข้อมูล: ตัวละคร + log
+  const name = 'ไอโอ-' + Date.now();
+  db.prepare('UPDATE character SET name = ? WHERE id = ?').run(name, c.id);
+  addLog(c.id, { type: 'battle_win', title: 'ชนะ', detail: 'x', xp: 10, sessionKey: 'io-test' });
+
+  const data = exportJsonData(db);
+  expect('exportJsonData: มี header app/version + ข้อมูลตัวละคร', data.app === 'pomoquest' && data.version === SCHEMA_VERSION && data.character.length === 1);
+  expect('exportJsonData: มี log ที่เพิ่งเพิ่ม', data.log.some((l) => l.session_key === 'io-test'));
+
+  // ล้างข้อมูล แล้วกู้คืนจาก export — ต้องได้ตัวละครกลับมา
+  db.prepare('DELETE FROM character').run();
+  db.prepare('DELETE FROM log').run();
+  expect('ล้างข้อมูลแล้ว (ก่อน restore)', db.prepare('SELECT COUNT(*) n FROM character').get().n === 0);
+  restoreFromJson(db, data);
+  const back = db.prepare('SELECT * FROM character WHERE name = ?').get(name);
+  expect('restoreFromJson: ตัวละครกลับมาเหมือนเดิม', back && back.id === c.id && back.class === 'warrior');
+  expect('restoreFromJson: log กลับมาเหมือนเดิม', db.prepare("SELECT COUNT(*) n FROM log WHERE session_key = 'io-test'").get().n === 1);
+
+  // เวอร์ชันไม่ตรง → ต้อง reject
+  let rejected = false;
+  try { restoreFromJson(db, { ...data, version: SCHEMA_VERSION + 1 }); } catch { rejected = true; }
+  expect('restoreFromJson: เวอร์ชันไม่ตรง → reject', rejected);
+  // app ไม่ใช่ pomoquest → reject
+  let rejected2 = false;
+  try { restoreFromJson(db, { ...data, app: 'other' }); } catch { rejected2 = true; }
+  expect('restoreFromJson: app ไม่ใช่ pomoquest → reject', rejected2);
+}
+
 // --- session_key: จับกลุ่มเหตุการณ์ของ session เดียวกัน (ใช้ในหน้าประวัติ session) ---
 {
   const key = `test-${Date.now()}`;

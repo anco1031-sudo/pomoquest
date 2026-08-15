@@ -9,7 +9,8 @@
 #   ./run.sh stop       # หยุด server ที่รันอยู่
 #   ./run.sh reset      # RESET เกม: หยุด server → ลบฐานข้อมูล → รันใหม่ (ต้องพิมพ์ reset ยืนยัน, ใช้ -y ข้าม)
 #   ./run.sh backup     # สำรองฐานข้อมูลไปที่ backups/ (snapshot ตอนนี้ — server รันอยู่ได้)
-#   ./run.sh restore    # กู้คืนจาก backup (เลือกไฟล์ หรือ ./run.sh restore backups/xxx.db) — ต้องยืนยัน
+#   ./run.sh backup --json   # สำรองเป็น .json.gz (บีบอัด, อ่าน/แก้ได้)
+#   ./run.sh restore    # กู้คืนจาก backup (.db หรือ .json.gz) — ต้องยืนยัน
 #   ./run.sh status     # ดูสถานะ: server / LLM ที่ port 8080
 #   ./run.sh llm        # เช็คว่า LLM (localhost:8080) พร้อมใช้งานไหม
 #   ./run.sh help       # ดูวิธีใช้
@@ -76,16 +77,21 @@ case "${1:-dev}" in
     ;;
   backup)
     mkdir -p backups
-    dest="backups/pomoquest-$(date +%Y%m%d-%H%M%S).db"
-    node scripts/backup-db.mjs backup "$dest"
+    if [[ "${2:-}" == "--json" ]]; then
+      dest="backups/pomoquest-$(date +%Y%m%d-%H%M%S).json.gz"
+      node scripts/backup-db.mjs backup-json "$dest"
+    else
+      dest="backups/pomoquest-$(date +%Y%m%d-%H%M%S).db"
+      node scripts/backup-db.mjs backup "$dest"
+    fi
     echo "   ดูไฟล์: ls backups/"
     ;;
   restore)
     src="${2:-}"
     if [[ -z "$src" ]]; then
       echo "📂 backup ที่มี (ล่าสุด 10):"
-      ls -1t backups/*.db 2>/dev/null | head -10 || echo "   (ยังไม่มี backup — ใช้ ./run.sh backup ก่อน)"
-      echo "วิธีใช้: ./run.sh restore backups/pomoquest-xxxxxxxx.db"
+      ls -1t backups/pomoquest-* 2>/dev/null | head -10 || echo "   (ยังไม่มี backup — ใช้ ./run.sh backup ก่อน)"
+      echo "วิธีใช้: ./run.sh restore backups/pomoquest-xxxxxxxx.db|json.gz"
       exit 1
     fi
     [[ -f "$src" ]] || { echo "❌ ไม่พบไฟล์: $src" >&2; exit 1; }
