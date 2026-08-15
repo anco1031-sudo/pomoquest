@@ -16,7 +16,7 @@ export function achievementValues(c, prog) {
     gold_earned: prog.gold_earned,
     level: c.level,
     gold: c.gold,
-    equip: c.weapon_id && c.armor_id && c.accessory_id ? 1 : 0,
+    equip: c.head_id && c.armor_id && c.arms_id && c.legs_id && c.feet_id ? 1 : 0,
   };
 }
 

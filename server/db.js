@@ -31,8 +31,16 @@ CREATE TABLE IF NOT EXISTS character (
   crit REAL DEFAULT 5,
   stat_points INTEGER DEFAULT 0,
   weapon_id INTEGER,
+  offhand_id INTEGER,
+  head_id INTEGER,
   armor_id INTEGER,
+  arms_id INTEGER,
+  legs_id INTEGER,
+  feet_id INTEGER,
   accessory_id INTEGER,
+  accessory_2_id INTEGER,
+  accessory_3_id INTEGER,
+  accessory_4_id INTEGER,
   city_index INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -55,6 +63,7 @@ CREATE TABLE IF NOT EXISTS item (
   use_gold INTEGER DEFAULT 0,
   price INTEGER DEFAULT 0,
   lvl INTEGER DEFAULT 1,
+  handed INTEGER DEFAULT 1,
   exclusive INTEGER DEFAULT 0
 );
 
@@ -146,10 +155,19 @@ ensureColumn('progress', 'merchant_gifts', 'INTEGER DEFAULT 0');
 ensureColumn('settings', 'active_character_id', 'INTEGER');
 ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
+// ช่องสวมใส่ใหม่ (ระบบ RPG — กัน DB เก่าใช้งานได้)
+ensureColumn('character', 'offhand_id', 'INTEGER');
+ensureColumn('character', 'head_id', 'INTEGER');
+ensureColumn('character', 'arms_id', 'INTEGER');
+ensureColumn('character', 'legs_id', 'INTEGER');
+ensureColumn('character', 'feet_id', 'INTEGER');
+ensureColumn('character', 'accessory_2_id', 'INTEGER');
+ensureColumn('character', 'accessory_3_id', 'INTEGER');
+ensureColumn('character', 'accessory_4_id', 'INTEGER');
 
 // seed items
-const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, exclusive)
-  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @exclusive)`);
+const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, handed, exclusive)
+  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @handed, @exclusive)`);
 const seedItems = db.transaction(() => {
   for (const i of ITEMS) {
     insertItem.run({
@@ -159,14 +177,19 @@ const seedItems = db.transaction(() => {
       spd_bonus: i.spd_bonus || 0, crit_bonus: i.crit_bonus || 0,
       heal_pct: i.heal_pct || 0, mana_pct: i.mana_pct || 0,
       use_xp: i.use_xp || 0, use_gold: i.use_gold || 0,
-      price: i.price || 0, lvl: i.lvl || 1, exclusive: i.exclusive ? 1 : 0,
+      price: i.price || 0, lvl: i.lvl || 1, handed: i.handed || 1, exclusive: i.exclusive ? 1 : 0,
     });
   }
 });
 ensureColumn('item', 'exclusive', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'use_xp', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'use_gold', 'INTEGER DEFAULT 0');
+ensureColumn('item', 'handed', 'INTEGER DEFAULT 1');
 seedItems();
+// กัน DB เก่า: อัปเดต handed ของอาวุธสองมือที่ seed ไปแล้ว (INSERT OR IGNORE ไม่ทับของเดิม)
+for (const i of ITEMS) {
+  if (i.handed === 2) db.prepare('UPDATE item SET handed = 2 WHERE id = ?').run(i.id);
+}
 
 // seed settings
 db.prepare(`INSERT OR IGNORE INTO settings (id, work_min, short_break_min, long_break_min, sessions_per_cycle, event_every_sec)
@@ -224,7 +247,7 @@ export const getSettings = () => db.prepare('SELECT * FROM settings WHERE id = 1
 export const getInventory = (charId) => db.prepare(`
   SELECT inv.item_id, inv.qty, item.name, item.icon, item.type, item.price, item.heal_pct, item.mana_pct,
          item.hp_bonus, item.mp_bonus, item.atk_bonus, item.def_bonus, item.spd_bonus, item.crit_bonus, item.desc,
-         item.use_xp, item.use_gold, item.exclusive
+         item.use_xp, item.use_gold, item.exclusive, item.handed
   FROM inventory inv JOIN item ON item.id = inv.item_id
   WHERE inv.character_id = ? AND inv.qty > 0
   ORDER BY item.type, item.id`).all(charId);
@@ -246,6 +269,9 @@ export const addItem = (charId, itemId, qty = 1) => {
 export const updateCharacter = (c) => {
   db.prepare(`UPDATE character SET level=@level, xp=@xp, gold=@gold, hp=@hp, max_hp=@max_hp, mp=@mp, max_mp=@max_mp,
     atk=@atk, def=@def, spd=@spd, crit=@crit, stat_points=@stat_points,
-    weapon_id=@weapon_id, armor_id=@armor_id, accessory_id=@accessory_id, city_index=@city_index
+    weapon_id=@weapon_id, offhand_id=@offhand_id, head_id=@head_id, armor_id=@armor_id,
+    arms_id=@arms_id, legs_id=@legs_id, feet_id=@feet_id,
+    accessory_id=@accessory_id, accessory_2_id=@accessory_2_id, accessory_3_id=@accessory_3_id, accessory_4_id=@accessory_4_id,
+    city_index=@city_index
     WHERE id=@id`).run(c);
 };

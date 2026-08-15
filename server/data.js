@@ -23,27 +23,64 @@ export const CLASSES = {
   },
 };
 
-// item.type: 'consumable' | 'weapon' | 'armor' | 'accessory'
+// item.type: 'consumable' | 'weapon' | 'shield' | 'armor' | 'head' | 'arms' | 'legs' | 'feet' | 'accessory'
+// item.handed: (เฉพาะ weapon) 1 = มือเดียว, 2 = สองมือ (ปิดช่องมือรอง)
 export const ITEMS = [
   { id: 1,  name: 'ยาบำบัดน้อย', icon: '🧪', type: 'consumable', heal_pct: 0.3,  mana_pct: 0,   price: 25,  desc: 'ฟื้น HP 30% ของพลังสูงสุด' },
   { id: 2,  name: 'ยาบำบัดใหญ่', icon: '⚗️', type: 'consumable', heal_pct: 0.6,  mana_pct: 0,   price: 60,  desc: 'ฟื้น HP 60% ของพลังสูงสุด' },
   { id: 3,  name: 'น้ำอมฤต',     icon: '💧', type: 'consumable', heal_pct: 0,    mana_pct: 0.4, price: 30,  desc: 'ฟื้น MP 40% ของพลังสูงสุด' },
   { id: 4,  name: 'ยาฟื้นฟูเต็ม', icon: '✨', type: 'consumable', heal_pct: 1,    mana_pct: 1,   price: 120, desc: 'ฟื้น HP และ MP 100%' },
 
-  { id: 10, name: 'มีดสั้นเก่า',   icon: '🔪', type: 'weapon', atk_bonus: 3,  price: 40,  desc: 'มีดเก่า ๆ แต่ยังคม', lvl: 1 },
-  { id: 11, name: 'ดาบเหล็ก',     icon: '⚔️', type: 'weapon', atk_bonus: 6,  price: 90,  desc: 'ดาบเหล็กมาตรฐานทหาร', lvl: 2 },
-  { id: 12, name: 'ขวานสงคราม',   icon: '🪓', type: 'weapon', atk_bonus: 10, price: 180, desc: 'ขวานหนัก ทุบได้ทั้งเกราะ', lvl: 3 },
-  { id: 13, name: 'ดาบเพชรนิล',   icon: '💎', type: 'weapon', atk_bonus: 15, price: 320, desc: 'ดาบในตำนาน ส่องแสงสีม่วง', lvl: 5 },
+  // อาวุธ (handed: 1 = มือเดียว, 2 = สองมือ)
+  { id: 10, name: 'มีดสั้นเก่า',   icon: '🔪', type: 'weapon', atk_bonus: 3,  price: 40,  desc: 'มีดเก่า ๆ แต่ยังคม', lvl: 1, handed: 1 },
+  { id: 11, name: 'ดาบเหล็ก',     icon: '⚔️', type: 'weapon', atk_bonus: 6,  price: 90,  desc: 'ดาบเหล็กมาตรฐานทหาร', lvl: 2, handed: 1 },
+  { id: 12, name: 'ขวานสงคราม',   icon: '🪓', type: 'weapon', atk_bonus: 10, price: 180, desc: 'ขวานใหญ่สองมือ ทุบได้ทั้งเกราะ', lvl: 3, handed: 2 },
+  { id: 13, name: 'ดาบเพชรนิล',   icon: '💎', type: 'weapon', atk_bonus: 15, price: 320, desc: 'ดาบใหญ่ในตำนาน ส่องแสงสีม่วง', lvl: 5, handed: 2 },
+  { id: 14, name: 'กระบองเหล็ก',   icon: '🏏', type: 'weapon', atk_bonus: 5,  price: 70,  desc: 'กระบองหนักหนึ่งมือ', lvl: 1, handed: 1 },
+  { id: 15, name: 'ดาบสั้นคู่ใจ',   icon: '🗡️', type: 'weapon', atk_bonus: 8,  price: 150, desc: 'ดาบสั้นที่เฉียบคม ติดตัวตลอดทาง', lvl: 2, handed: 1 },
+  { id: 16, name: 'ดาบใหญ่เหล็ก',   icon: '⚔️', type: 'weapon', atk_bonus: 13, price: 280, desc: 'ดาบใหญ่สองมือ หนักแต่ทรงพลัง', lvl: 4, handed: 2 },
+  { id: 17, name: 'คทาจอมเวท',     icon: '🪄', type: 'weapon', atk_bonus: 9, mp_bonus: 25, price: 300, desc: 'คทาสองมือที่อัดแน่นด้วยเวทมนตร์', lvl: 4, handed: 2 },
 
+  // เกราะตัว (armor)
   { id: 20, name: 'เกราะหนัง',   icon: '🛡️', type: 'armor', def_bonus: 3,  hp_bonus: 10, price: 50,  desc: 'เกราะหนังสัตว์ เหนียวพอตัว', lvl: 1 },
   { id: 21, name: 'เกราะโซ่',    icon: '⛓️', type: 'armor', def_bonus: 6,  hp_bonus: 25, price: 120, desc: 'เกราะโซ่เหล็ก ทนทาน', lvl: 2 },
   { id: 22, name: 'เกราะเหล็ก',  icon: '🛡️', type: 'armor', def_bonus: 10, hp_bonus: 45, price: 240, desc: 'เกราะเต็มยศของอัศวิน', lvl: 3 },
   { id: 23, name: 'เกราะมังกร',  icon: '🐲', type: 'armor', def_bonus: 16, hp_bonus: 80, price: 420, desc: 'ทำจากเกล็ดมังกร กันเวทได้', lvl: 5 },
 
+  // โล่ (มือรอง)
+  { id: 50, name: 'โล่ไม้',       icon: '🛡️', type: 'shield', def_bonus: 4,  hp_bonus: 8,  price: 45,  desc: 'โล่ไม้เก่า ๆ กันได้นิดหน่อย', lvl: 1 },
+  { id: 51, name: 'โล่เหล็ก',     icon: '🛡️', type: 'shield', def_bonus: 8,  hp_bonus: 20, price: 160, desc: 'โล่เหล็กหนักหน่วง กันทุกการโจมตี', lvl: 3 },
+  { id: 52, name: 'โล่ศักดิ์สิทธิ์', icon: '⛨', type: 'shield', def_bonus: 12, hp_bonus: 35, price: 340, desc: 'โล่แห่งแสง กันได้แม้เวทมนตร์', lvl: 5 },
+
+  // หมวก (หัว)
+  { id: 60, name: 'หมวกผ้า',     icon: '🧢', type: 'head', def_bonus: 1, hp_bonus: 6,  price: 30,  desc: 'หมวกผ้านุ่ม ๆ กันแดด', lvl: 1 },
+  { id: 61, name: 'หมวกเหล็ก',   icon: '⛑️', type: 'head', def_bonus: 4, hp_bonus: 12, price: 90,  desc: 'หมวกเหล็กกันกระแทก', lvl: 2 },
+  { id: 62, name: 'หมวกมังกร',   icon: '🐲', type: 'head', def_bonus: 7, hp_bonus: 25, price: 300, desc: 'หมวกทำจากเกล็ดมังกร', lvl: 5 },
+
+  // แขน
+  { id: 70, name: 'สนับแขนหนัง',  icon: '🧤', type: 'arms', def_bonus: 2, atk_bonus: 1, price: 35,  desc: 'สนับแขนหนังเหนียว', lvl: 1 },
+  { id: 71, name: 'ถุงมือเหล็ก',   icon: '🥊', type: 'arms', def_bonus: 5, atk_bonus: 2, price: 140, desc: 'ถุงมือเหล็ก กำหมัดได้แรงขึ้น', lvl: 3 },
+  { id: 72, name: 'ถุงมือเวท',     icon: '🪶', type: 'arms', mp_bonus: 18, price: 210, desc: 'ถุงมือที่ซึมซับมานา', lvl: 4 },
+
+  // ขา
+  { id: 80, name: 'สนับขาหนัง',   icon: '👖', type: 'legs', def_bonus: 3, hp_bonus: 8,  price: 40,  desc: 'สนับขาหนังยืดหยุ่นดี', lvl: 1 },
+  { id: 81, name: 'สนับขาเหล็ก',  icon: '🦵', type: 'legs', def_bonus: 7, hp_bonus: 18, price: 170, desc: 'สนับขาเหล็กหนักแน่น', lvl: 3 },
+  { id: 82, name: 'สนับขาเงา',    icon: '🌙', type: 'legs', spd_bonus: 4, price: 220, desc: 'สนับขาเบาเหมือนไร้น้ำหนัก', lvl: 4 },
+
+  // เท้า
+  { id: 90, name: 'รองเท้าหนัง',   icon: '🥾', type: 'feet', def_bonus: 2, spd_bonus: 1, price: 35,  desc: 'รองเท้าหนังเดินทางไกล', lvl: 1 },
+  { id: 91, name: 'รองเท้าบู๊ตเหล็ก', icon: '👢', type: 'feet', def_bonus: 4, spd_bonus: 3, price: 150, desc: 'บู๊ตเหล็กหนักแต่ทรงพลัง', lvl: 3 },
+  { id: 92, name: 'รองเท้าเมฆ',    icon: '☁️', type: 'feet', spd_bonus: 6, price: 280, desc: 'เหยียบเมฆได้ ว่องไวกว่าลม', lvl: 5 },
+
+  // เครื่องประดับ (ใส่ได้ 4 ช่อง)
   { id: 30, name: 'แหวนเงิน',     icon: '💍', type: 'accessory', spd_bonus: 2, crit_bonus: 2, price: 60,  desc: 'แหวนเงินเรืองแสง', lvl: 1 },
   { id: 31, name: 'สร้อยเวท',     icon: '📿', type: 'accessory', mp_bonus: 20, price: 100, desc: 'สร้อยที่อัดแน่นด้วยมานา', lvl: 2 },
   { id: 32, name: 'รองเท้าเงา',   icon: '👟', type: 'accessory', spd_bonus: 5, price: 150, desc: 'เดินเบาเหมือนเงา', lvl: 3 },
   { id: 33, name: 'ต่างหูมรกต',   icon: '💚', type: 'accessory', crit_bonus: 8, price: 260, desc: 'มรกตเขียวขจี เพิ่มดวง', lvl: 4 },
+  { id: 34, name: 'เข็มกลัดพลัง',  icon: '📌', type: 'accessory', atk_bonus: 2, price: 90,  desc: 'เข็มกลัดเพิ่มพลังโจมตี', lvl: 2 },
+  { id: 35, name: 'สร้อยมังกร',   icon: '🐉', type: 'accessory', def_bonus: 4, hp_bonus: 15, price: 240, desc: 'สร้อยที่ฝังเกล็ดมังกร', lvl: 4 },
+  { id: 36, name: 'แหวนคริติคอล', icon: '💍', type: 'accessory', crit_bonus: 5, price: 180, desc: 'แหวนแห่งโชคชะตา', lvl: 3 },
+  { id: 37, name: 'เครื่องรางป้องกัน', icon: '🧿', type: 'accessory', def_bonus: 6, price: 300, desc: 'เครื่องรางโบราณกันอาถรรพ์', lvl: 5 },
 
   // ---- ไอเทมพิเศษเฉพาะ Daily Quest (exclusive: true — หาซื้อตามร้านไม่ได้) ----
   { id: 40, name: 'ถุงเงินนำโชค',     icon: '🧧', type: 'consumable', use_gold: 150, price: 80, exclusive: true, desc: '✦ พิเศษ — ใช้แล้วได้ทอง 150 ทันที' },
@@ -155,7 +192,7 @@ export const ACHIEVEMENTS = [
   { id: 'monster_10',  name: 'นักกำจัดมอนสเตอร์', icon: '🐺', stat: 'monsters',  target: 10,   reward: { gold: 50 }, desc: 'กำจัดมอนสเตอร์ 10 ตัว' },
   { id: 'quest_5',     name: 'นักทำภารกิจ',     icon: '📜', stat: 'quests',    target: 5,    reward: { gold: 50 }, desc: 'ทำภารกิจสำเร็จ 5 ครั้ง' },
   { id: 'streak_3',    name: 'คอมโบเริ่มต้น',    icon: '🧵', stat: 'streak',    target: 3,    reward: { gold: 30 }, desc: 'คอมโบโฟกัส 3 session ติดต่อ' },
-  { id: 'equip_all',   name: 'พร้อมรบเต็มยศ',   icon: '🔧', stat: 'equip',     target: 1,    reward: { gold: 50 }, desc: 'สวมอุปกรณ์ครบทั้ง 3 ช่อง' },
+  { id: 'equip_all',   name: 'พร้อมรบเต็มยศ',   icon: '🔧', stat: 'equip',     target: 1,    reward: { gold: 50 }, desc: 'สวมเกราะครบทั้ง 5 ชิ้น (หัว/ตัว/แขน/ขา/เท้า)' },
   { id: 'focus_5h',    name: 'ห้าชั่วโมงแห่งโฟกัส', icon: '⏳', stat: 'focus_sec', target: 18000, reward: { gold: 100 }, desc: 'โฟกัสรวม 5 ชั่วโมง' },
   { id: 'gold_1000',   name: 'เศรษฐีน้อย',      icon: '🏦', stat: 'gold_earned', target: 1000, reward: { gold: 50 }, desc: 'สะสมทองรวม 1,000' },
 

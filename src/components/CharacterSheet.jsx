@@ -71,23 +71,41 @@ export function StatAllocator({ onDone }) {
 }
 
 export default function CharacterSheet() {
-  const { character, inventory, post } = useGame();
+  const { character, inventory, post, showToast } = useGame();
   if (!character) return null;
 
+  const eq = character.equipment || {};
+  const allEq = [eq.weapon, eq.offhand, eq.head, eq.body, eq.arms, eq.legs, eq.feet, ...(eq.accessories || [])].filter(Boolean);
+  const sum = (k) => allEq.reduce((a, i) => a + (i[k] || 0), 0);
   const eqBonus = {
-    maxHp: (character.weapon?.hp_bonus || 0) + (character.armor?.hp_bonus || 0) + (character.accessory?.hp_bonus || 0),
-    maxMp: (character.weapon?.mp_bonus || 0) + (character.armor?.mp_bonus || 0) + (character.accessory?.mp_bonus || 0),
-    atk: (character.weapon?.atk_bonus || 0) + (character.armor?.atk_bonus || 0) + (character.accessory?.atk_bonus || 0),
-    def: (character.weapon?.def_bonus || 0) + (character.armor?.def_bonus || 0) + (character.accessory?.def_bonus || 0),
-    spd: (character.weapon?.spd_bonus || 0) + (character.armor?.spd_bonus || 0) + (character.accessory?.spd_bonus || 0),
-    crit: (character.weapon?.crit_bonus || 0) + (character.armor?.crit_bonus || 0) + (character.accessory?.crit_bonus || 0),
+    maxHp: sum('hp_bonus'),
+    maxMp: sum('mp_bonus'),
+    atk: sum('atk_bonus'),
+    def: sum('def_bonus'),
+    spd: sum('spd_bonus'),
+    crit: sum('crit_bonus'),
   };
 
+  const twoHanded = eq.weapon?.handed === 2;
   const slots = [
-    { label: 'อาวุธ', item: character.weapon, type: 'weapon' },
-    { label: 'เกราะ', item: character.armor, type: 'armor' },
-    { label: 'เครื่องประดับ', item: character.accessory, type: 'accessory' },
+    { label: 'อาวุธ (มือหลัก)', col: 'weapon_id', item: eq.weapon },
+    { label: 'มือรอง (อาวุธ/โล่)', col: 'offhand_id', item: eq.offhand, locked: twoHanded },
+    { label: 'หมวก (หัว)', col: 'head_id', item: eq.head },
+    { label: 'เกราะ (ตัว)', col: 'armor_id', item: eq.body },
+    { label: 'แขน', col: 'arms_id', item: eq.arms },
+    { label: 'ขา', col: 'legs_id', item: eq.legs },
+    { label: 'เท้า', col: 'feet_id', item: eq.feet },
+    { label: 'เครื่องประดับ 1', col: 'accessory_id', item: eq.accessories?.[0] },
+    { label: 'เครื่องประดับ 2', col: 'accessory_2_id', item: eq.accessories?.[1] },
+    { label: 'เครื่องประดับ 3', col: 'accessory_3_id', item: eq.accessories?.[2] },
+    { label: 'เครื่องประดับ 4', col: 'accessory_4_id', item: eq.accessories?.[3] },
   ];
+
+  const unequip = async (s) => {
+    sfx.click();
+    const d = await post('/inventory/unequip', { slot: s.col });
+    if (d) showToast(d.message || 'ถอดแล้ว');
+  };
 
   return (
     <>
@@ -102,28 +120,21 @@ export default function CharacterSheet() {
 
       <Panel title="🔧 อุปกรณ์ที่สวม">
         {slots.map((s) => (
-          <div className="slot-row" key={s.type}>
+          <div className="slot-row" key={s.col}>
             <span className="slot-label">{s.label}</span>
-            {s.item ? (
-              <span className="slot-item">{s.item.icon} {s.item.name}</span>
+            {s.locked ? (
+              <span className="slot-empty">🔒 บล็อก (อาวุธสองมือ)</span>
+            ) : s.item ? (
+              <span className="slot-item">{s.item.icon} {s.item.name}{s.item.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null}</span>
             ) : (
               <span className="slot-empty">— ว่าง —</span>
             )}
-            {s.item && (
-              <button
-                className="btn btn-sm"
-                onClick={async () => {
-                  // ถอดออก: หาไอเทมชนิดเดียวกันในกระเป๋าแล้วสวมแทนไม่ได้ ง่ายสุดคือเก็บไว้
-                  const d = await post('/inventory/equip', { itemId: s.item.id });
-                  if (d) s.item = null;
-                }}
-              >
-                เก็บ
-              </button>
+            {s.item && !s.locked && (
+              <button className="btn btn-sm" onClick={() => unequip(s)}>ถอด</button>
             )}
           </div>
         ))}
-        <p className="hint">💡 สวมไอเทมได้ที่กระเป๋า (ช่วงพักแคมป์)</p>
+        <p className="hint">💡 สวมไอเทมได้ที่กระเป๋า (ช่วงพักแคมป์) — อาวุธสองมือจะปิดช่องมือรอง</p>
       </Panel>
 
       {character.statPoints > 0 && (

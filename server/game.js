@@ -6,9 +6,16 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export const xpToNext = (level) => Math.floor(80 * Math.pow(level, 1.6));
 
+// ช่องสวมใส่ทั้งหมด (RPG: มือหลัก/มือรอง/หัว/ตัว/แขน/ขา/เท้า/เครื่องประดับ x4)
+export const SLOT_COLS = [
+  'weapon_id', 'offhand_id', 'head_id', 'armor_id', 'arms_id', 'legs_id', 'feet_id',
+  'accessory_id', 'accessory_2_id', 'accessory_3_id', 'accessory_4_id',
+];
+
 // คำนวณค่าสถานะแสดงผล = สถานะฐาน/เติบโต + โบนัสจากอุปกรณ์ที่สวม
 export function computeStats(c) {
-  const eq = [c.weapon_id, c.armor_id, c.accessory_id]
+  const eq = SLOT_COLS
+    .map((col) => c[col])
     .filter(Boolean)
     .map((id) => ITEM_BY_ID[id])
     .filter(Boolean);
@@ -24,11 +31,10 @@ export function computeStats(c) {
     ...s,
     hp: clamp(c.hp, 0, s.maxHp),
     mp: clamp(c.mp, 0, s.maxMp),
-    weapon: c.weapon_id ? ITEM_BY_ID[c.weapon_id] : null,
-    armor: c.armor_id ? ITEM_BY_ID[c.armor_id] : null,
-    accessory: c.accessory_id ? ITEM_BY_ID[c.accessory_id] : null,
   };
 }
+
+const itemOf = (id) => (id ? ITEM_BY_ID[id] || null : null);
 
 export function serializeCharacter(c) {
   const cls = CLASSES[c.class];
@@ -47,6 +53,16 @@ export function serializeCharacter(c) {
     statPoints: c.stat_points,
     cityIndex: c.city_index,
     city: CITIES[c.city_index % CITIES.length],
+    equipment: {
+      weapon: itemOf(c.weapon_id),
+      offhand: itemOf(c.offhand_id),
+      head: itemOf(c.head_id),
+      body: itemOf(c.armor_id),
+      arms: itemOf(c.arms_id),
+      legs: itemOf(c.legs_id),
+      feet: itemOf(c.feet_id),
+      accessories: [c.accessory_id, c.accessory_2_id, c.accessory_3_id, c.accessory_4_id].map(itemOf),
+    },
     ...stats,
   };
 }

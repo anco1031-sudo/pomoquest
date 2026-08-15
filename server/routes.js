@@ -8,7 +8,7 @@ import {
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn,
-  rollQuests, resolveQuest,
+  rollQuests, resolveQuest, SLOT_COLS,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -344,25 +344,80 @@ router.post('/inventory/use', (req, res) => {
   });
 });
 
+const SLOT_NAMES = {
+  weapon_id: 'อาวุธ (มือหลัก)', offhand_id: 'มือรอง', head_id: 'หมวก', armor_id: 'เกราะตัว',
+  arms_id: 'แขน', legs_id: 'ขา', feet_id: 'เท้า',
+  accessory_id: 'เครื่องประดับ', accessory_2_id: 'เครื่องประดับ 2', accessory_3_id: 'เครื่องประดับ 3', accessory_4_id: 'เครื่องประดับ 4',
+};
+
+// หาช่องที่จะสวมตามชนิดไอเทม (อาวุธสองมือปิดมือรอง ฯลฯ)
+const pickEquipSlot = (c, item, addItemFn) => {
+  const twoHanded = (id) => !!id && ITEM_BY_ID[id]?.handed === 2;
+
+  if (item.type === 'weapon') {
+    if (item.handed === 2) {
+      // สองมือ → มือหลัก + เคลียร์มือรอง (คืนกระเป๋า)
+      if (c.offhand_id) { addItemFn(c.offhand_id); c.offhand_id = null; }
+      return 'weapon_id';
+    }
+    if (!c.weapon_id) return 'weapon_id';             // มือหลักว่าง → มือหลัก
+    if (twoHanded(c.weapon_id)) {                      // มือหลักถือสองมือ → สลับอาวุธหลัก
+      addItemFn(c.weapon_id);
+      c.weapon_id = null;
+      return 'weapon_id';
+    }
+    return 'offhand_id';                              // มือเดียว → มือรอง (แทนที่ของเดิมถ้ามี)
+  }
+  if (item.type === 'shield') {
+    if (twoHanded(c.weapon_id)) return null;          // ถือสองมือ ใส่โล่ไม่ได้
+    return 'offhand_id';
+  }
+  if (item.type === 'armor') return 'armor_id';
+  if (item.type === 'head') return 'head_id';
+  if (item.type === 'arms') return 'arms_id';
+  if (item.type === 'legs') return 'legs_id';
+  if (item.type === 'feet') return 'feet_id';
+  if (item.type === 'accessory') {
+    return ['accessory_id', 'accessory_2_id', 'accessory_3_id', 'accessory_4_id'].find((s) => !c[s]) || 'accessory_id';
+  }
+  return null;
+};
+
 router.post('/inventory/equip', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const { itemId } = req.body || {};
   const inv = getInventory(c.id).find((i) => i.item_id === itemId);
   if (!inv) return res.status(400).json({ error: 'ไม่มีไอเทมนี้' });
   const item = ITEM_BY_ID[itemId];
-  if (item.type === 'consumable') return res.status(400).json({ error: 'ไอเทมนี้ใช้ไม่ได้กับช่องสวมใส่' });
+  if (!item || item.type === 'consumable') return res.status(400).json({ error: 'ไอเทมนี้ใช้ไม่ได้กับช่องสวมใส่' });
 
-  const slot = item.type === 'weapon' ? 'weapon_id' : item.type === 'armor' ? 'armor_id' : 'accessory_id';
+  const slot = pickEquipSlot(c, item, (id) => addItem(c.id, id, 1));
+  if (!slot) return res.status(400).json({ error: 'ถืออาวุธสองมืออยู่ — ถอดอาวุธออกก่อนถึงจะถือโล่ได้' });
+
+  // ถอดของเก่าในช่องคืนกระเป๋า แล้วใส่ของใหม่
   const oldId = c[slot];
-  // ถอดของเก่าคืนกระเป๋า
   if (oldId) addItem(c.id, oldId, 1);
-  // ใส่ของใหม่
   db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
   c[slot] = itemId;
   updateCharacter(c);
-  addLog(c.id, { type: 'equip', title: '🔧 สวมใส่', detail: `สวม ${item.icon} ${item.name}` });
+  addLog(c.id, { type: 'equip', title: '🔧 สวมใส่', detail: `สวม ${item.icon} ${item.name} (${SLOT_NAMES[slot]})` });
   const ach = checkAchievements(c, getProgress(c.id));
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `สวม ${item.name} เรียบร้อย`, achievements: ach.fresh, levelUps: { levels: ach.ups, statPoints: c.stat_points } });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `สวม ${item.name} (${SLOT_NAMES[slot]})`, achievements: ach.fresh, levelUps: { levels: ach.ups, statPoints: c.stat_points } });
+});
+
+router.post('/inventory/unequip', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { slot } = req.body || {};
+  if (!SLOT_COLS.includes(slot)) return res.status(400).json({ error: 'ช่องสวมใส่ไม่ถูกต้อง' });
+  const id = c[slot];
+  if (!id) return res.status(400).json({ error: 'ช่องนี้ว่างอยู่แล้ว' });
+  const item = ITEM_BY_ID[id];
+  addItem(c.id, id, 1);
+  c[slot] = null;
+  updateCharacter(c);
+  addLog(c.id, { type: 'unequip', title: '📦 ถอดอุปกรณ์', detail: `ถอด ${item?.icon || ''} ${item?.name || 'ไอเทม'} (${SLOT_NAMES[slot]})` });
+  const ach = checkAchievements(c, getProgress(c.id));
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ถอด ${item?.name || 'ไอเทม'} แล้ว`, achievements: ach.fresh, levelUps: { levels: ach.ups, statPoints: c.stat_points } });
 });
 
 router.post('/camp/rest', (req, res) => {
@@ -485,7 +540,7 @@ router.post('/boss/act', (req, res) => {
       bossWin: {
         hp: c.hp,
         pct: (c.hp / stats.maxHp) * 100,
-        noEquip: !c.weapon_id && !c.armor_id && !c.accessory_id,
+        noEquip: !SLOT_COLS.some((col) => c[col]),
         cityIndex: foughtCity,
       },
     });

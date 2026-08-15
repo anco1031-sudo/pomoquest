@@ -61,6 +61,8 @@ export default function CampScreen({ remain, total, running, onSkip }) {
     if (d) showToast(d.message || 'ขายแล้ว');
   };
 
+  const twoHandTag = (i) => (i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null);
+
   const rest = async () => {
     sfx.complete();
     const d = await post('/camp/rest');
@@ -95,7 +97,7 @@ export default function CampScreen({ remain, total, running, onSkip }) {
               <div className="shop-row" key={i.id}>
                 <span className="inv-icon">{i.icon}</span>
                 <div className="inv-info">
-                  <div className="inv-name">{i.name} {i.owned > 0 && <span className="inv-qty">มี {i.owned}</span>}</div>
+                  <div className="inv-name">{i.name} {twoHandTag(i)} {i.owned > 0 && <span className="inv-qty">มี {i.owned}</span>}</div>
                   <div className="inv-desc">{i.desc}</div>
                 </div>
                 <button
@@ -153,7 +155,7 @@ export default function CampScreen({ remain, total, running, onSkip }) {
               <div className="inv-row" key={i.item_id}>
                 <span className="inv-icon">{i.icon}</span>
                 <div className="inv-info">
-                  <div className="inv-name">{i.name} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
+                  <div className="inv-name">{i.name} {twoHandTag(i)} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
                   <div className="inv-desc">{i.desc}</div>
                 </div>
                 <div className="inv-actions">
