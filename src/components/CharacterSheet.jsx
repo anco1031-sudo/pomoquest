@@ -107,6 +107,23 @@ export default function CharacterSheet() {
     if (d) showToast(d.message || 'ถอดแล้ว');
   };
 
+  const useItem = async (i) => {
+    const d = await post('/inventory/use', { itemId: i.item_id });
+    if (d) showToast(d.message || 'ใช้แล้ว');
+  };
+
+  const equipItem = async (i) => {
+    sfx.click();
+    const d = await post('/inventory/equip', { itemId: i.item_id });
+    if (d) showToast(d.message || 'สวมแล้ว');
+  };
+
+  const sellItem = async (i) => {
+    if (!window.confirm(`ขาย ${i.name} x1?`)) return;
+    const d = await post('/shop/sell', { itemId: i.item_id, qty: 1 });
+    if (d) showToast(d.message || 'ขายแล้ว');
+  };
+
   return (
     <>
       <Panel title={`🛡️ ${character.name} · ${character.className} Lv.${character.level}`}>
@@ -151,8 +168,16 @@ export default function CharacterSheet() {
             <div className="inv-row" key={i.item_id}>
               <span className="inv-icon">{i.icon}</span>
               <div className="inv-info">
-                <div className="inv-name">{i.name} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
+                <div className="inv-name">{i.name} {i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
                 <div className="inv-desc">{i.desc}</div>
+              </div>
+              <div className="inv-actions">
+                {i.type === 'consumable' ? (
+                  <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
+                ) : (
+                  <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
+                )}
+                <button className="btn btn-sm btn-danger-soft" onClick={() => sellItem(i)}>ขาย</button>
               </div>
             </div>
           ))
