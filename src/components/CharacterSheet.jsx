@@ -3,10 +3,10 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { Panel, StatRow } from './ui.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
-import { CLASS_WEIGHTS, AUTO_KEYS, gearAdjustedWeights, allocatePoints } from '../alloc.js';
+import { CLASS_WEIGHTS, AUTO_KEYS, gearAdjustedWeights, allocatePoints, equipGoals, allocateWithGoals } from '../alloc.js';
 
 export function StatAllocator({ onDone }) {
-  const { character, post } = useGame();
+  const { character, inventory, post } = useGame();
   const [alloc, setAlloc] = useState({ hp: 0, mp: 0, atk: 0, def: 0, spd: 0 });
   const [busy, setBusy] = useState(false);
   const remaining = character.statPoints - (alloc.hp + alloc.mp + alloc.atk + alloc.def + alloc.spd);
@@ -39,8 +39,17 @@ export function StatAllocator({ onDone }) {
   const weights = gearAdjustedWeights(character.class, gearBonus, base);
   const hasGearAdjust = AUTO_KEYS.some((k) => Math.abs(weights[k] - w[k]) > 0.001);
 
+  // เป้าหมายจากของในกระเป๋า: ไอเทมที่สวมได้ (คลาส/เลเวลผ่าน) แต่ขาด statReq → เติม stat ให้ถึงเกณฑ์ก่อน
+  const curStats = {
+    hp: character.maxHp, mp: character.maxMp, atk: character.atk, def: character.def, spd: character.spd,
+  };
+  const { goals, items: goalItems } = equipGoals(character.class, character.level, curStats, inventory || []);
+  const goalHint = goalItems.length
+    ? `🎯 เป้าหมาย: ${goalItems.map((g) => `${g.icon} ${g.name} (${Object.entries(g.missing).map(([k, v]) => `${k.toUpperCase()} +${v}`).join(', ')})`).join(' · ')}`
+    : null;
+
   const auto = () => {
-    setAlloc(allocatePoints(character.statPoints, weights));
+    setAlloc(allocateWithGoals(character.statPoints, weights, goals, curStats));
     sfx.click();
   };
 
@@ -68,7 +77,7 @@ export function StatAllocator({ onDone }) {
         <span>🪙 แต้มสถานะคงเหลือ: <b>{remaining}</b></span>
         <button className="btn btn-sm" onClick={auto} title={`เน้นตามคลาส: ${priorityHint}`}>✨ จัดอัตโนมัติ (ตามคลาส)</button>
       </div>
-      <div className="alloc-hint">🎯 {character.className} ควรเน้น: <b>{priorityHint}</b> — จัดอัตโนมัติกระจายตามสัดส่วนนี้{hasGearAdjust ? ' · 🔧 ปรับตามอุปกรณ์ที่สวม (เติม stat ที่ขาด)' : ''}</div>
+      <div className="alloc-hint">🎯 {character.className} ควรเน้น: <b>{priorityHint}</b> — จัดอัตโนมัติกระจายตามสัดส่วนนี้{hasGearAdjust ? ' · 🔧 ปรับตามอุปกรณ์ที่สวม' : ''}{goalHint ? ` · ${goalHint}` : ''}</div>
       {rows.map((r) => (
         <div className="alloc-row" key={r.k}>
           <span className="alloc-label">{r.label}</span>

@@ -175,6 +175,26 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   const plain = allocatePoints(25, CLASS_WEIGHTS.warrior);
   const geared = allocatePoints(25, wAdj);
   expect('alloc: เกียร์ ATK → แต้ม ATK น้อยลง ไป DEF แทน', geared.atk <= plain.atk && geared.def >= plain.def, `plain=${JSON.stringify(plain)} gear=${JSON.stringify(geared)}`);
+
+  // --- alloc แบบมีเป้าหมาย: เติม stat ให้ถึงเกณฑ์สวมของในกระเป๋า (equipGoals + allocateWithGoals) ---
+  const { equipGoals, allocateWithGoals } = await import('../src/alloc.js');
+  const stats = { hp: 120, mp: 20, atk: 14, def: 10, spd: 8 };
+  const items = [
+    { type: 'weapon', classReq: ['warrior'], lvl: 1, statReq: { atk: 20 }, name: 'ดาบเป้าหมาย', icon: '🗡️' },
+    { type: 'armor', classReq: ['mage'], lvl: 1, statReq: { def: 12 }, name: 'ของคลาสอื่น', icon: '🛡️' },   // คลาสไม่ตรง → ไม่ใช่เป้าหมาย
+    { type: 'armor', classReq: ['warrior'], lvl: 99, statReq: { def: 12 }, name: 'เลเวลยังไม่ถึง', icon: '🛡️' }, // เลเวลไม่พอ → ไม่ใช่เป้าหมาย
+    { type: 'consumable', statReq: { atk: 99 }, name: 'ของใช้', icon: '🧪' },                                  // ไม่ใช่อุปกรณ์ → ไม่ใช่เป้าหมาย
+  ];
+  const g = equipGoals('warrior', 5, stats, items);
+  expect('equipGoals: เจอเป้าหมายเฉพาะของที่สวมได้แต่ขาด stat (ATK 20)', JSON.stringify(g.goals) === '{"atk":20}', JSON.stringify(g.goals));
+  expect('equipGoals: กรองคลาสอื่น/เลเวลไม่พอ/ของใช้ออก', g.items.length === 1, `items=${g.items.length}`);
+  const withGoal = allocateWithGoals(10, CLASS_WEIGHTS.warrior, g.goals, stats);
+  expect('allocateWithGoals: เติม ATK ให้ถึง 20 ก่อน (6 แต้ม)', withGoal.atk >= 6 && stats.atk + withGoal.atk >= 20, JSON.stringify(withGoal));
+  expect('allocateWithGoals: แจกครบจำนวน', sum(withGoal) === 10, JSON.stringify(withGoal));
+  const noGoal = allocateWithGoals(10, CLASS_WEIGHTS.warrior, {}, stats);
+  expect('allocateWithGoals: ไม่มีเป้าหมาย = เหมือน allocatePoints', JSON.stringify(noGoal) === JSON.stringify(allocatePoints(10, CLASS_WEIGHTS.warrior)), JSON.stringify(noGoal));
+  const small = allocateWithGoals(3, CLASS_WEIGHTS.warrior, { atk: 20 }, { ...stats, atk: 14 });
+  expect('allocateWithGoals: แต้มไม่พอ → เอาไปเติมเป้าหมายที่ใกล้ที่สุดก่อน', small.atk === 3, JSON.stringify(small));
 }
 
 // --- ทุก event ต้องมี title/flavor/detail สำหรับแสดงผล ---

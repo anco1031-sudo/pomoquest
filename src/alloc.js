@@ -19,6 +19,52 @@ export function gearAdjustedWeights(cls, gearBonus, base) {
   return adj;
 }
 
+// เป้าหมายจากของในกระเป๋า: ไอเทมที่สวมได้อยู่แล้ว (คลาส/เลเวลผ่าน) แต่ขาด statReq
+// stats = ค่าสถานะรวมปัจจุบัน (base + เกียร์) · items = ไอเทมในกระเป๋า
+// คืน { goals: { atk: 15 }, items: [{ icon, name, missing }] } — goals ใช้จัดสรร, items ใช้แสดงผล
+export function equipGoals(cls, level, stats, items) {
+  const goals = {};
+  const goalItems = [];
+  for (const i of items || []) {
+    if (!i || i.type === 'consumable' || i.type === 'junk' || i.type === 'scroll') continue;
+    if (i.classReq && !i.classReq.includes(cls)) continue; // คลาสอื่น — ยังไงก็สวมไม่ได้ (alloc stat ไม่ช่วย)
+    if ((i.lvl || 1) > level) continue; // เลเวลไม่พอ — stat เต็มแค่ไหนก็สวมไม่ได้
+    const missing = {};
+    for (const [k, v] of Object.entries(i.statReq || {})) {
+      const need = v - (stats[k] || 0);
+      if (need > 0) missing[k] = need;
+    }
+    if (!Object.keys(missing).length) continue;
+    for (const [k, need] of Object.entries(missing)) goals[k] = Math.max(goals[k] || 0, (stats[k] || 0) + need);
+    goalItems.push({ icon: i.icon, name: i.name, missing });
+  }
+  return { goals, items: goalItems };
+}
+
+// จัดสรรแต้มแบบมีเป้าหมาย: เติม stat ที่ขาดเพื่อสวมของในกระเป๋าก่อน (เรียงเป้าหมายที่ใกล้ที่สุดก่อน —
+// ใช้แต้มน้อยสุดก่อน), แล้วค่อยกระจายแต้มที่เหลือตามน้ำหนัก (คลาส + เกียร์) — ถ้าไม่มีเป้าหมาย = เหมือนเดิม
+export function allocateWithGoals(total, weights, goals, stats) {
+  const out = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 };
+  if (total <= 0) return out;
+  let remaining = total;
+  const cur = { ...stats };
+  const list = Object.entries(goals || {})
+    .map(([k, v]) => ({ k, need: Math.max(0, v - (cur[k] || 0)) }))
+    .filter((g) => g.need > 0)
+    .sort((a, b) => a.need - b.need);
+  for (const g of list) {
+    const give = Math.min(g.need, remaining);
+    out[g.k] += give;
+    cur[g.k] += give;
+    remaining -= give;
+  }
+  if (remaining > 0) {
+    const rest = allocatePoints(remaining, weights);
+    for (const k of AUTO_KEYS) out[k] += rest[k];
+  }
+  return out;
+}
+
 // แจกแต้มตามน้ำหนัก — สัดส่วนพอดี + เศษที่เหลือให้ stat ที่เศษมากที่สุด (ถ้าเสมอกันให้ตัวที่น้ำหนักสูงกว่า)
 export function allocatePoints(total, weights) {
   const out = { hp: 0, mp: 0, atk: 0, def: 0, spd: 0 };
