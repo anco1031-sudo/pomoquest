@@ -193,6 +193,8 @@ ensureColumn('log', 'mp_change', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'session_key', 'TEXT');
 // เมืองที่ผจญภัยใน session (สำหรับหน้า session summary) — ใช้กรองเมืองในหน้าประวัติ session
 ensureColumn('log', 'city', 'TEXT');
+// โหมดท้าทายที่เล่นตอนนั้น (หน้า session summary — โชว์ badge ย้อนหลัง แม้เปลี่ยนโหมดไปแล้ว)
+ensureColumn('log', 'challenge_mode', "TEXT DEFAULT ''");
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
 // ตลาดมืด (black market) — สินค้าที่ขายในค่ายพักนี้ ระบุแหล่งที่มา ('camp' = ร้านปกติ, 'black' = ตลาดมืด)
 ensureColumn('camp_shop', 'market', "TEXT DEFAULT 'camp'");
@@ -307,10 +309,10 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null }) {
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '' }) {
   // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
-  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, hp_change, mp_change, session_key, city, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, hpChange, mpChange, sessionKey, city).lastInsertRowid;
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, hp_change, mp_change, session_key, city, challenge_mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, hpChange, mpChange, sessionKey, city, challengeMode).lastInsertRowid;
 }
 
 // ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----
@@ -343,6 +345,6 @@ export const updateCharacter = (c) => {
     weapon_id=@weapon_id, offhand_id=@offhand_id, head_id=@head_id, armor_id=@armor_id,
     arms_id=@arms_id, legs_id=@legs_id, feet_id=@feet_id,
     accessory_id=@accessory_id, accessory_2_id=@accessory_2_id, accessory_3_id=@accessory_3_id, accessory_4_id=@accessory_4_id,
-    city_index=@city_index
+    city_index=@city_index, challenge_mode=@challenge_mode
     WHERE id=@id`).run(c);
 };

@@ -111,6 +111,7 @@ try {
   // --- /session-history ---
   r = await api('/session-history');
   expect('session-history: คืน session ที่จบไป (มี session_key)', r.status === 200 && r.json.sessions?.length === 1 && r.json.sessions[0].session_key === 'api-test-key');
+  expect('session-history: session มี challenge_mode (ตอนนั้นเล่นโหมดอะไร)', r.status === 200 && r.json.sessions[0].challenge_mode === '', JSON.stringify(r.json.sessions[0]?.challenge_mode));
 
   // --- /weekly-summary ---
   r = await api('/weekly-summary');

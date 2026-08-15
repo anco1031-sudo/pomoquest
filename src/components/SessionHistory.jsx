@@ -82,7 +82,12 @@ export default function SessionHistory() {
             return (
               <div className={`session-card ${open ? 'open' : ''}`} key={s.id}>
                 <button className="session-card-head" onClick={() => setOpenId(open ? null : s.id)}>
-                  <span className="session-card-title">📋 {s.title}</span>
+                  <span className="session-card-title">
+                    📋 {s.title}
+                    {s.challenge_mode === 'hard' && <span className="challenge-badge">⚔️ โหมดโหด</span>}
+                    {s.challenge_mode === 'marathon' && <span className="challenge-badge">⏱️ มาราธอน</span>}
+                    {s.challenge_mode === 'survival' && <span className="challenge-badge">🩸 เอาชีวิตรอด</span>}
+                  </span>
                   <span className="session-card-date">{fmtSessionDate(s.created_at)}</span>
                   <span className="session-card-toggle">{open ? '▾' : '▸'}</span>
                 </button>

@@ -40,6 +40,7 @@ const charBrief = (c) => ({
   classIcon: CLASSES[c.class]?.icon || '❓', className: CLASSES[c.class]?.name || c.class,
   level: c.level, xp: c.xp, gold: c.gold,
   city: CITIES[c.city_index % CITIES.length],
+  challengeMode: c.challenge_mode || '',
   createdAt: c.created_at,
 });
 
@@ -311,6 +312,7 @@ router.post('/adventure/complete', (req, res) => {
       xp: sXp, gold: sGold,
       sessionKey,
       city: sessCity.name,
+      challengeMode: c.challenge_mode || '',
     });
   }
 

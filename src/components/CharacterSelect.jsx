@@ -56,6 +56,9 @@ export default function CharacterSelect({ standalone = false, onClose, onDone })
             <div className="char-name">
               {c.name}
               {c.id === activeCharacterId && <span className="char-current">กำลังเล่น</span>}
+              {c.challengeMode === 'hard' && <span className="challenge-badge">⚔️ โหมดโหด</span>}
+              {c.challengeMode === 'marathon' && <span className="challenge-badge">⏱️ มาราธอน</span>}
+              {c.challengeMode === 'survival' && <span className="challenge-badge">🩸 เอาชีวิตรอด</span>}
             </div>
             <div className="char-sub">{c.className} · Lv.{c.level} · {c.city.icon} {c.city.name}</div>
             <div className="char-sub">💰 {c.gold} ทอง</div>
