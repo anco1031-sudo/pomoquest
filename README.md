@@ -44,6 +44,9 @@ PomoQuest ผสม **เทคนิค Pomodoro** เข้ากับ **เ�
 ./run.sh prod       # build + รัน production ที่ http://localhost:3001
 ./run.sh start      # รัน production แบบ background (log: /tmp/pomoquest.log)
 ./run.sh stop       # หยุด server
+./run.sh reset      # RESET เกม: หยุด server → ลบฐานข้อมูล → รันใหม่ (พิมพ์ reset ยืนยัน, -y ข้าม)
+./run.sh backup     # สำรองฐานข้อมูลไปที่ backups/ (snapshot สม่ำเสมอ — server รันอยู่ได้)
+./run.sh restore    # กู้คืนจาก backup (./run.sh restore backups/xxx.db) — พิมพ์ restore ยืนยัน
 ./run.sh status     # ดูสถานะ server + LLM
 ./run.sh llm        # เช็คว่า LLM ที่ localhost:8080 พร้อมใช้ไหม
 ```

@@ -8,6 +8,8 @@
 #   ./run.sh start      # รัน production แบบ background (daemon) — log ที่ /tmp/pomoquest.log
 #   ./run.sh stop       # หยุด server ที่รันอยู่
 #   ./run.sh reset      # RESET เกม: หยุด server → ลบฐานข้อมูล → รันใหม่ (ต้องพิมพ์ reset ยืนยัน, ใช้ -y ข้าม)
+#   ./run.sh backup     # สำรองฐานข้อมูลไปที่ backups/ (snapshot ตอนนี้ — server รันอยู่ได้)
+#   ./run.sh restore    # กู้คืนจาก backup (เลือกไฟล์ หรือ ./run.sh restore backups/xxx.db) — ต้องยืนยัน
 #   ./run.sh status     # ดูสถานะ: server / LLM ที่ port 8080
 #   ./run.sh llm        # เช็คว่า LLM (localhost:8080) พร้อมใช้งานไหม
 #   ./run.sh help       # ดูวิธีใช้
@@ -71,6 +73,36 @@ case "${1:-dev}" in
     else
       echo "ℹ️  ไม่มี server รันอยู่"
     fi
+    ;;
+  backup)
+    mkdir -p backups
+    dest="backups/pomoquest-$(date +%Y%m%d-%H%M%S).db"
+    node scripts/backup-db.mjs backup "$dest"
+    echo "   ดูไฟล์: ls backups/"
+    ;;
+  restore)
+    src="${2:-}"
+    if [[ -z "$src" ]]; then
+      echo "📂 backup ที่มี (ล่าสุด 10):"
+      ls -1t backups/*.db 2>/dev/null | head -10 || echo "   (ยังไม่มี backup — ใช้ ./run.sh backup ก่อน)"
+      echo "วิธีใช้: ./run.sh restore backups/pomoquest-xxxxxxxx.db"
+      exit 1
+    fi
+    [[ -f "$src" ]] || { echo "❌ ไม่พบไฟล์: $src" >&2; exit 1; }
+    echo "⚠️  จะแทนที่ข้อมูลปัจจุบันด้วย $src — ข้อมูลที่ไม่ได้ backup จะหาย!"
+    if [[ "${3:-}" != "-y" && "${3:-}" != "--yes" ]]; then
+      read -r -p "พิมพ์ 'restore' เพื่อยืนยัน: " confirm
+      [[ "$confirm" == "restore" ]] || { echo "🚫 ยกเลิก"; exit 1; }
+    fi
+    echo "🛑 หยุด server…"
+    pkill -f "node server/index.js" 2>/dev/null || true
+    sleep 1
+    echo "♻️  กู้คืนจาก $src …"
+    node scripts/backup-db.mjs restore "$src"
+    echo "🔨 build + รันใหม่แบบ background…"
+    npm run build
+    nohup npm start > /tmp/pomoquest.log 2>&1 &
+    echo "✅ restore เสร็จ: http://localhost:${API_PORT}  (log: /tmp/pomoquest.log)"
     ;;
   reset)
     echo "⚠️  RESET เกมทั้งหมด: จะลบตัวละคร/ไอเทม/ประวัติ session ทั้งหมด — กู้คืนไม่ได้!"
