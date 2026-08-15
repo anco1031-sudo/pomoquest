@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, setMuted, isMuted } from '../sound.js';
-import { Bar, Panel, fmtDuration } from './ui.jsx';
+import { Bar, Panel, fmtDuration, fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
 import AchievementList from './AchievementList.jsx';
 import StatsScreen from './StatsScreen.jsx';
 import DailyQuests from './DailyQuests.jsx';
+import DevPanel from './DevPanel.jsx';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
@@ -17,10 +18,11 @@ const TABS = [
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
-export default function HomeScreen({ onStart, onManageCharacters }) {
+export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, onManageCharacters }) {
   const { character, progress, settings, achievements, put, refresh, showToast, post, cities } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
+  const [showDev, setShowDev] = useState(false);
 
   if (!character) return null;
   const city = character.city;
@@ -45,6 +47,7 @@ export default function HomeScreen({ onStart, onManageCharacters }) {
         <div className="logo">🍅⚔️ PomoQuest</div>
         <div className="topbar-right">
           <span className="gold-chip">💰 {character.gold}</span>
+          <button className="icon-btn" onClick={() => setShowDev(true)} title="Dev Test Panel">🧪</button>
           <button className="icon-btn" onClick={onManageCharacters} title="จัดการตัวละคร">👥</button>
           <button className="icon-btn" onClick={toggleMute} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}>
             {muted ? '🔇' : '🔊'}
@@ -94,8 +97,16 @@ export default function HomeScreen({ onStart, onManageCharacters }) {
               <p className="panel-text">
                 เมืองนี้ยังมีเรื่องราวรอคุณอยู่… กดเริ่มผจญภัยเพื่อโฟกัสงาน แล้วตัวละครของคุณจะออกเดินทาง!
               </p>
-              <button className="btn btn-primary btn-big" onClick={onStart}>
-                ⚔️ เริ่มผจญภัย (โฟกัส {settings.work_min} นาที)
+              {hasPausedSession && onContinue && (
+                <>
+                  <p className="paused-note">⏸️ มี session ที่พักไว้อยู่ — กดต่อเพื่อกลับไปโฟกัสต่อ</p>
+                  <button className="btn btn-continue btn-big" onClick={onContinue}>
+                    ▶️ ต่อ session ต่อ (เหลือ {fmtTime(pausedRemain)})
+                  </button>
+                </>
+              )}
+              <button className="btn btn-primary btn-big" onClick={onStart} style={hasPausedSession ? { marginTop: 10 } : undefined}>
+                {hasPausedSession ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)' : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
               </button>
             </Panel>
 
@@ -170,7 +181,6 @@ export default function HomeScreen({ onStart, onManageCharacters }) {
               { key: 'short_break_min', label: '☕ พักสั้น (นาที)', min: 1, max: 30, val: settings.short_break_min },
               { key: 'long_break_min', label: '🏕️ พักยาว (นาที)', min: 1, max: 60, val: settings.long_break_min },
               { key: 'sessions_per_cycle', label: '🔁 sessions ต่อรอบ (ก่อนสู้บอส)', min: 1, max: 8, val: settings.sessions_per_cycle },
-              { key: 'event_every_sec', label: '🎲 เหตุการณ์ทุก (วินาที)', min: 30, max: 600, val: settings.event_every_sec },
             ].map((s) => (
               <div className="setting-row" key={s.key}>
                 <label>{s.label}</label>
@@ -192,6 +202,8 @@ export default function HomeScreen({ onStart, onManageCharacters }) {
           </div>
         )}
       </main>
+
+      {showDev && <DevPanel onClose={() => setShowDev(false)} />}
     </div>
   );
 }

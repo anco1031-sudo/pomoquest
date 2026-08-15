@@ -12,11 +12,12 @@ const TABS = [
   { key: 'char', label: 'ตัวละคร', icon: '🛡️' },
 ];
 
-export default function CampScreen({ remain, total, running, onSkip, visit }) {
+export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, visit }) {
   const { character, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
   const [shop, setShop] = useState([]);
   const [quests, setQuests] = useState([]);
+  const [sellPrices, setSellPrices] = useState({}); // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น)
   const [doneQuests, setDoneQuests] = useState({});
   const [questResults, setQuestResults] = useState({});
 
@@ -26,6 +27,7 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
       if (d) {
         setShop(d.shop || []);
         setQuests(d.quests || []);
+        setSellPrices(d.sellPrices || {});
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,8 +63,9 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
   };
 
   const sellItem = async (i) => {
-    if (!window.confirm(`ขาย ${i.name} x1?`)) return;
-    const d = await post('/shop/sell', { itemId: i.item_id, qty: 1 });
+    const sp = sellPrices[i.item_id] || {};
+    if (!window.confirm(`ขาย ${i.name} x1?${sp.wanted ? ' (พ่อค้าต้องการของชิ้นนี้ — ขายได้แพง!)' : ''}`)) return;
+    const d = await post('/shop/sell', { itemId: i.item_id, qty: 1, visit });
     if (d) showToast(d.message || 'ขายแล้ว');
   };
 
@@ -81,10 +84,22 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
       <header className="camp-header">
         <div>
           <div className="timer-title">🔥 ค่ายพัก</div>
-          <div className="camp-sub">พักผ่อน เตรียมตัว เตรียมใจ ⏳ {fmtTime(remain)}</div>
+          <div className="camp-sub">
+            {breakOver
+              ? `⏰ เลยเวลาพัก ${fmtTime(overrun)} — กด "เริ่มโฟกัส" เมื่อพร้อม`
+              : `พักผ่อน เตรียมตัว เตรียมใจ ⏳ ${fmtTime(remain)}`}
+          </div>
         </div>
         <button className="btn btn-sm" onClick={onSkip}>จบพักเร็ว ⏩</button>
       </header>
+
+      {/* สถานะตัวละครระหว่างพัก */}
+      <div className="camp-vitals">
+        <div className="hp-row"><span>❤️ HP</span><span>{character.hp}/{character.maxHp}</span></div>
+        <div className="hp-bar"><div className="hp-fill hp-color" style={{ width: `${(character.hp / character.maxHp) * 100}%` }} /></div>
+        <div className="hp-row"><span>💧 MP</span><span>{character.mp}/{character.maxMp}</span></div>
+        <div className="hp-bar"><div className="hp-fill mp-color" style={{ width: `${(character.mp / character.maxMp) * 100}%` }} /></div>
+      </div>
 
       <div className="tabs">
         {TABS.map((t) => (
@@ -102,7 +117,10 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
               <div className="shop-row" key={i.id}>
                 <span className="inv-icon">{i.icon}</span>
                 <div className="inv-info">
-                  <div className="inv-name">{i.name} {twoHandTag(i)}</div>
+                  <div className="inv-name">
+                    {i.name} {twoHandTag(i)}
+                    {i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
+                  </div>
                   <ItemStatChips item={i} />
                   <div className="inv-desc">{i.desc}</div>
                 </div>
@@ -120,7 +138,7 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
               </div>
             ))}
           </div>
-          <p className="hint">ทองของคุณ: 💰 {character.gold} — สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
+          <p className="hint">ทองของคุณ: 💰 {character.gold} — ราคาตามตลาดวันนี้ (🔥 ขึ้น / 🏷️ ลด) สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
         </div>
       )}
 
@@ -161,25 +179,39 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
           {inventory.length === 0 ? (
             <p className="hint">กระเป๋าว่างเปล่า — ไปหา treasure กัน!</p>
           ) : (
-            inventory.map((i) => (
-              <div className="inv-row" key={i.item_id}>
-                <span className="inv-icon">{i.icon}</span>
-                <div className="inv-info">
-                  <div className="inv-name">{i.name} {twoHandTag(i)} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
-                  <ItemStatChips item={i} />
-                  <div className="inv-desc">{i.desc}</div>
+            inventory.map((i) => {
+              const sp = sellPrices[i.item_id] || {};
+              return (
+                <div className="inv-row" key={i.item_id}>
+                  <span className="inv-icon">{i.icon}</span>
+                  <div className="inv-info">
+                    <div className="inv-name">
+                      {i.name} {twoHandTag(i)} <span className="inv-qty">x{i.qty}</span>
+                      {i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}
+                      {sp.wanted ? <span className="wanted-tag">🔥 พ่อค้าต้องการ!</span> : null}
+                    </div>
+                    <ItemStatChips item={i} />
+                    <div className="inv-desc">{i.desc}</div>
+                  </div>
+                  <div className="inv-actions">
+                    {i.type === 'consumable' ? (
+                      <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
+                    ) : i.type === 'scroll' ? (
+                      <span className="junk-note">📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)</span>
+                    ) : i.type === 'junk' ? null : (
+                      <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
+                    )}
+                    {i.type !== 'scroll' && (
+                      <button className={`btn btn-sm ${sp.wanted ? 'btn-wanted' : 'btn-danger-soft'}`} onClick={() => sellItem(i)}>
+                        💰 {sp.price ?? Math.round(i.price * 0.5)}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="inv-actions">
-                  {i.type === 'consumable' ? (
-                    <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
-                  ) : (
-                    <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
-                  )}
-                  <button className="btn btn-sm btn-danger-soft" onClick={() => sellItem(i)}>ขาย</button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
+          <p className="hint">ราคาขายเป็นราคาที่พ่อค้าแคมป์นี้รับซื้อ — ของที่พ่อค้า "ต้องการ" (🔥) ขายได้แพงขึ้น</p>
         </div>
       )}
 

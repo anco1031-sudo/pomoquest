@@ -146,6 +146,15 @@ CREATE TABLE IF NOT EXISTS camp_shop (
   qty INTEGER DEFAULT 0,
   PRIMARY KEY (character_id, visit, item_id)
 );
+
+CREATE TABLE IF NOT EXISTS character_skill (
+  character_id INTEGER NOT NULL,
+  skill_id TEXT NOT NULL,
+  level INTEGER DEFAULT 1,
+  xp INTEGER DEFAULT 0,
+  source TEXT DEFAULT 'class',
+  PRIMARY KEY (character_id, skill_id)
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)
@@ -160,8 +169,16 @@ ensureColumn('progress', 'boss_potions', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'shrines', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'traps', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'merchant_gifts', 'INTEGER DEFAULT 0');
+// สถิติการพักเบรก (พักนานแค่ไหน / เลยเวลา / ต่อเวลากี่ครั้ง)
+ensureColumn('progress', 'break_sec', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'break_overrun_sec', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'break_extended', 'INTEGER DEFAULT 0');
+// ขายของให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
+ensureColumn('progress', 'wanted_sales', 'INTEGER DEFAULT 0');
 ensureColumn('settings', 'active_character_id', 'INTEGER');
 ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
+ensureColumn('log', 'break_sec', 'INTEGER DEFAULT 0');
+ensureColumn('log', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
 // ช่องสวมใส่ใหม่ (ระบบ RPG — กัน DB เก่าใช้งานได้)
 ensureColumn('character', 'offhand_id', 'INTEGER');
@@ -179,9 +196,10 @@ ensureColumn('item', 'exclusive', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'use_xp', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'use_gold', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'handed', 'INTEGER DEFAULT 1');
+ensureColumn('item', 'learn_skill', 'TEXT');
 
-const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, handed, exclusive)
-  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @handed, @exclusive)`);
+const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, handed, exclusive, learn_skill)
+  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @handed, @exclusive, @learn_skill)`);
 const seedItems = db.transaction(() => {
   for (const i of ITEMS) {
     insertItem.run({
@@ -192,6 +210,7 @@ const seedItems = db.transaction(() => {
       heal_pct: i.heal_pct || 0, mana_pct: i.mana_pct || 0,
       use_xp: i.use_xp || 0, use_gold: i.use_gold || 0,
       price: i.price || 0, lvl: i.lvl || 1, handed: i.handed || 1, exclusive: i.exclusive ? 1 : 0,
+      learn_skill: i.learn_skill || null,
     });
   }
 });
@@ -245,6 +264,7 @@ export const deleteCharacter = (id) => {
   db.prepare('DELETE FROM progress WHERE character_id = ?').run(id);
   db.prepare('DELETE FROM log WHERE character_id = ?').run(id);
   db.prepare('DELETE FROM achievement_unlock WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM character_skill WHERE character_id = ?').run(id);
   db.prepare('DELETE FROM character WHERE id = ?').run(id);
 };
 
@@ -257,7 +277,7 @@ export const getSettings = () => db.prepare('SELECT * FROM settings WHERE id = 1
 export const getInventory = (charId) => db.prepare(`
   SELECT inv.item_id, inv.qty, item.name, item.icon, item.type, item.price, item.heal_pct, item.mana_pct,
          item.hp_bonus, item.mp_bonus, item.atk_bonus, item.def_bonus, item.spd_bonus, item.crit_bonus, item.desc,
-         item.use_xp, item.use_gold, item.exclusive, item.handed
+         item.use_xp, item.use_gold, item.exclusive, item.handed, item.learn_skill
   FROM inventory inv JOIN item ON item.id = inv.item_id
   WHERE inv.character_id = ? AND inv.qty > 0
   ORDER BY item.type, item.id`).all(charId);
@@ -265,11 +285,30 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0 }) {
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0 }) {
   // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
-  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec).lastInsertRowid;
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec).lastInsertRowid;
 }
+
+// ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----
+export const getSkillRows = (charId) =>
+  db.prepare('SELECT skill_id, level, xp, source FROM character_skill WHERE character_id = ?').all(charId);
+
+export const getSkillRow = (charId, skillId) =>
+  db.prepare('SELECT skill_id, level, xp, source FROM character_skill WHERE character_id = ? AND skill_id = ?').get(charId, skillId);
+
+// upsert: บันทึกเลเวล/XP ของสกิล (คลาสเริ่ม level 1 ไม่มีแถว — มีแถวเมื่อเริ่มสะสม XP)
+export const upsertSkillRow = (charId, skillId, level, xp, source = 'class') => {
+  db.prepare(`INSERT INTO character_skill (character_id, skill_id, level, xp, source) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(character_id, skill_id) DO UPDATE SET level = excluded.level, xp = excluded.xp`)
+    .run(charId, skillId, level, xp, source);
+};
+
+// เรียนรู้สกิลใหม่จากคัมภีร์ — ถ้าอยู่แล้วไม่ทำอะไร (คืน 0) / ใหม่คืน 1
+export const learnSkill = (charId, skillId, source = 'scroll') =>
+  db.prepare('INSERT OR IGNORE INTO character_skill (character_id, skill_id, level, xp, source) VALUES (?, ?, 1, 0, ?)')
+    .run(charId, skillId, source).changes;
 
 export const addItem = (charId, itemId, qty = 1) => {
   db.prepare(`INSERT INTO inventory (character_id, item_id, qty) VALUES (?, ?, ?)

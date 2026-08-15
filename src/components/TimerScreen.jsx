@@ -1,7 +1,7 @@
 import { useGame } from '../context.jsx';
 import { fmtTime } from './ui.jsx';
 
-export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, sessionEvents = [] }) {
+export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [] }) {
   const { character } = useGame();
   if (!character) return null;
   const city = character.city;
@@ -44,6 +44,7 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
         <button className="btn btn-primary btn-big" onClick={running ? onPause : onResume}>
           {running ? '⏸️ หยุดพัก' : '▶️ โฟกัสต่อ'}
         </button>
+        <button className="btn" onClick={onHome}>🏠 กลับหน้าหลัก (พักไว้)</button>
         <button className="btn btn-danger" onClick={onAbort}>💨 ทิ้งเซสชัน</button>
       </div>
 

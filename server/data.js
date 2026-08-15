@@ -23,13 +23,57 @@ export const CLASSES = {
   },
 };
 
-// item.type: 'consumable' | 'weapon' | 'shield' | 'armor' | 'head' | 'arms' | 'legs' | 'feet' | 'accessory'
+// ----- สกิลของแต่ละคลาส (ใช้ตอนสู้บอส + มีโอกาสเล็กน้อยใช้ใน event อัตโนมัติ) -----
+// mp = มานาที่ใช้, dmg = ตัวคูณพลังโจมตี, healPct = ฟื้น HP %ของพลังสูงสุด
+// critChance/critMult = โอกาส/ตัวคูณคริติคอลของสกิล, freeze = โอกาสแช่แข็งบอส (ข้ามเทิร์น)
+// poison = %HP ที่บอสเสียต่อเทิร์น (2 เทิร์น), hits = โจมตีกี่ครั้ง, buffAtk = โจมตีเทิร์นหน้า x?, mpHeal = ฟื้น MP
+export const SKILLS = {
+  warrior: [
+    { id: 'ws_power', name: 'ฟันแหลก',     icon: '⚔️', desc: 'โจมตี x1.8 (คริติคอลได้)',              mp: 6,  dmg: 1.8 },
+    { id: 'ws_guard', name: 'เกราะเหล็ก',   icon: '🛡️', desc: 'ฟื้น HP 25% ของพลังสูงสุด',            mp: 10, healPct: 0.25 },
+    { id: 'ws_fury',  name: 'คลั่งอาฆาต',   icon: '💥', desc: 'โจมตี x2.5 แต่แลกด้วย MP ที่สูงมาก',  mp: 18, dmg: 2.5 },
+  ],
+  mage: [
+    { id: 'mg_fire',  name: 'ลูกไฟ',        icon: '🔥', desc: 'โจมตี x2.0',                          mp: 8,  dmg: 2.0 },
+    { id: 'mg_frost', name: 'น้ำแข็งแหลม',  icon: '❄️', desc: 'โจมตี x1.5 + 30% แช่แข็งบอส (ข้ามเทิร์น)', mp: 12, dmg: 1.5, freeze: 0.3 },
+    { id: 'mg_bolt',  name: 'สายฟ้าพิภพ',   icon: '⚡', desc: 'โจมตี x2.8 MP สูงมาก',                 mp: 22, dmg: 2.8 },
+  ],
+  rogue: [
+    { id: 'rg_back',  name: 'แทงลับ',       icon: '🗡️', desc: 'โจมตี x1.6 + คริติคอล 50% (x2.5)',   mp: 8,  dmg: 1.6, critChance: 0.5, critMult: 2.5 },
+    { id: 'rg_poison', name: 'ยาพิษ',       icon: '☠️', desc: 'บอสเสีย 8% HP ต่อเทิร์น (2 เทิร์น)',   mp: 14, poison: 0.08 },
+    { id: 'rg_dance', name: 'วายุระบำ',     icon: '🌪️', desc: 'โจมตี 3 ครั้ง ครั้งละ x0.7',          mp: 16, hits: 3, dmg: 0.7 },
+  ],
+  cleric: [
+    { id: 'cl_heal',  name: 'ฟื้นพลัง',      icon: '✨', desc: 'ฟื้น HP 35% ของพลังสูงสุด',            mp: 10, healPct: 0.35 },
+    { id: 'cl_holy',  name: 'แสงศักดิ์สิทธิ์', icon: '🔆', desc: 'โจมตี x1.4 + ฟื้น HP 15%',            mp: 14, dmg: 1.4, healPct: 0.15 },
+    { id: 'cl_bless', name: 'อวยพร',        icon: '🙏', desc: 'เทิร์นหน้าโจมตี x1.5 + ฟื้น MP 20',   mp: 12, buffAtk: 1.5, mpHeal: 20 },
+  ],
+};
+
+// ----- สกิลที่เรียนได้จากคัมภีร์หายาก (เจอในกล่องสมบัติ — โอกาสน้อยมาก) -----
+// เรียนได้ทุกคลาส — เมื่อใช้คัมภีร์ สกิลนี้จะถูกเพิ่มให้ตัวละคร (เลเวล 1 เหมือนสกิลคลาส)
+export const SCROLL_SKILLS = [
+  { id: 'sc_fireball', name: 'ลูกไฟใหญ่',   icon: '🔥', desc: 'โจมตี x2.2 (คริติคอลได้)',              mp: 14, dmg: 2.2 },
+  { id: 'sc_heal',     name: 'แสงรักษา',    icon: '💖', desc: 'ฟื้น HP 50% ของพลังสูงสุด',            mp: 12, healPct: 0.5 },
+  { id: 'sc_thunder',  name: 'สายฟ้าพิภพ',  icon: '⚡', desc: 'โจมตี x2.6',                          mp: 18, dmg: 2.6 },
+  { id: 'sc_venom',    name: 'พิษร้าย',     icon: '🐍', desc: 'บอสเสีย 12% HP ต่อเทิร์น (2 เทิร์น)',   mp: 16, poison: 0.12 },
+  { id: 'sc_guard',    name: 'โล่เวท',      icon: '🛡️', desc: 'ลดดาเมจที่ได้รับ 60% ในเทิร์นนี้',      mp: 10, shield: 0.6 },
+  { id: 'sc_haste',    name: 'สายฟ้าแลบ',  icon: '🌀', desc: 'โจมตี 2 ครั้ง ครั้งละ x1.1',           mp: 12, hits: 2, dmg: 1.1 },
+];
+export const SCROLL_SKILL_BY_ID = Object.fromEntries(SCROLL_SKILLS.map((s) => [s.id, s]));
+
+// item.type: 'consumable' | 'junk' | 'scroll' | 'weapon' | 'shield' | 'armor' | 'head' | 'arms' | 'legs' | 'feet' | 'accessory'
 // item.handed: (เฉพาะ weapon) 1 = มือเดียว, 2 = สองมือ (ปิดช่องมือรอง)
 export const ITEMS = [
   { id: 1,  name: 'ยาบำบัดน้อย', icon: '🧪', type: 'consumable', heal_pct: 0.3,  mana_pct: 0,   price: 25,  desc: 'ฟื้น HP 30% ของพลังสูงสุด' },
   { id: 2,  name: 'ยาบำบัดใหญ่', icon: '⚗️', type: 'consumable', heal_pct: 0.6,  mana_pct: 0,   price: 60,  desc: 'ฟื้น HP 60% ของพลังสูงสุด' },
   { id: 3,  name: 'น้ำอมฤต',     icon: '💧', type: 'consumable', heal_pct: 0,    mana_pct: 0.4, price: 30,  desc: 'ฟื้น MP 40% ของพลังสูงสุด' },
   { id: 4,  name: 'ยาฟื้นฟูเต็ม', icon: '✨', type: 'consumable', heal_pct: 1,    mana_pct: 1,   price: 120, desc: 'ฟื้น HP และ MP 100%' },
+
+  // ยา/สมุนไพรทั่วไป — ของรางวัลจากเหตุการณ์ (ราคาถูก)
+  { id: 5,  name: 'สมุนไพรป่า',  icon: '🌿', type: 'consumable', heal_pct: 0.15, price: 10, desc: 'สมุนไพรป่าแก้เจ็บเล็กน้อย' },
+  { id: 6,  name: 'เห็ดเรืองแสง', icon: '🍄', type: 'consumable', heal_pct: 0.2,  price: 15, desc: 'เห็ดที่เรืองแสงอ่อน ๆ ฟื้น HP 20%' },
+  { id: 7,  name: 'เนื้อสดย่าง',  icon: '🍖', type: 'consumable', heal_pct: 0.25, price: 18, desc: 'เนื้อย่างหอม ๆ ฟื้น HP 25%' },
 
   // อาวุธ (handed: 1 = มือเดียว, 2 = สองมือ)
   { id: 10, name: 'มีดสั้นเก่า',   icon: '🔪', type: 'weapon', atk_bonus: 3,  price: 40,  desc: 'มีดเก่า ๆ แต่ยังคม', lvl: 1, handed: 1 },
@@ -88,6 +132,27 @@ export const ITEMS = [
   { id: 42, name: 'สมุดนำโชค',       icon: '🍀', type: 'accessory', spd_bonus: 3, crit_bonus: 4, price: 200, exclusive: true, desc: '✦ พิเศษ — เครื่องรางจากดินแดนแห่งโชค' },
   { id: 43, name: 'มงกุฎนักโฟกัส',   icon: '👑', type: 'accessory', hp_bonus: 40, mp_bonus: 15, price: 250, exclusive: true, desc: '✦ พิเศษ — รางวัลแห่งผู้มุ่งมั่น' },
   { id: 44, name: 'อีลิกเซอร์บริสุทธิ์', icon: '⚡', type: 'consumable', heal_pct: 1, mana_pct: 1, price: 200, exclusive: true, desc: '✦ พิเศษ — ฟื้น HP + MP 100% ทันที' },
+
+  // ---- ของขวัญ/ของขยะทั่วไป — เจอจากเหตุการณ์ เอาไว้ขายตอนค่ายพัก (พ่อค้าอาจอยากได้เป็นพิเศษ) ----
+  { id: 45, name: 'กระดูกมอนสเตอร์', icon: '🦴', type: 'junk', price: 12, desc: 'ของเก็บบนเส้นทาง ขายได้นิดหน่อย' },
+  { id: 46, name: 'เศษหินเวท',      icon: '🧱', type: 'junk', price: 16, desc: 'หินที่มีพลังเหลืออยู่เล็กน้อย พ่อค้ารับซื้อ' },
+  { id: 47, name: 'ดอกไม้เหี่ยวเฉา', icon: '🥀', type: 'junk', price: 8,  desc: 'ดอกไม้ไร้วิญญาณ ขายได้นิดหน่อย' },
+  { id: 48, name: 'เศษผ้าขาดวิ่น',   icon: '🧵', type: 'junk', price: 10, desc: 'เศษผ้าเก่า ๆ ของพ่อค้าเร่ร่อนรับซื้อ' },
+  { id: 49, name: 'ขนนกยักษ์',      icon: '🪶', type: 'junk', price: 20, desc: 'ขนของนกยักษ์ เอาไปขายได้ราคาดี' },
+
+  // ---- ของขวัญหายาก (rare junk) — เจอได้เฉพาะดรอปพิเศษ/ยาก ขายแพง ----
+  { id: 100, name: 'เศษอัญมณีโบราณ', icon: '💎', type: 'junk', price: 140, desc: 'เศษอัญมณีจากยุคโบราณ พ่อค้ารับซื้อแพง' },
+  { id: 101, name: 'แจกันโบราณ',     icon: '🏺', type: 'junk', price: 230, desc: 'แจกันลายครามเก่าแก่ ตัวจริงของนักสะสม' },
+  { id: 102, name: 'หน้ากากพิธีกรรม', icon: '🎭', type: 'junk', price: 340, desc: 'หน้ากากจากพิธีกรรมโบราณ ล้ำค่ามาก' },
+
+  // ---- คัมภีร์สกิลหายาก (type: scroll) — เจอจากกล่องสมบัติเท่านั้น (โอกาสน้อยมาก) ----
+  // ใช้แล้วเรียนรู้สกิล (learn_skill) — ถ้าเรียนไปแล้วใช้ไม่ได้
+  { id: 110, name: 'คัมภีร์: ลูกไฟใหญ่', icon: '📜', type: 'scroll', learn_skill: 'sc_fireball', price: 260, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🔥 ลูกไฟใหญ่ (ทุกคลาสเรียนได้)' },
+  { id: 111, name: 'คัมภีร์: แสงรักษา', icon: '📜', type: 'scroll', learn_skill: 'sc_heal',     price: 240, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 💖 แสงรักษา (ทุกคลาสเรียนได้)' },
+  { id: 112, name: 'คัมภีร์: สายฟ้าพิภพ', icon: '📜', type: 'scroll', learn_skill: 'sc_thunder',  price: 300, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล ⚡ สายฟ้าพิภพ (ทุกคลาสเรียนได้)' },
+  { id: 113, name: 'คัมภีร์: พิษร้าย',   icon: '📜', type: 'scroll', learn_skill: 'sc_venom',    price: 280, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🐍 พิษร้าย (ทุกคลาสเรียนได้)' },
+  { id: 114, name: 'คัมภีร์: โล่เวท',    icon: '📜', type: 'scroll', learn_skill: 'sc_guard',    price: 260, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🛡️ โล่เวท (ทุกคลาสเรียนได้)' },
+  { id: 115, name: 'คัมภีร์: สายฟ้าแลบ', icon: '📜', type: 'scroll', learn_skill: 'sc_haste',    price: 250, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🌀 สายฟ้าแลบ (ทุกคลาสเรียนได้)' },
 ];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
@@ -113,6 +178,30 @@ export const BOSSES = [
   { name: 'คริสตัลการ์เดี้ยน', icon: '🔮' },
   { name: 'มังกรน้ำแข็ง', icon: '🐉' },
   { name: 'จอมมารเงา', icon: '👹' },
+];
+
+// ----- สกิลของบอส — แต่ละเมือง/บอสมีท่าเด็ดของตัวเอง (มีโอกาสใช้แทนโจมตีปกติ) -----
+// mult = คูณพลังโจมตี, heal = ฟื้น %HP สูงสุด, poison = %HP ผู้เล่นเสียต่อเทิร์น,
+// guard = ลดดาเมจที่บอสได้รับ (ตัวคูณ), drainMp = ผู้เล่นเสีย %MP
+export const BOSS_SKILLS = {
+  rage:  { name: 'คลั่ง',       icon: '💢', desc: 'โจมตี x1.5 (คริติคอลได้)', mult: 1.5 },
+  crush: { name: 'ทุบแหลก',    icon: '🔨', desc: 'โจมตี x2.0 (หนักมาก)',    mult: 2.0 },
+  heal:  { name: 'เรียกพลัง',   icon: '💚', desc: 'ฟื้น HP 20%',             heal: 0.2 },
+  venom: { name: 'พิษร้าย',     icon: '☠️', desc: 'ผู้เล่นเสีย 5% HP/เทิร์น (2 เทิร์น)', poison: 0.05 },
+  guard: { name: 'เกราะแข็ง',   icon: '🛡️', desc: 'ลดดาเมจที่บอสได้รับ 35% (2 เทิร์น)', guard: 0.65 },
+  drain: { name: 'ดูดมานา',     icon: '🧿', desc: 'ผู้เล่นเสีย MP 25%',      drainMp: 0.25 },
+};
+
+// ท่าเด็ดของบอสแต่ละเมือง (index ตรงกับ BOSSES)
+export const BOSS_LOADOUTS = [
+  ['rage', 'guard'],
+  ['crush', 'drain'],
+  ['rage', 'venom'],
+  ['heal', 'venom'],
+  ['crush', 'heal'],
+  ['guard', 'drain'],
+  ['venom', 'guard'],
+  ['crush', 'venom'],
 ];
 
 // มอนสเตอร์ที่เจอระหว่างผจญภัย (power_mult คูณพลังมอนสเตอร์ตามเลเวล)
@@ -166,9 +255,16 @@ export const QUESTS = [
   { id: 'q6', title: 'ฝึกซ้อมกับทหารยาม', icon: '🤺', detail: 'ท้าประลองกับทหารยามจอมเก่ง', xp: 45, gold: 0, success: 0.7, fail: 'แพ้ซะยับ แต่ก็ได้ประสบการณ์', win: 'ชนะ! ทหารยามยอมรับฝีมือ' },
 ];
 
-// ร้านค้าขายเฉพาะไอเทมธรรมดา — ไอเทม exclusive (พิเศษ) หาซื้อไม่ได้
+// ของรางวัลธรรมดาจากเหตุการณ์: ยา + สมุนไพร + ของขวัญ (พ่อค้าเร่ร่อนแจก / รางวัลภารกิจ / กล่องสมบัติ)
+export const COMMON_LOOT = [1, 3, 5, 6, 7, 45, 46, 47, 48, 49];
+// ของขวัญหายาก — ดรอปยาก (กล่องสมบัติพิเศษ / พ่อค้าแจกน้อยครั้ง)
+export const RARE_JUNK = [100, 101, 102];
+// คัมภีร์สกิลหายาก — เจอจากกล่องสมบัติเท่านั้น (โอกาสน้อยมาก ~3% ของการดรอปไอเทม)
+export const SCROLL_ITEMS = [110, 111, 112, 113, 114, 115];
+
+// ร้านค้าขายเฉพาะไอเทมธรรมดา — ไอเทม exclusive (พิเศษ) หาซื้อไม่ได้, ของขวัญ (junk) และคัมภีร์ (scroll) ไม่ขายในร้าน
 // (item.type: consumable/weapon/armor/accessory, exclusive = ได้จาก Daily Quest เท่านั้น)
-export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && (i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id)));
+export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && (i.type !== 'consumable' || [1, 2, 3, 4].includes(i.id)));
 
 // ----- ภารกิจประจำวัน (Daily Quest) — สุ่ม 3 อันต่อวันตามเลเวล -----
 // key ตรงกับชื่อ counter ใน daily_counter ตาราง
@@ -179,6 +275,7 @@ export const DAILY_QUESTS = [
   { id: 'dq_camp_quest',    name: 'สายภารกิจแคมป์',   icon: '📜', key: 'camp_quests', target: () => 2, desc: 'ทำภารกิจแคมป์ {n} ครั้งวันนี้', unit: 'count' },
   { id: 'dq_boss',          name: 'นักล่าบอสรายวัน',  icon: '👹', key: 'boss_wins', target: () => 1, desc: 'ชนะบอส 1 ตัววันนี้', unit: 'count' },
   { id: 'dq_potion',        name: 'นักเล่นแร่แปรธาตุ', icon: '🧪', key: 'potions', target: (lvl) => 3 + (lvl >= 10 ? 2 : 0), desc: 'ใช้ยา {n} ขวดวันนี้', unit: 'count' },
+  { id: 'dq_junk',          name: 'คนเก็บขยะ',       icon: '🗑️', key: 'junk_sold', target: (lvl) => 5 + (lvl >= 10 ? 2 : 0), desc: 'ขายของขวัญ (junk) {n} ชิ้นวันนี้ — วันไหนพ่อค้าต้องการ ขายได้แพงขึ้น!', unit: 'count' },
   { id: 'dq_shop',          name: 'ลูกค้าประจำ',      icon: '🛒', key: 'items_bought', target: (lvl) => 3 + (lvl >= 8 ? 2 : 0), desc: 'ซื้อของ {n} ชิ้นวันนี้', unit: 'count' },
   { id: 'dq_focus_min',     name: 'มาราธอนรายวัน',    icon: '⏳', key: 'focus_sec', target: (lvl) => 50 * 60 + (lvl >= 10 ? 10 * 60 : 0), desc: 'โฟกัสครบ {n} นาทีวันนี้', unit: 'min' },
 ];
@@ -187,6 +284,7 @@ export const DAILY_QUESTS = [
 export const ACHIEVEMENTS = [
   { id: 'first_step',  name: 'ก้าวแรก',          icon: '🐣', stat: 'sessions',  target: 1,    reward: { gold: 20 }, desc: 'ทำโฟกัสครบ 1 session' },
   { id: 'first_level', name: 'เริ่มเติบโต',      icon: '⬆️', stat: 'level',     target: 2,    reward: { gold: 25 }, desc: 'อัพเป็นเลเวล 2' },
+  { id: 'wanted_5',    name: 'นักขายมือฉมัง',    icon: '🏷️', stat: 'wanted_sales', target: 5,    reward: { gold: 100 }, desc: 'ขายของให้พ่อค้าที่ต้องการ 5 ครั้ง' },
   { id: 'first_boss',  name: 'นักล่าบอส',       icon: '⚔️', stat: 'bosses',    target: 1,    reward: { gold: 100 }, desc: 'ชนะบอสตัวแรก' },
   { id: 'treasure_5',  name: 'นักล่าสมบัติ',     icon: '💰', stat: 'treasures', target: 5,    reward: { gold: 50 }, desc: 'เจอสมบัติ 5 ครั้ง' },
   { id: 'monster_10',  name: 'นักกำจัดมอนสเตอร์', icon: '🐺', stat: 'monsters',  target: 10,   reward: { gold: 50 }, desc: 'กำจัดมอนสเตอร์ 10 ตัว' },
@@ -206,6 +304,7 @@ export const ACHIEVEMENTS = [
   { id: 'traveler',    name: 'นักเดินทาง',      icon: '🚶', stat: 'cycles',    target: 2,    reward: { gold: 100 }, desc: 'เดินทางครบ 2 รอบเมือง' },
   { id: 'focus_20h',   name: 'ยี่สิบชั่วโมงแห่งโฟกัส', icon: '🧘', stat: 'focus_sec', target: 72000, reward: { gold: 300 }, desc: 'โฟกัสรวม 20 ชั่วโมง' },
   { id: 'gold_5000',   name: 'เศรษฐีใหม่',      icon: '💰', stat: 'gold_earned', target: 5000, reward: { gold: 200 }, desc: 'สะสมทองรวม 5,000' },
+  { id: 'wanted_20',   name: 'ราชาแห่งตลาด',    icon: '💰', stat: 'wanted_sales', target: 20,   reward: { gold: 300 }, desc: 'ขายของให้พ่อค้าที่ต้องการ 20 ครั้ง' },
 
   { id: 'focus_50',    name: 'สายโฟกัสตัวจริง', icon: '🔥', stat: 'sessions',  target: 50,   reward: { gold: 200 }, desc: 'ทำโฟกัสครบ 50 session' },
   { id: 'level_10',    name: 'นักรบผู้แข็งแกร่ง', icon: '🗡️', stat: 'level',    target: 10,   reward: { gold: 150 }, desc: 'อัพเป็นเลเวล 10' },

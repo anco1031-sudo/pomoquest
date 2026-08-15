@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import routes from './routes.js';
+import devRoutes from './dev.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -11,6 +12,7 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 app.use('/api', routes);
+app.use('/api', devRoutes); // dev test (login: admin/adminlouis)
 
 // เสิร์ฟ frontend ที่ build แล้ว (production)
 const distDir = path.join(__dirname, '..', 'dist');

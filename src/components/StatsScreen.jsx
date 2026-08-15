@@ -4,6 +4,16 @@ import { Panel, fmtDuration } from './ui.jsx';
 
 const DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 
+// ระดับความเข้มใน heatmap — แบ่งตามนาทีที่โฟกัสต่อวัน
+const heatLevel = (focusSec) => {
+  const m = Math.round((focusSec || 0) / 60);
+  if (m <= 0) return 0;
+  if (m < 30) return 1;
+  if (m < 60) return 2;
+  if (m < 120) return 3;
+  return 4;
+};
+
 export default function StatsScreen() {
   const { get } = useGame();
   const [data, setData] = useState(null);
@@ -19,6 +29,17 @@ export default function StatsScreen() {
 
   const p = data.progress;
   const maxFocus = Math.max(1, ...data.days.map((d) => d.focusSec));
+  const maxBreak = Math.max(1, ...data.breakDays.map((d) => d.breakSec));
+
+  // heatmap 91 วัน → จัดเป็นคอลัมน์รายสัปดาห์ (ขึ้นต้นวันจันทร์ เติมช่องว่างก่อนหน้าให้เต็มสัปดาห์)
+  const heatCells = (() => {
+    if (!data.heatmap || !data.heatmap.length) return [];
+    const first = new Date(data.heatmap[0].date + 'T00:00:00');
+    const leading = (first.getDay() + 6) % 7; // จันทร์ = 0 … อาทิตย์ = 6
+    const cells = [...Array(leading).fill(null), ...data.heatmap];
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  })();
 
   return (
     <>
@@ -55,6 +76,52 @@ export default function StatsScreen() {
         </div>
       </Panel>
 
+      <Panel title="☕ พักเบรกย้อนหลัง 7 วัน">
+        <div className="chart">
+          {data.breakDays.map((d, i) => {
+            const minutes = Math.round(d.breakSec / 60);
+            const h = Math.max(4, (d.breakSec / maxBreak) * 100);
+            const dow = new Date(d.date + 'T12:00:00').getDay();
+            return (
+              <div className="chart-col" key={d.date}>
+                <div className="chart-value">{minutes > 0 ? `${minutes}m` : ''}</div>
+                <div className="chart-bar-wrap">
+                  <div className="chart-bar chart-bar-break" style={{ height: `${h}%` }} />
+                </div>
+                <div className="chart-label">{DAY_NAMES[dow]}</div>
+                <div className="chart-sessions">{d.overrunSec > 0 ? `เลย ${Math.round(d.overrunSec / 60)}m` : ''}</div>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      <Panel title="🔥 Heatmap โฟกัส (12 สัปดาห์)">
+        <div className="heat-wrap">
+          <div className="heat-labels">
+            <span>จ</span><span /><span>พ</span><span /><span>ศ</span><span /><span>อา</span>
+          </div>
+          <div className="heat-grid">
+            {heatCells.map((c, i) => (
+              <div
+                key={i}
+                className={`heat-cell ${c ? `l${heatLevel(c.focusSec)}` : 'pad'}`}
+                title={c ? `${c.date} · ${Math.round(c.focusSec / 60)} นาที` : ''}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="heat-legend">
+          <span>น้อย</span>
+          <div className="heat-cell l0" />
+          <div className="heat-cell l1" />
+          <div className="heat-cell l2" />
+          <div className="heat-cell l3" />
+          <div className="heat-cell l4" />
+          <span>มาก</span>
+        </div>
+      </Panel>
+
       <Panel title="⚔️ สถิติการต่อสู้">
         <div className="stat-grid">
           <div className="stat-box"><b>{p.gold_earned}</b><span>ทองที่หาได้</span></div>
@@ -65,6 +132,14 @@ export default function StatsScreen() {
           <div className="stat-box"><b>{p.cycles_completed}</b><span>รอบที่เดินทาง</span></div>
           <div className="stat-box"><b>{p.boss_potions}</b><span>ยาที่ใช้สู้บอส</span></div>
           <div className="stat-box"><b>{p.traps}</b><span>กับดักที่โดน</span></div>
+        </div>
+      </Panel>
+
+      <Panel title="☕ สถิติการพักเบรก">
+        <div className="stat-grid">
+          <div className="stat-box"><b>{fmtDuration(p.break_sec)}</b><span>เวลาพักทั้งหมด</span></div>
+          <div className="stat-box"><b>{p.break_extended}</b><span>ครั้งที่ต่อเวลาพัก</span></div>
+          <div className="stat-box"><b>{fmtDuration(p.break_overrun_sec)}</b><span>เวลาที่เลยพักทั้งหมด</span></div>
         </div>
       </Panel>
 

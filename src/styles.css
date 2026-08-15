@@ -90,6 +90,8 @@ body {
 .btn-danger { background: linear-gradient(135deg, #7f1d1d, #991b1b); border-color: transparent; }
 .btn-danger-soft { background: transparent; color: #f87171; border-color: #7f1d1d; }
 .btn-skill { background: linear-gradient(135deg, #1d4ed8, #2563eb); border-color: transparent; color: #fff; }
+.btn-continue { background: linear-gradient(135deg, #15803d, #16a34a); border-color: transparent; color: #fff; box-shadow: 0 4px 18px rgba(34, 197, 94, 0.35); }
+.paused-note { font-size: 12.5px; color: var(--gold); margin-bottom: 8px; }
 
 .input {
   width: 100%;
@@ -296,6 +298,8 @@ body {
   border-radius: 12px;
   padding: 12px 14px;
   text-align: left;
+  max-height: 180px;
+  overflow-y: auto; /* เหตุการณ์เยอะ → เลื่อนดูแทนการยืดหน้า */
 }
 .session-log-title { font-size: 12.5px; font-weight: 800; color: var(--gold); margin-bottom: 6px; }
 .session-log-item {
@@ -346,6 +350,15 @@ body {
 }
 .camp-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
+/* สถานะ HP/MP ระหว่างพักแคมป์ */
+.camp-vitals {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
 /* ---------- item stat chips ---------- */
 .item-stat-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .item-stat-chip {
@@ -372,6 +385,49 @@ body {
 .inv-qty { color: var(--muted); font-weight: 500; font-size: 12.5px; }
 .inv-desc { font-size: 12px; color: var(--muted); }
 .inv-actions { display: flex; gap: 6px; }
+
+/* ของที่พ่อค้าต้องการ (ขายได้แพงขึ้นตอนค่ายพักนี้) */
+.wanted-tag {
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  color: #fdba74;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.btn-wanted {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(249, 115, 22, 0.1));
+  border-color: var(--orange);
+  color: #fdba74;
+}
+.junk-note { font-size: 11px; color: var(--muted); align-self: center; white-space: nowrap; }
+
+/* ราคาตลาดรายวันในร้านค้าค่ายพัก */
+.market-hot {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.market-sale {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
 
 /* ---------- quests ---------- */
 .quest-card {
@@ -419,7 +475,7 @@ body {
 .bar-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
 
 /* ---------- adventure log ---------- */
-.log-list { display: flex; flex-direction: column; }
+.log-list { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; padding-right: 4px; }
 .log-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
 .log-icon { font-size: 20px; }
 .log-body { flex: 1; min-width: 0; }
@@ -448,6 +504,20 @@ body {
 .boss-name { font-size: 19px; font-weight: 800; color: #f87171; margin-bottom: 8px; }
 .boss-stats { display: flex; justify-content: center; gap: 14px; margin-top: 8px; color: var(--muted); font-size: 13px; }
 
+/* ท่าเด็ดของบอส (สกิล) — โชว์บนการ์ดให้วางแผนได้ */
+.boss-skills { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+.boss-skills-title { font-size: 11.5px; color: var(--muted); font-weight: 700; align-self: center; }
+.boss-skill-chip {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: help;
+}
+
 .player-card {
   display: flex;
   gap: 12px;
@@ -467,6 +537,69 @@ body {
 
 .potion-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .potion-btn { background: var(--panel); }
+
+/* รายการสกิลของคลาส (สู้บอส) */
+.skill-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.skill-list-title { font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.skill-list-title b { color: var(--blue); }
+.skill-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: var(--panel);
+}
+.skill-btn-top { font-weight: 700; }
+.skill-mp { color: var(--blue); }
+.skill-lv-chip {
+  display: inline-block;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.skill-desc { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+
+/* รายการสกิลในหน้า CharacterSheet */
+.skill-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.skill-card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.skill-card-name { font-weight: 700; font-size: 13.5px; }
+.skill-card-level {
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.skill-card-desc { font-size: 12px; color: var(--muted); margin: 4px 0 6px; }
+.skill-xp-row { display: flex; align-items: center; gap: 8px; }
+.skill-xp-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--panel2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.skill-xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  border-radius: 999px;
+}
+.skill-xp-text { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+.skill-maxed { font-size: 11px; color: var(--gold); font-weight: 700; }
 
 .battle-log {
   background: var(--bg);
@@ -525,6 +658,12 @@ body {
 .modal p { color: var(--muted); font-size: 14px; }
 .modal-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 
+/* แถวปุ่มตัวเลือกใน modal (เช่น ต่อเวลาพัก +1/+5/+10 นาที) */
+.modal-row { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.modal-row-label { font-size: 12.5px; color: var(--muted); }
+.modal-row-btns { display: flex; gap: 8px; width: 100%; }
+.modal-row-btns .btn { flex: 1; }
+
 /* event modal */
 .event-modal { text-align: center; border-top: 4px solid var(--gold); }
 .event-modal.accent-red { border-top-color: var(--red); }
@@ -540,9 +679,46 @@ body {
 
 /* story modal (เรื่องราวการผจญภัยหลังจบ session) */
 .story-modal { text-align: center; border-top: 4px solid var(--purple); }
+
+/* สถานะ "กำลังเขียนเรื่องราว…" ระหว่างรอ LLM */
+.story-wait {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--panel2);
+  border: 1px solid var(--purple);
+  color: var(--text);
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  z-index: 45;
+  animation: popIn 0.2s ease;
+  max-width: 90vw;
+  text-align: center;
+  white-space: nowrap;
+}
+.story-wait-icon { animation: bob 1.2s ease-in-out infinite; }
+
+/* ---------- dev test panel ---------- */
+.dev-panel h2 { margin-bottom: 4px; }
+.dev-sub { font-size: 12.5px; margin-bottom: 14px; }
+.dev-login { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.dev-login-info { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--green); margin-bottom: 6px; }
+.dev-section { font-size: 12.5px; font-weight: 800; color: var(--gold); margin: 14px 0 8px; }
+.dev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dev-grid .btn { font-size: 13px; padding: 10px 8px; min-height: 40px; }
+.dev-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dev-row .btn { flex: 1; min-width: 90px; }
+.dev-input { width: 90px; flex: 0 0 auto; }
 .story-icon { font-size: 44px; }
 .story-title { font-size: 20px; font-weight: 900; color: var(--gold); margin: 8px 0 12px; }
-.story-text { font-size: 14.5px; line-height: 1.6; color: var(--text); background: var(--bg); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left; }
+.story-text { font-size: 14.5px; line-height: 1.6; color: var(--text); background: var(--bg); border-radius: 10px; padding: 14px; margin-bottom: 16px; text-align: left; white-space: pre-line; /* รองรับสรุปเหตุการณ์หลายบรรทัด */ }
 
 /* level up modal */
 .levelup-modal { text-align: center; border-top: 4px solid var(--gold); }
@@ -739,11 +915,41 @@ body {
   min-height: 2px;
   transition: height 0.4s ease;
 }
+.chart-bar-break { background: linear-gradient(180deg, #60a5fa, #2563eb); }
 .chart-label { font-size: 11px; color: var(--muted); }
 .chart-sessions { font-size: 10px; color: var(--gold); height: 13px; }
 
 .city-log { display: flex; flex-direction: column; }
 .city-log-item { padding: 5px 0; font-size: 13px; color: var(--text); border-bottom: 1px dashed var(--border); }
+
+/* ---------- heatmap โฟกัส (12 สัปดาห์) ---------- */
+.heat-wrap { display: flex; gap: 6px; }
+.heat-labels { display: flex; flex-direction: column; font-size: 10px; color: var(--muted); }
+.heat-labels span { height: 12px; line-height: 12px; margin-bottom: 3px; }
+.heat-labels span:last-child { margin-bottom: 0; }
+.heat-grid {
+  flex: 1;
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  grid-auto-flow: column;
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.heat-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.heat-cell.l1 { background: rgba(34, 197, 94, 0.25); border-color: transparent; }
+.heat-cell.l2 { background: rgba(34, 197, 94, 0.5); border-color: transparent; }
+.heat-cell.l3 { background: rgba(34, 197, 94, 0.75); border-color: transparent; }
+.heat-cell.l4 { background: var(--green); border-color: transparent; box-shadow: 0 0 6px rgba(34, 197, 94, 0.5); }
+.heat-cell.pad { visibility: hidden; }
+.heat-legend { display: flex; align-items: center; gap: 4px; margin-top: 12px; font-size: 11px; color: var(--muted); }
+.heat-legend .heat-cell { display: inline-block; }
 
 /* ---------- travel (ย้อนกลับเมือง) ---------- */
 .travel-list { display: flex; flex-direction: column; gap: 8px; }

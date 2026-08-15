@@ -71,6 +71,34 @@ export function StatAllocator({ onDone }) {
   );
 }
 
+// รายการสกิลของตัวละคร (คลาส + คัมภีร์) — โชว์เลเวล/XP เพื่อวางแผน
+function SkillList({ skills }) {
+  if (!skills || !skills.length) return <p className="hint">ยังไม่มีสกิล</p>;
+  return (
+    <div className="skill-list">
+      {skills.map((s) => (
+        <div className="skill-card" key={s.id}>
+          <div className="skill-card-top">
+            <span className="skill-card-name">{s.icon} {s.name}</span>
+            <span className="skill-card-level">Lv.{s.level}{s.source === 'scroll' ? ' 📜' : ''}</span>
+          </div>
+          <div className="skill-card-desc">{s.desc} · <b className="skill-mp">{s.mp} MP</b></div>
+          <div className="skill-xp-row">
+            {s.level >= s.maxLevel ? (
+              <span className="skill-maxed">⭐ เลเวลสูงสุดแล้ว</span>
+            ) : (
+              <>
+                <div className="skill-xp-bar"><div className="skill-xp-fill" style={{ width: `${Math.min(100, (s.xp / s.xpNext) * 100)}%` }} /></div>
+                <span className="skill-xp-text">XP {s.xp}/{s.xpNext}</span>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CharacterSheet() {
   const { character, inventory, post, showToast } = useGame();
   if (!character) return null;
@@ -130,6 +158,11 @@ export default function CharacterSheet() {
         <StatRow label="คริติคอล" value={`${character.crit}%`} bonus={eqBonus.crit} icon="🎯" />
       </Panel>
 
+      <Panel title={`⚡ สกิล (${(character.skills || []).length})`}>
+        <SkillList skills={character.skills} />
+        <p className="hint">💡 สกิลสะสม XP ทุกครั้งที่ใช้สู้บอส — เลเวลยิ่งสูง ยิ่งแรง (+10%/เลเวล) · คัมภีร์หายาก 📜 เรียนสกิลเพิ่มได้จากกล่องสมบัติ</p>
+      </Panel>
+
       <Panel title="🔧 อุปกรณ์ที่สวม">
         {slots.map((s) => (
           <div className="slot-row" key={s.col}>
@@ -173,6 +206,10 @@ export default function CharacterSheet() {
               <div className="inv-actions">
                 {i.type === 'consumable' ? (
                   <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
+                ) : i.type === 'scroll' ? (
+                  <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>
+                ) : i.type === 'junk' ? (
+                  <span className="junk-note">ขายได้ที่แคมป์</span>
                 ) : (
                   <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
                 )}

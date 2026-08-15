@@ -3,9 +3,10 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 
-export default function BossScreen({ bossState, remain, total, running, onAct, onRetreat, onContinue }) {
+export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onContinue }) {
   const { character, inventory } = useGame();
   const [potionOpen, setPotionOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const logRef = useRef(null);
 
   const boss = bossState?.boss;
@@ -26,12 +27,13 @@ export default function BossScreen({ bossState, remain, total, running, onAct, o
   }
 
   const consumables = inventory.filter((i) => i.type === 'consumable');
-  const skillCost = 12 + character.level;
+  const skills = character.skills || [];
 
-  const act = async (action, itemId) => {
+  const act = async (action, arg) => {
     sfx.click();
-    await onAct(action, itemId);
+    await onAct(action, arg);
     setPotionOpen(false);
+    setSkillsOpen(false);
   };
 
   return (
@@ -39,7 +41,11 @@ export default function BossScreen({ bossState, remain, total, running, onAct, o
       <header className="camp-header">
         <div>
           <div className="timer-title">👹 จอมบอสประจำเมือง!</div>
-          <div className="camp-sub">⏳ พักยาวเหลือ {fmtTime(remain)} — ชนะบอสเพื่อเดินทางต่อ</div>
+          <div className="camp-sub">
+            {breakOver
+              ? `⏰ เลยเวลาพัก ${fmtTime(overrun)} — เริ่มโฟกัสเมื่อพร้อม`
+              : `⏳ พักยาวเหลือ ${fmtTime(remain)} — ชนะบอสเพื่อเดินทางต่อ`}
+          </div>
         </div>
         <button className="btn btn-sm" onClick={() => window.confirm('หนีจากบอส? จะเสียพลัง 20%') && onRetreat()}>💨 หนี</button>
       </header>
@@ -58,6 +64,14 @@ export default function BossScreen({ bossState, remain, total, running, onAct, o
         <div className="boss-stats">
           <span>⚔️ {boss.atk}</span><span>🛡️ {boss.def}</span>
         </div>
+        {boss.skills?.length > 0 && (
+          <div className="boss-skills">
+            <span className="boss-skills-title">ท่าเด็ด:</span>
+            {boss.skills.map((s) => (
+              <span className="boss-skill-chip" key={s.name} title={s.desc}>{s.icon} {s.name}</span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* player card */}
@@ -77,15 +91,31 @@ export default function BossScreen({ bossState, remain, total, running, onAct, o
       {!outcome && (
         <div className="boss-actions">
           <button className="btn btn-primary" onClick={() => act('attack')}>⚔️ โจมตี</button>
-          <button
-            className="btn btn-skill"
-            onClick={() => act('skill')}
-            disabled={character.mp < skillCost}
-            title={`ใช้มานา ${skillCost}`}
-          >
-            🔮 สกิล ({skillCost} MP)
+          <button className="btn btn-skill" onClick={() => setSkillsOpen((o) => !o)} title="ดูสกิลของคลาส">
+            ⚡ สกิล
           </button>
           <button className="btn" onClick={() => setPotionOpen((o) => !o)}>🧪 ใช้ยา</button>
+        </div>
+      )}
+
+      {skillsOpen && !outcome && (
+        <div className="skill-list">
+          <div className="skill-list-title">
+            ⚡ สกิลของ {character.className} — MP ที่เหลือ <b>{character.mp}</b>
+          </div>
+          {skills.map((s) => (
+            <button
+              key={s.id}
+              className="btn skill-btn"
+              disabled={character.mp < s.mp}
+              onClick={() => act('skill', s.id)}
+              title={s.desc}
+            >
+              <span className="skill-btn-top">{s.icon} {s.name} <span className="skill-lv-chip">Lv.{s.level}</span> <b className="skill-mp">({s.mp} MP)</b></span>
+              <span className="skill-desc">{s.desc}</span>
+            </button>
+          ))}
+          {skills.length === 0 && <div className="hint">คลาสนี้ยังไม่มีสกิล</div>}
         </div>
       )}
 

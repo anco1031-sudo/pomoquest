@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import {
   db, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
-  addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily,
+  addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
+  getSkillRow, learnSkill,
 } from './db.js';
 import {
-  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK,
+  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn,
-  rollQuests, resolveQuest, SLOT_COLS,
+  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -155,7 +156,10 @@ router.post('/character/allocate', (req, res) => {
 // ----- ผจญภัย (work session) -----
 router.post('/adventure/event', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const ev = rollEvent(c);
+  // key (optional) = บังคับ event ให้เกิดตาม key — ใช้ใน dev test
+  const { key } = req.body || {};
+  const ev = rollEvent(c, key || null);
+  if (!ev) return res.status(400).json({ error: 'event ไม่พบ' });
   updateCharacter(c);
   addLog(c.id, { type: ev.logType || ev.key, title: ev.title, detail: ev.detail, xp: ev.xp, gold: ev.gold });
   if (ev.item) addItem(c.id, ev.item.id);
@@ -183,7 +187,7 @@ router.post('/adventure/event', (req, res) => {
 
 router.post('/adventure/complete', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { focusSec = 1500 } = req.body || {};
+  const { focusSec = 1500, events = [] } = req.body || {};
   const prog = getProgress(c.id);
 
   prog.streak += 1;
@@ -217,19 +221,38 @@ router.post('/adventure/complete', (req, res) => {
     xp, gold, focusSec,
   });
 
-  // สรุปการผจญภัยด้วย LLM (ถ้าเปิดใช้) — fire-and-forget: ไม่บล็อก response, error → เงียบ (เกมใช้ข้อความเดิม)
+  // เหตุการณ์ที่เจอใน session นี้ (จาก client) — ส่งให้ LLM แต่งเรื่อง + ใช้เป็นสรุปสำรอง
+  const sessionEvents = (Array.isArray(events) ? events : [])
+    .filter((e) => e && (e.detail || e.title))
+    .slice(-12);
+
+  // สรุปจาก log เหตุการณ์จริง — ใช้เมื่อ LLM ไม่ได้เรื่อง (ปิด / พัง / ตอบไม่ได้)
+  const fallbackTale = () => {
+    if (!sessionEvents.length) return null;
+    const lines = sessionEvents.map((e, i) => `${i + 1}. ${e.detail || e.title}`);
+    return [
+      `ใน session นี้ ${c.name} ได้พบเหตุการณ์ ${sessionEvents.length} อย่าง:`,
+      ...lines,
+      `รวมแล้วได้ +${xp} XP และ +${gold} ทอง (คอมโบโฟกัส x${bonus.toFixed(1)})`,
+    ].join('\n');
+  };
+  const recordTale = (text) => {
+    if (text) addLog(c.id, { type: 'llm_tale', title: '📖 เรื่องราวการผจญภัย', detail: text.slice(0, 500) });
+  };
+
+  // สรุปการผจญภัยด้วย LLM (ถ้าเปิดใช้) — fire-and-forget: ไม่บล็อก response; ถ้าไม่ได้เรื่องก็ใช้สรุปเหตุการณ์แทน
   const city = CITIES[c.city_index % CITIES.length];
   llmChat({
-    system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story in Thai mixed with English (like the game\'s style). Narrate only what happened during this focus session — never invent rewards, numbers, items or levels. Keep it fun and concise.',
+    system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story in Thai mixed with English (like the game\'s style). Narrate only what happened during this focus session, weaving in the events list below if provided — never invent rewards, numbers, items or levels. Keep it fun and concise.',
     user: JSON.stringify({
       character: c.name, class: CLASSES[c.class]?.name || c.class, level: c.level,
       city: city.name, terrain: city.terrain,
       focusMinutes: Math.round(focusSec / 60), streak: prog.streak,
       xpGained: xp, goldGained: gold, sessionsCompleted: prog.sessions_completed,
+      events: sessionEvents.map((e) => e.detail || e.title),
     }),
-  }).then((tale) => {
-    if (tale) addLog(c.id, { type: 'llm_tale', title: '📖 เรื่องราวการผจญภัย', detail: tale.slice(0, 500) });
-  }).catch(() => {});
+  }).then((tale) => recordTale(tale || fallbackTale()))
+    .catch(() => recordTale(fallbackTale()));
   // ตัวนับรายวัน (Daily Quest)
   bumpDaily(c.id, 'sessions');
   bumpDaily(c.id, 'focus_sec', focusSec);
@@ -261,6 +284,24 @@ router.post('/adventure/abort', (req, res) => {
   db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
   addLog(c.id, { type: 'abort', title: '💨 ละทิ้งเซสชัน', detail: 'คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)' });
   res.json({ progress: getProgress(c.id) });
+});
+
+// ----- จบพักเบรก — บันทึกสถิติการพัก (ระยะเวลา / เลยเวลา / ต่อเวลากี่ครั้ง) -----
+router.post('/break/done', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { breakSec = 0, overrunSec = 0, extended = 0 } = req.body || {};
+  const prog = getProgress(c.id);
+  prog.break_sec += Math.max(0, Math.round(breakSec));
+  prog.break_overrun_sec += Math.max(0, Math.round(overrunSec));
+  prog.break_extended += Math.max(0, Math.round(extended));
+  db.prepare('UPDATE progress SET break_sec=?, break_overrun_sec=?, break_extended=? WHERE id=?')
+    .run(prog.break_sec, prog.break_overrun_sec, prog.break_extended, prog.id);
+  const mins = Math.round(Math.max(0, Math.round(breakSec)) / 60);
+  const parts = [`พัก ${mins} นาที`];
+  if (extended > 0) parts.push(`ต่อเวลา ${extended} ครั้ง`);
+  if (overrunSec > 0) parts.push(`เลยเวลา ${Math.round(overrunSec / 60)} นาที`);
+  addLog(c.id, { type: 'break_done', title: '☕ จบพักเบรก', detail: parts.join(' · '), breakSec: Math.round(breakSec), overrunSec: Math.round(overrunSec) });
+  res.json({ progress: getProgress(c.id), message: 'บันทึกการพักแล้ว' });
 });
 
 // ----- เดินทาง (ย้อนกลับไปเมืองที่เคยไปมาแล้ว — เสีย 20 ทอง/เมือง) -----
@@ -305,15 +346,32 @@ router.get('/camp', (req, res) => {
   if (!stock.length) {
     db.prepare('DELETE FROM camp_shop WHERE character_id = ?').run(c.id); // ล้าง stock ค่ายเก่า
     const pool = SHOP_STOCK.filter((i) => i.type === 'consumable' || (i.lvl || 1) <= c.level + 1);
-    const chosen = [...pickRandom(pool.filter((i) => i.type === 'consumable'), 2), ...pickRandom(pool.filter((i) => i.type !== 'consumable'), 3)];
+    // สินค้า 3–5 ชิ้น: ยา 1–2 + อุปกรณ์ 2–3 (สุ่มจำนวนด้วย)
+    const nConsumable = 1 + Math.floor(Math.random() * 2);
+    const nGear = 2 + Math.floor(Math.random() * 2);
+    const chosen = [
+      ...pickRandom(pool.filter((i) => i.type === 'consumable'), nConsumable),
+      ...pickRandom(pool.filter((i) => i.type !== 'consumable'), nGear),
+    ];
     const ins = db.prepare('INSERT OR IGNORE INTO camp_shop (character_id, visit, item_id, qty) VALUES (?, ?, ?, 0)');
     for (const i of chosen) ins.run(c.id, visit, i.id);
     stock = db.prepare('SELECT item_id, qty FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   }
-  const shop = stock.map((s) => ({ ...ITEM_BY_ID[s.item_id], bought: s.qty >= 1 ? 1 : 0 })).filter(Boolean);
+  // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของไม่ดังลดราคา
+  const dayKey = today();
+  const shop = stock.map((s) => {
+    const base = ITEM_BY_ID[s.item_id];
+    if (!base) return null;
+    const m = marketPrice(base, dayKey);
+    return { ...base, price: m.price, priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
+  }).filter(Boolean);
+  // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ — จังหวะรายวัน (พ่อค้าอยากได้ของบางชิ้น → แพงขึ้น, เปลี่ยนทุกวัน)
+  const inventory = getInventory(c.id);
+  const sellPrices = Object.fromEntries(inventory.map((inv) => [inv.item_id, campSellPrice(inv, dayKey)]));
   res.json({
     ...serialize(c),
-    inventory: getInventory(c.id),
+    inventory,
+    sellPrices,
     shop,
     quests: rollQuests(c.level, 3),
   });
@@ -329,14 +387,16 @@ router.post('/shop/buy', (req, res) => {
   const row = db.prepare('SELECT qty FROM camp_shop WHERE character_id = ? AND visit = ? AND item_id = ?').get(c.id, visit, itemId);
   if (!row) return res.status(400).json({ error: 'สินค้านี้ไม่อยู่ในร้านค่ายพักนี้' });
   if (row.qty >= 1) return res.status(400).json({ error: 'ซื้อได้ครั้งเดียวต่อค่ายพัก — ขายหมดแล้ว' });
-  if (c.gold < item.price) return res.status(400).json({ error: 'ทองไม่พอ!' });
-  c.gold -= item.price;
+  // ราคาตามวันนี้ (ตลาดขึ้น/ลด) — ราคาเดียวกับที่โชว์ใน /camp
+  const price = marketPrice(item, today()).price;
+  if (c.gold < price) return res.status(400).json({ error: `ทองไม่พอ! (ต้องใช้ ${price} ทอง)` });
+  c.gold -= price;
   addItem(c.id, itemId, 1);
   db.prepare('UPDATE camp_shop SET qty = qty + 1 WHERE character_id = ? AND visit = ? AND item_id = ?').run(c.id, visit, itemId);
   updateCharacter(c);
-  addLog(c.id, { type: 'shop', title: '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${item.price} ทอง)`, gold: -item.price });
+  addLog(c.id, { type: 'shop', title: '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)`, gold: -price });
   bumpDaily(c.id, 'items_bought', 1);
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ`, ...dailyPayload(c) });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, ...dailyPayload(c) });
 });
 
 router.post('/shop/sell', (req, res) => {
@@ -344,12 +404,33 @@ router.post('/shop/sell', (req, res) => {
   const { itemId, qty = 1 } = req.body || {};
   const inv = getInventory(c.id).find((i) => i.item_id === itemId);
   if (!inv || inv.qty < qty) return res.status(400).json({ error: 'ไม่มีไอเทมพอจะขาย' });
-  const gain = Math.round(inv.price * 0.5) * qty;
+  // ราคาขายตามวันนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น) — ราคาเดียวกับที่โชว์ใน /camp
+  const sell = campSellPrice(inv, today());
+  const gain = sell.price * qty;
   c.gold += gain;
   db.prepare('UPDATE inventory SET qty = qty - ? WHERE character_id = ? AND item_id = ?').run(qty, c.id, itemId);
   updateCharacter(c);
-  addLog(c.id, { type: 'shop', title: '💰 ขายของ', detail: `ขาย ${inv.icon} ${inv.name} x${qty} (+${gain} ทอง)`, gold: gain });
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ขายได้ ${gain} ทอง` });
+  const detail = sell.wanted
+    ? `ขาย ${inv.icon} ${inv.name} x${qty} ให้พ่อค้าที่ต้องการของ (+${gain} ทอง)`
+    : `ขาย ${inv.icon} ${inv.name} x${qty} (+${gain} ทอง)`;
+  addLog(c.id, { type: 'shop', title: '💰 ขายของ', detail, gold: gain });
+  // เควสประจำวัน "คนเก็บขยะ" — ขายของขวัญ (junk) นับชิ้น
+  if (inv.type === 'junk') bumpDaily(c.id, 'junk_sold', qty);
+  // นับจำนวนที่ขายให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
+  let ach = { fresh: [], ups: 0 };
+  if (sell.wanted) {
+    const prog = getProgress(c.id);
+    prog.wanted_sales = (prog.wanted_sales || 0) + qty;
+    db.prepare('UPDATE progress SET wanted_sales = ? WHERE id = ?').run(prog.wanted_sales, prog.id);
+    ach = checkAchievements(c, prog);
+  }
+  res.json({
+    ...serialize(c),
+    inventory: getInventory(c.id),
+    achievements: ach.fresh,
+    levelUps: { levels: ach.ups, statPoints: c.stat_points },
+    message: sell.wanted ? `🔥 พ่อค้าต้องการของชิ้นนี้! ได้ ${gain} ทอง` : `ขายได้ ${gain} ทอง`,
+  });
 });
 
 router.post('/inventory/use', (req, res) => {
@@ -361,6 +442,25 @@ router.post('/inventory/use', (req, res) => {
   const stats = computeStats(c);
   let used = false;
   let ups = 0;
+
+  // คัมภีร์สกิลหายาก — ใช้แล้วเรียนรู้สกิลใหม่ (เรียนซ้ำไม่ได้)
+  if (item.type === 'scroll') {
+    const sk = SCROLL_SKILL_BY_ID[item.learn_skill];
+    if (!sk) return res.status(400).json({ error: 'คัมภีร์นี้ใช้ไม่ได้' });
+    if (getSkillRow(c.id, sk.id)) return res.status(400).json({ error: `เรียนรู้สกิล ${sk.name} ไปแล้ว — คัมภีร์ซ้ำใช้ไม่ได้` });
+    learnSkill(c.id, sk.id, 'scroll');
+    db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+    addLog(c.id, { type: 'skill_learn', title: `📖 เรียนรู้สกิลใหม่: ${sk.icon} ${sk.name}`, detail: `จาก ${item.name} — ใช้สู้บอสได้เลย! (${sk.mp} MP)` });
+    const ach = checkAchievements(c, getProgress(c.id));
+    return res.json({
+      ...serialize(c), inventory: getInventory(c.id),
+      message: `📖 เรียนรู้สกิล ${sk.name} แล้ว!`,
+      achievements: ach.fresh,
+      ...dailyPayload(c),
+      levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
+    });
+  }
+
   if (item.heal_pct && c.hp < stats.maxHp) { c.hp = Math.min(stats.maxHp, c.hp + Math.round(stats.maxHp * item.heal_pct)); used = true; }
   if (item.mana_pct && c.mp < stats.maxMp) { c.mp = Math.min(stats.maxMp, c.mp + Math.round(stats.maxMp * item.mana_pct)); used = true; }
   if (item.use_gold) { c.gold += item.use_gold; used = true; }
@@ -544,9 +644,9 @@ router.post('/boss/act', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const fight = fights.get(c.id);
   if (!fight) return res.status(400).json({ error: 'ยังไม่เริ่มสู้บอส' });
-  const { action, itemId } = req.body || {};
+  const { action, itemId, skillId } = req.body || {};
   c.inv = getInventory(c.id);
-  const result = bossPlayerTurn(c, fight, action, itemId);
+  const result = bossPlayerTurn(c, fight, action, itemId, skillId);
   if (result.error) return res.status(400).json({ error: result.error });
 
   updateCharacter(c);
@@ -627,10 +727,38 @@ router.get('/stats', (req, res) => {
   // เมืองที่ชนะบอสมาแล้ว (จาก log boss_win)
   const cityLogs = db.prepare("SELECT detail FROM log WHERE character_id = ? AND type = 'boss_win' ORDER BY id").all(c.id);
 
+  // เวลาพักเบรกย้อนหลัง 7 วัน (จาก log break_done)
+  const breakRaw = db.prepare(`
+    SELECT date(created_at) AS d, COALESCE(SUM(break_sec), 0) AS break_sec, COALESCE(SUM(break_overrun_sec), 0) AS overrun_sec
+    FROM log WHERE character_id = ? AND type = 'break_done'
+      AND created_at >= datetime('now', 'localtime', '-6 days')
+    GROUP BY d`).all(c.id);
+  const breakDays = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = db.prepare(`SELECT date('now','localtime','-${i} day') AS d`).get().d;
+    const row = breakRaw.find((r) => r.d === date);
+    breakDays.push({ date, breakSec: row?.break_sec || 0, overrunSec: row?.overrun_sec || 0 });
+  }
+
+  // heatmap โฟกัส 12 สัปดาห์ (วันละกี่นาที)
+  const heatRaw = db.prepare(`
+    SELECT date(created_at) AS d, COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'session_done'
+      AND created_at >= datetime('now', 'localtime', '-90 days')
+    GROUP BY d`).all(c.id);
+  const heatmap = [];
+  for (let i = 90; i >= 0; i--) {
+    const date = db.prepare(`SELECT date('now','localtime','-${i} day') AS d`).get().d;
+    const row = heatRaw.find((r) => r.d === date);
+    heatmap.push({ date, focusSec: row?.focus_sec || 0 });
+  }
+
   res.json({
     character: serializeCharacter(c),
     progress: prog,
     days,
+    breakDays,
+    heatmap,
     cityLogs,
     achievements: { unlocked: ach.unlocked, total: ach.total },
     settings: getSettings(),
@@ -640,14 +768,13 @@ router.get('/stats', (req, res) => {
 // ----- ตั้งค่า -----
 router.put('/settings', (req, res) => {
   const s = getSettings();
-  const { work_min, short_break_min, long_break_min, sessions_per_cycle, event_every_sec } = req.body || {};
-  db.prepare(`UPDATE settings SET work_min=?, short_break_min=?, long_break_min=?, sessions_per_cycle=?, event_every_sec=? WHERE id=1`)
+  const { work_min, short_break_min, long_break_min, sessions_per_cycle } = req.body || {};
+  db.prepare(`UPDATE settings SET work_min=?, short_break_min=?, long_break_min=?, sessions_per_cycle=? WHERE id=1`)
     .run(
       Math.max(1, Math.min(90, work_min ?? s.work_min)),
       Math.max(1, Math.min(30, short_break_min ?? s.short_break_min)),
       Math.max(1, Math.min(60, long_break_min ?? s.long_break_min)),
       Math.max(1, Math.min(8, sessions_per_cycle ?? s.sessions_per_cycle)),
-      Math.max(30, Math.min(600, event_every_sec ?? s.event_every_sec)),
     );
   res.json({ settings: getSettings() });
 });
