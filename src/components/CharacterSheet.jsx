@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { Panel, StatRow } from './ui.jsx';
+import ItemTip from './ItemTip.jsx';
+import ItemStatChips from './ItemStats.jsx';
 
 export function StatAllocator({ onDone }) {
   const { character, post } = useGame();
@@ -136,7 +138,10 @@ export default function CharacterSheet() {
             {s.locked ? (
               <span className="slot-empty">🔒 บล็อก (อาวุธสองมือ)</span>
             ) : s.item ? (
-              <span className="slot-item">{s.item.icon} {s.item.name}{s.item.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null}</span>
+              <ItemTip item={s.item} className="slot-item">
+                <span>{s.item.icon} {s.item.name}{s.item.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null}</span>
+                <ItemStatChips item={s.item} />
+              </ItemTip>
             ) : (
               <span className="slot-empty">— ว่าง —</span>
             )}
@@ -160,11 +165,14 @@ export default function CharacterSheet() {
         ) : (
           inventory.map((i) => (
             <div className="inv-row" key={i.item_id}>
-              <span className="inv-icon">{i.icon}</span>
-              <div className="inv-info">
-                <div className="inv-name">{i.name} {i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
-                <div className="inv-desc">{i.desc}</div>
-              </div>
+              <ItemTip item={i}>
+                <span className="inv-icon">{i.icon}</span>
+                <div className="inv-info">
+                  <div className="inv-name">{i.name} {i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
+                  <ItemStatChips item={i} />
+                  <div className="inv-desc">{i.desc}</div>
+                </div>
+              </ItemTip>
               <div className="inv-actions">
                 {i.type === 'consumable' ? (
                   <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>

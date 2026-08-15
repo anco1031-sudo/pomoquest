@@ -3,6 +3,8 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
+import ItemTip from './ItemTip.jsx';
+import ItemStatChips from './ItemStats.jsx';
 
 const TABS = [
   { key: 'shop', label: 'ร้านค้า', icon: '🛒' },
@@ -99,11 +101,14 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
           <div className="shop-list">
             {shop.map((i) => (
               <div className="shop-row" key={i.id}>
-                <span className="inv-icon">{i.icon}</span>
-                <div className="inv-info">
-                  <div className="inv-name">{i.name} {twoHandTag(i)}</div>
-                  <div className="inv-desc">{i.desc}</div>
-                </div>
+                <ItemTip item={i}>
+                  <span className="inv-icon">{i.icon}</span>
+                  <div className="inv-info">
+                    <div className="inv-name">{i.name} {twoHandTag(i)}</div>
+                    <ItemStatChips item={i} />
+                    <div className="inv-desc">{i.desc}</div>
+                  </div>
+                </ItemTip>
                 {i.bought ? (
                   <span className="sold-tag">ขายแล้ว</span>
                 ) : (
@@ -161,11 +166,14 @@ export default function CampScreen({ remain, total, running, onSkip, visit }) {
           ) : (
             inventory.map((i) => (
               <div className="inv-row" key={i.item_id}>
-                <span className="inv-icon">{i.icon}</span>
-                <div className="inv-info">
-                  <div className="inv-name">{i.name} {twoHandTag(i)} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
-                  <div className="inv-desc">{i.desc}</div>
-                </div>
+                <ItemTip item={i}>
+                  <span className="inv-icon">{i.icon}</span>
+                  <div className="inv-info">
+                    <div className="inv-name">{i.name} {twoHandTag(i)} <span className="inv-qty">x{i.qty}</span>{i.exclusive ? <span className="exclusive-tag">✦ พิเศษ</span> : null}</div>
+                    <ItemStatChips item={i} />
+                    <div className="inv-desc">{i.desc}</div>
+                  </div>
+                </ItemTip>
                 <div className="inv-actions">
                   {i.type === 'consumable' ? (
                     <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
