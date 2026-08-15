@@ -46,19 +46,33 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   };
 
   // ---- ข้อมูล: export / import / reset ----
+  const downloadFile = async (path, filename) => {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error('export ไม่สำเร็จ');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExport = async () => {
     try {
-      const res = await fetch('/api/backup');
-      if (!res.ok) throw new Error('export ไม่สำเร็จ');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
       const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
-      a.href = url;
-      a.download = `pomoquest-backup-${ts}.db`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('📤 ดาวน์โหลด backup แล้ว');
+      await downloadFile('/api/backup', `pomoquest-backup-${ts}.db`);
+      showToast('📤 ดาวน์โหลด backup (.db) แล้ว');
+    } catch (e) {
+      showToast(e.message);
+    }
+  };
+
+  const handleExportJson = async () => {
+    try {
+      const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      await downloadFile('/api/export', `pomoquest-backup-${ts}.json.gz`);
+      showToast('📤 ดาวน์โหลด backup (JSON) แล้ว');
     } catch (e) {
       showToast(e.message);
     }
@@ -74,7 +88,12 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
       const res = await fetch('/api/restore', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buf });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { showToast(d.error || 'import ไม่สำเร็จ'); return; }
-      setShowImportNote(true);
+      if (d.restart) {
+        setShowImportNote(true); // ไฟล์ .db → ต้องรีสตาร์ท server
+      } else {
+        showToast(d.message || 'กู้คืนข้อมูลแล้ว');
+        refresh(); // JSON → มีผลทันที
+      }
     } catch (err) {
       showToast(err.message);
     }
@@ -255,19 +274,23 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
           <div className="panel">
             <div className="panel-title">💾 ข้อมูล (Export / Import / Reset)</div>
             <div className="setting-row">
-              <label>📤 Export</label>
-              <button className="btn" onClick={handleExport}>ดาวน์โหลด backup (.db)</button>
+              <label>📤 Export (.db)</label>
+              <button className="btn" onClick={handleExport}>ดาวน์โหลด backup</button>
+            </div>
+            <div className="setting-row">
+              <label>📤 Export (JSON)</label>
+              <button className="btn" onClick={handleExportJson}>ดาวน์โหลด .json.gz</button>
             </div>
             <div className="setting-row">
               <label>📥 Import</label>
-              <button className="btn" onClick={() => fileRef.current?.click()}>อัปโหลดไฟล์ .db</button>
-              <input ref={fileRef} type="file" accept=".db,application/octet-stream" hidden onChange={handleImport} />
+              <button className="btn" onClick={() => fileRef.current?.click()}>อัปโหลดไฟล์ (.db / .json.gz)</button>
+              <input ref={fileRef} type="file" accept=".db,.json.gz,.gz,application/octet-stream,application/gzip" hidden onChange={handleImport} />
             </div>
             <div className="setting-row">
               <label>🗑️ Reset</label>
               <button className="btn btn-danger" onClick={handleReset}>ล้างข้อมูลทั้งหมด</button>
             </div>
-            <p className="hint">💡 Export ได้ไฟล์ .db เดียวกับ <code>./run.sh backup</code> — ใช้กู้คืนผ่าน <code>./run.sh restore</code> หรือปุ่ม Import ได้</p>
+            <p className="hint">💡 <b>.db</b> = ไฟล์เดียวกับ <code>./run.sh backup</code> (import แล้วต้องรีสตาร์ท server) · <b>.json.gz</b> = อ่าน/แก้ด้วยมือได้ ไฟล์เล็ก (บีบอัด gzip) import แล้วมีผลทันที — รองรับทั้ง 2 แบบ</p>
           </div>
         )}
       </main>

@@ -195,7 +195,8 @@ LLM_API_KEY=xxxx npm run dev       # มี key
 | POST | `/api/travel` | เดินทางย้อนกลับไปเมืองที่เคยไปมาแล้ว (เสีย 20 ทอง/เมือง) |
 | PUT | `/api/settings` | ปรับเวลา Pomodoro |
 | GET | `/api/backup` | Export ข้อมูลทั้งหมดเป็นไฟล์ .db (ดาวน์โหลด) |
-| POST | `/api/restore` | Import ไฟล์ .db (ต้องรีสตาร์ท server ถึงมีผล) |
+| GET | `/api/export` | Export เป็น JSON บีบอัด gzip (.json.gz — อ่าน/แก้ได้ ไฟล์เล็ก) |
+| POST | `/api/restore` | Import — .json.gz มีผลทันที · .db ต้องรีสตาร์ท server |
 | POST | `/api/reset` | ล้างข้อมูลเกมทั้งหมด (มีผลทันที) |
 
 ## 🧪 Dev Test Panel
