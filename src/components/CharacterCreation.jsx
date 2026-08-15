@@ -9,7 +9,9 @@ const CLASSES = [
   { key: 'cleric', name: 'นักบวช', en: 'Cleric', icon: '✨', desc: 'สายสมดุล มนามาก ฟื้นพลังได้เรื่อย ๆ', base: 'MP 50 · ATK 10 · DEF 9' },
 ];
 
-export default function CharacterCreation() {
+// modal = แสดงเป็น modal (กดจากปุ่ม "สร้างตัวละครใหม่" ในหน้าเลือกตัวละคร)
+// onClose = กลับไปหน้าเลือกตัวละคร (เฉพาะโหมด modal)
+export default function CharacterCreation({ modal = false, onClose }) {
   const { post } = useGame();
   const [name, setName] = useState('');
   const [cls, setCls] = useState(null);
@@ -23,13 +25,9 @@ export default function CharacterCreation() {
     setBusy(false);
   };
 
-  return (
-    <div className="creation">
-      <div className="creation-hero">
-        <div className="creation-logo">🍅⚔️</div>
-        <h1>PomoQuest</h1>
-        <p className="subtitle">โฟกัสงาน… แล้วตัวละครของคุณจะผจญภัยไปกับคุณ</p>
-      </div>
+  const content = (
+    <>
+      {modal && <div className="modal-title">✨ สร้างตัวละครใหม่</div>}
 
       <div className="panel">
         <div className="panel-title">📛 ตั้งชื่อนักผจญภัย</div>
@@ -68,6 +66,32 @@ export default function CharacterCreation() {
         🚀 เริ่มการผจญภัย
       </button>
       <p className="hint">ทุก 25 นาทีที่คุณโฟกัส = 1 session ผจญภัย · ครบ 4 session = สู้บอส!</p>
+      {modal && (
+        <button className="btn" onClick={onClose}>← กลับไปเลือกตัวละคร</button>
+      )}
+    </>
+  );
+
+  // โหมดหน้าเต็ม (ตอนยังไม่มีตัวละครเลย — หน้าแรกสุด)
+  if (!modal) {
+    return (
+      <div className="creation">
+        <div className="creation-hero">
+          <div className="creation-logo">🍅⚔️</div>
+          <h1>PomoQuest</h1>
+          <p className="subtitle">โฟกัสงาน… แล้วตัวละครของคุณจะผจญภัยไปกับคุณ</p>
+        </div>
+        {content}
+      </div>
+    );
+  }
+
+  // โหมด modal — เด้งทับหน้าเลือกตัวละคร
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal character-create-modal" onClick={(e) => e.stopPropagation()}>
+        {content}
+      </div>
     </div>
   );
 }

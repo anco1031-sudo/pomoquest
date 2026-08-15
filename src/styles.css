@@ -838,6 +838,7 @@ body {
 .select-screen { max-width: 520px; margin: 0 auto; padding: 20px 16px 40px; }
 .character-select-modal { max-width: 460px; }
 .select-title { font-size: 19px; font-weight: 800; margin-bottom: 14px; }
+.modal-title { font-size: 19px; font-weight: 800; margin-bottom: 14px; }
 .char-card {
   display: flex;
   align-items: center;
