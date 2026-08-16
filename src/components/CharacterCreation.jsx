@@ -31,22 +31,39 @@ const CHALLENGES = [
 ];
 
 // modal = แสดงเป็น modal (กดจากปุ่ม "สร้างตัวละครใหม่" ในหน้าเลือกตัวละคร)
-// onClose = กลับไปหน้าเลือกตัวละคร (เฉพาะโหมด modal)
-export default function CharacterCreation({ modal = false, onClose }) {
+// onClose = กลับไปหน้าเลือกตัวละคร (เฉพาะโหมด modal) · onDone = ปิดเมนูทั้งหมดแล้วใช้ตัวละครที่เพิ่งสร้าง (ไปหน้า Home)
+export default function CharacterCreation({ modal = false, onClose, onDone }) {
   const { post } = useGame();
   const [name, setName] = useState('');
   const [cls, setCls] = useState(null);
   const [challenge, setChallenge] = useState('');
   const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState(null); // ตัวละครที่เพิ่งสร้าง (โชว์ modal "ใช้เลยไหม") — เฉพาะโหมด modal
 
   const create = async () => {
     if (!name.trim() || !cls || busy) return;
     setBusy(true);
     sfx.start();
     const d = await post('/character/create', { name, class: cls, challengeMode: challenge });
-    // เพิ่งสร้างตัวละครแรก (จากลิสต์ว่าง — เริ่มเกมใหม่จริง ๆ) → ให้หน้าแรกโชว์ modal วิธีเล่น
-    if (d && d.characters?.length === 1) localStorage.setItem('pomoquest-onboarded-pending', '1');
+    if (d) {
+      // เพิ่งสร้างตัวละครแรก (จากลิสต์ว่าง — เริ่มเกมใหม่จริง ๆ) → ให้หน้าแรกโชว์ modal วิธีเล่น
+      if (d.characters?.length === 1) localStorage.setItem('pomoquest-onboarded-pending', '1');
+      if (modal) setCreated(d.character || { name, class: cls, challengeMode: challenge });
+    }
     setBusy(false);
+  };
+
+  // กด "ใช้เลย" — ปิดเมนูทั้งหมด + ไปหน้า Home (server ตั้งตัวที่เพิ่งสร้างเป็น active อยู่แล้ว)
+  const startPlaying = () => {
+    sfx.click();
+    onDone?.();
+  };
+
+  // กด "กลับไปเลือกตัวละคร" — เก็บตัวละครไว้ (ยังเป็น active) แล้วกลับไปลิสต์
+  const backToSelect = () => {
+    sfx.click();
+    setCreated(null);
+    onClose?.();
   };
 
   const content = (
@@ -155,9 +172,23 @@ export default function CharacterCreation({ modal = false, onClose }) {
 
   // โหมด modal — เด้งทับหน้าเลือกตัวละคร
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={created ? undefined : onClose}>
       <div className="modal character-create-modal" onClick={(e) => e.stopPropagation()}>
-        {content}
+        {created ? (
+          <>
+            <div className="modal-title">🎉 สร้างตัวละครสำเร็จ!</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center', margin: '14px 0 6px' }}>
+              <span className="char-avatar">{created.classIcon || '❓'}</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontWeight: 800, fontSize: 17 }}>{created.name}</div>
+                <div className="hint" style={{ margin: 0 }}>{created.className || created.class} · Lv.{created.level || 1}</div>
+              </div>
+            </div>
+            <p className="hint" style={{ textAlign: 'center' }}>จะเริ่มผจญภัยด้วยตัวละครนี้เลยไหม?</p>
+            <button className="btn btn-primary btn-big" onClick={startPlaying}>⚔️ ใช้เลย — เริ่มผจญภัย</button>
+            <button className="btn" onClick={backToSelect}>← กลับไปเลือกตัวละคร</button>
+          </>
+        ) : content}
       </div>
     </div>
   );

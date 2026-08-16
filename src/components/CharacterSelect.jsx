@@ -10,7 +10,7 @@ export default function CharacterSelect({ standalone = false, onClose, onDone })
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showSkillsId, setShowSkillsId] = useState(null);
 
-  if (showCreate) return <CharacterCreation modal onClose={() => setShowCreate(false)} />;
+  if (showCreate) return <CharacterCreation modal onClose={() => setShowCreate(false)} onDone={onDone} />;
 
   const select = async (c) => {
     sfx.click();
