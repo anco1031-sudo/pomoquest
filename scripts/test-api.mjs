@@ -110,6 +110,12 @@ try {
   expect('complete: มี session summary (พร้อม session_key)', !!summ && summ.session_key === 'api-test-key');
   const pauseSec = db.prepare('SELECT pause_sec FROM progress WHERE character_id = ?').get(cid)?.pause_sec || 0;
   expect('complete: พักกลาง session (pauseSec 180 วิ) นับแยกจาก break_sec', pauseSec === 180, `pause_sec=${pauseSec}`);
+  const today = db.prepare("SELECT date('now','localtime') AS d").get().d;
+  const storedPauseLog = db.prepare("SELECT pause_sec FROM log WHERE character_id = ? AND type = 'session_done' ORDER BY id DESC LIMIT 1").get(cid);
+  expect('complete: บันทึก pause_sec ลง log session_done (สำหรับกราฟรายวัน)', storedPauseLog?.pause_sec === 180, JSON.stringify(storedPauseLog));
+  r = await api('/stats');
+  const todayPause = r.json.breakDays?.find((d) => d.date === today)?.pauseSec || 0;
+  expect('stats: กราฟ 7 วันมีพักกลาง session (pauseSec วันนี้ = 180)', todayPause === 180, `pauseSec วันนี้=${todayPause}`);
 
   // --- /session-history ---
   r = await api('/session-history');

@@ -56,6 +56,7 @@ export default function StatsScreen() {
   const totalMonthSessions = monthDays.reduce((a, d) => a + d.sessions, 0);
   const totalMonthMinutes = Math.round(monthDays.reduce((a, d) => a + d.focusSec, 0) / 60);
   const maxBreak = Math.max(1, ...data.breakDays.map((d) => d.breakSec));
+  const maxPause = Math.max(1, ...data.breakDays.map((d) => d.pauseSec || 0));
 
   // heatmap 91 วัน → จัดเป็นคอลัมน์รายสัปดาห์ (ขึ้นต้นวันจันทร์ เติมช่องว่างก่อนหน้าให้เต็มสัปดาห์)
   const heatCells = (() => {
@@ -201,17 +202,29 @@ export default function StatsScreen() {
         </div>
       </Panel>
 
-      <Panel title="☕ พักเบรกย้อนหลัง 7 วัน">
+      <Panel title="☕ เวลาพักย้อนหลัง 7 วัน">
+        <div className="chart-legend">
+          <span className="legend-item"><i className="legend-dot legend-break" /> พักเบรกระหว่าง session</span>
+          <span className="legend-item"><i className="legend-dot legend-pause" /> พักกลาง session (⏸️ หยุดพัก/กลับหน้าหลัก)</span>
+        </div>
         <div className="chart">
           {data.breakDays.map((d, i) => {
-            const minutes = Math.round(d.breakSec / 60);
-            const h = Math.max(4, (d.breakSec / maxBreak) * 100);
+            const breakM = Math.round(d.breakSec / 60);
+            const pauseM = Math.round((d.pauseSec || 0) / 60);
+            const totalM = breakM + pauseM;
+            const hBreak = Math.max(4, (d.breakSec / maxBreak) * 100);
+            const hPause = Math.max(4, ((d.pauseSec || 0) / maxPause) * 100);
             const dow = new Date(d.date + 'T12:00:00').getDay();
             return (
               <div className="chart-col" key={d.date}>
-                <div className="chart-value">{minutes > 0 ? `${minutes}m` : ''}</div>
-                <div className="chart-bar-wrap">
-                  <div className="chart-bar chart-bar-break" style={{ height: `${h}%` }} />
+                <div className="chart-value">{totalM > 0 ? `${totalM}m` : ''}</div>
+                <div className="chart-bar-group">
+                  <div className="chart-bar-wrap">
+                    <div className="chart-bar chart-bar-break" style={{ height: `${hBreak}%` }} />
+                  </div>
+                  <div className="chart-bar-wrap">
+                    <div className="chart-bar chart-bar-pause" style={{ height: `${hPause}%` }} />
+                  </div>
                 </div>
                 <div className="chart-label">{DAY_NAMES[dow]}</div>
                 <div className="chart-sessions">{d.overrunSec > 0 ? `เลย ${Math.round(d.overrunSec / 60)}m` : ''}</div>

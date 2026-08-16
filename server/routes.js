@@ -290,12 +290,13 @@ router.post('/adventure/complete', (req, res) => {
     total_focus_sec=@total_focus_sec, pause_sec=@pause_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
 
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
-  const pauseNote = pauseSec > 60
-    ? ` · ⏸️ พัก ${Math.round(pauseSec / 60)} นาที`
-    : pauseSec > 0 ? ` · ⏸️ พัก ${pauseSec} วิ` : '';
+  const pauseSecRounded = Math.max(0, Math.round(pauseSec));
+  const pauseNote = pauseSecRounded > 60
+    ? ` · ⏸️ พัก ${Math.round(pauseSecRounded / 60)} นาที`
+    : pauseSecRounded > 0 ? ` · ⏸️ พัก ${pauseSecRounded} วิ` : '';
   const taleAfter = addLog(c.id, {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
-    xp, gold, focusSec, focusTask,
+    xp, gold, focusSec, pauseSec: pauseSecRounded, focusTask,
   });
   if (survivalFall) {
     addLog(c.id, { type: 'survival_fall', title: '💀 อ่อนแรงล้ม', detail: survivalFall });
@@ -1124,17 +1125,23 @@ router.get('/stats', (req, res) => {
   const bmSells = db.prepare("SELECT COUNT(*) n, COALESCE(SUM(gold),0) AS gold FROM log WHERE character_id=? AND type='shop' AND title='💰 ขายของ' AND detail LIKE '%ตลาดมืด%'").get(c.id);
   const bmStats = { buys: bmBuys.n, buyGold: bmBuys.gold, sells: bmSells.n, sellGold: bmSells.gold, profit: bmSells.gold - bmBuys.gold };
 
-  // เวลาพักเบรกย้อนหลัง 7 วัน (จาก log break_done)
+  // เวลาพักเบรกย้อนหลัง 7 วัน (จาก log break_done) + พักกลาง session (จาก log session_done)
   const breakRaw = db.prepare(`
     SELECT date(created_at) AS d, COALESCE(SUM(break_sec), 0) AS break_sec, COALESCE(SUM(break_overrun_sec), 0) AS overrun_sec
     FROM log WHERE character_id = ? AND type = 'break_done'
       AND created_at >= datetime('now', 'localtime', '-6 days')
     GROUP BY d`).all(c.id);
+  const pauseRaw = db.prepare(`
+    SELECT date(created_at) AS d, COALESCE(SUM(pause_sec), 0) AS pause_sec
+    FROM log WHERE character_id = ? AND type = 'session_done'
+      AND created_at >= datetime('now', 'localtime', '-6 days')
+    GROUP BY d`).all(c.id);
+  const pauseByDate = Object.fromEntries(pauseRaw.map((r) => [r.d, r.pause_sec]));
   const breakDays = [];
   for (let i = 6; i >= 0; i--) {
     const date = db.prepare(`SELECT date('now','localtime','-${i} day') AS d`).get().d;
     const row = breakRaw.find((r) => r.d === date);
-    breakDays.push({ date, breakSec: row?.break_sec || 0, overrunSec: row?.overrun_sec || 0 });
+    breakDays.push({ date, breakSec: row?.break_sec || 0, overrunSec: row?.overrun_sec || 0, pauseSec: pauseByDate[date] || 0 });
   }
 
   // สถิติแยกตามงานที่โฟกัส (session_done — 30 วันล่าสุด) — ตั้งชื่องานก่อนเริ่มโฟกัสได้
