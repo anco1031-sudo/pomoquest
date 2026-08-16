@@ -3,13 +3,14 @@ process.env.POMOQUEST_DB = `/tmp/pq-test-api-${Date.now()}.db`;
 
 const express = (await import('express')).default;
 const routes = (await import('../server/routes.js')).default;
-const devRoutes = (await import('../server/dev.js')).default;
+const { default: devRoutes, devDryRun } = await import('../server/dev.js');
 const { db, addItem } = await import('../server/db.js');
 const { equipBlockReason } = await import('../server/game.js');
 const { ITEM_BY_ID } = await import('../server/data.js');
 
 const app = express();
 app.use(express.json());
+app.use('/api', devDryRun); // dev test: request ที่มี x-dev-token → ลองเล่น (ไม่บันทึก)
 app.use('/api', routes);
 app.use('/api', devRoutes);
 const server = app.listen(0);
@@ -217,6 +218,21 @@ try {
     expect('dev xp: DB ไม่บันทึก (เลเวลเท่าเดิม)', stateAfter.level === levelBefore, `before=${levelBefore}, after=${stateAfter.level}`);
     const devLogs = db.prepare("SELECT COUNT(*) n FROM log WHERE type = 'dev'").get().n;
     expect('dev: ไม่มี log dev เข้า DB', devLogs === 0);
+
+    // --- dev: ปุ่มที่เรียกระบบจริงของเกม (จบ session) ก็เป็นลองเล่น — ไม่บันทึก/ไม่นับ XP ---
+    const stB = await api('/state');
+    const xpB = stB.json.character.xp;
+    const goldB = stB.json.character.gold;
+    const levelB = stB.json.character.level;
+    const sessB = stB.json.progress.sessions_completed;
+    const doneB = db.prepare("SELECT COUNT(*) n FROM log WHERE character_id = ? AND type = 'session_done'").get(cid).n;
+    r = await devPost('/adventure/complete', { focusSec: 1500 });
+    expect('dev complete: ตอบเหมือนจบ session จริง (ได้ XP/ทอง/เลเวลอัพ)', r.status === 200 && r.json.reward?.xp > 0 && r.json.character.xp > xpB, `xp=${r.json.character?.xp} (ก่อน ${xpB})`);
+    const stA = await api('/state');
+    expect('dev complete: DB ไม่บันทึก (XP/ทอง/เลเวลเท่าเดิม)', stA.json.character.xp === xpB && stA.json.character.gold === goldB && stA.json.character.level === levelB, `xp=${stA.json.character.xp} gold=${stA.json.character.gold} lv=${stA.json.character.level}`);
+    expect('dev complete: ไม่นับ session/คอมโบใน progress', stA.json.progress.sessions_completed === sessB && stA.json.progress.streak === stB.json.progress.streak, `sessions=${stA.json.progress.sessions_completed} (ก่อน ${sessB})`);
+    const doneA = db.prepare("SELECT COUNT(*) n FROM log WHERE character_id = ? AND type = 'session_done'").get(cid).n;
+    expect('dev complete: ไม่มี log session_done เข้า DB', doneA === doneB, `before=${doneB} after=${doneA}`);
 
     // --- dev: ตัวอย่างตลาดมืด (preview ล้วน — ไม่มีผลกับเกมจริง) ---
     const bmVisit = `bm-preview-${Date.now()}`;

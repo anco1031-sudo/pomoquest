@@ -31,7 +31,7 @@ const QUEST_IDS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'];
 const DEV_KEY = 'pomoquest-dev-token';
 
 export default function DevPanel({ onClose }) {
-  const { post, showToast } = useGame();
+  const { showToast } = useGame();
   const [token, setToken] = useState(() => localStorage.getItem(DEV_KEY) || '');
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
@@ -86,12 +86,12 @@ export default function DevPanel({ onClose }) {
     if (d?.items) setBmPreview(d);
   };
 
-  // เรียก endpoint ปกติของเกม (ทดสอบระบบจริง)
+  // เรียก endpoint จริงของเกมแบบลองเล่น — ส่ง dev token → server รันใน transaction แล้ว ROLLBACK (ไม่บันทึก)
   const act = async (fn, msg) => {
     setBusy(true);
     try {
       const d = await fn();
-      toast(d?.message || msg || 'เรียบร้อย');
+      toast(`${d?.message || msg || 'เรียบร้อย'} (ไม่บันทึก)`);
     } catch (e) {
       toast(e.message);
     } finally {
@@ -104,7 +104,7 @@ export default function DevPanel({ onClose }) {
       <div className="modal dev-panel" onClick={(e) => e.stopPropagation()}>
         <h2>🧪 Dev Test Panel</h2>
         <p className="dev-sub">ทดสอบระบบต่าง ๆ ของเกม — ต้องเข้าสู่ระบบก่อน (admin/admin)</p>
-        <p className="dev-sub" style={{ color: '#fcd34d' }}>⚠️ ปุ่ม /dev/* (ทอง/XP/ไอเทม/ตรา/ชนะบอส/สกิล…) เป็นโหมดลองเล่น — แสดงผลเหมือนจริงแต่ <b>ไม่บันทึกลง DB</b> (กันปั๊มเลเวล) · ปุ่มที่เรียกระบบจริงของเกม (event/session/ภารกิจ/ซื้อ) ยังบันทึกตามปกติ</p>
+        <p className="dev-sub" style={{ color: '#fcd34d' }}>⚠️ ทุกปุ่มใน panel นี้เป็นโหมดลองเล่น (รวม จบ session / event / ภารกิจ / ซื้อ / พักเบรก) — แสดงผลเหมือนจริงแต่ <b>ไม่บันทึกลง DB</b> (กันปั๊มเลเวล/ทอง) · ถ้าอยากทดสอบแบบบันทึกจริง ให้เล่นผ่านหน้าจอเกมปกติ</p>
 
         {!token ? (
           <div className="dev-login">
@@ -135,9 +135,9 @@ export default function DevPanel({ onClose }) {
 
             <div className="dev-section">🎲 เหตุการณ์ระหว่าง session</div>
             <div className="dev-grid">
-              <button className="btn" onClick={() => act(() => post('/adventure/event'), '🎲 สุ่ม event')} disabled={busy}>🎲 สุ่ม event</button>
+              <button className="btn" onClick={() => act(() => apiDevPost('/adventure/event'), '🎲 สุ่ม event')} disabled={busy}>🎲 สุ่ม event</button>
               {EVENT_KEYS.map((e) => (
-                <button key={e.key} className="btn" onClick={() => act(() => post('/adventure/event', { key: e.key }))} disabled={busy}>
+                <button key={e.key} className="btn" onClick={() => act(() => apiDevPost('/adventure/event', { key: e.key }))} disabled={busy}>
                   {e.label}
                 </button>
               ))}
@@ -145,15 +145,15 @@ export default function DevPanel({ onClose }) {
 
             <div className="dev-section">⏱️ สถานะ session / พัก</div>
             <div className="dev-grid">
-              <button className="btn" onClick={() => act(() => post('/adventure/complete', { focusSec: 1500 }), '✅ จบ session 25 นาที')} disabled={busy}>✅ จบ session (25 นาที)</button>
-              <button className="btn" onClick={() => act(() => post('/break/done', { breakSec: 300, overrunSec: 30, extended: 1 }), '☕ จบพักเบรก')} disabled={busy}>☕ จบพักเบรก (5 นาที)</button>
-              <button className="btn" onClick={() => act(() => post('/adventure/abort'), '💨 ล้างคอมโบ')} disabled={busy}>💨 ล้างคอมโบ</button>
+              <button className="btn" onClick={() => act(() => apiDevPost('/adventure/complete', { focusSec: 1500 }), '✅ จบ session 25 นาที')} disabled={busy}>✅ จบ session (25 นาที)</button>
+              <button className="btn" onClick={() => act(() => apiDevPost('/break/done', { breakSec: 300, overrunSec: 30, extended: 1 }), '☕ จบพักเบรก')} disabled={busy}>☕ จบพักเบรก (5 นาที)</button>
+              <button className="btn" onClick={() => act(() => apiDevPost('/adventure/abort'), '💨 ล้างคอมโบ')} disabled={busy}>💨 ล้างคอมโบ</button>
             </div>
 
             <div className="dev-section">⚔️ ระบบอื่น</div>
             <div className="dev-grid">
-              <button className="btn" onClick={() => act(() => post('/quest/do', { questId: QUEST_IDS[Math.floor(Math.random() * QUEST_IDS.length)] }), '📜 ทำภารกิจ')} disabled={busy}>📜 ภารกิจสุ่ม</button>
-              <button className="btn" onClick={() => act(() => post('/shop/buy', { itemId: 1, visit: `dev-${Date.now()}` }), '🛒 ซื้อยา')} disabled={busy}>🛒 ซื้อของ (ยาบำบัดน้อย)</button>
+              <button className="btn" onClick={() => act(() => apiDevPost('/quest/do', { questId: QUEST_IDS[Math.floor(Math.random() * QUEST_IDS.length)] }), '📜 ทำภารกิจ')} disabled={busy}>📜 ภารกิจสุ่ม</button>
+              <button className="btn" onClick={() => act(() => apiDevPost('/shop/buy', { itemId: 1, visit: `dev-${Date.now()}` }), '🛒 ซื้อยา')} disabled={busy}>🛒 ซื้อของ (ยาบำบัดน้อย)</button>
               <button className="btn" onClick={() => dev('/dev/boss-win', {})} disabled={busy}>👹 ชนะบอสทันที</button>
               <button className="btn" onClick={() => dev('/dev/tale', {})} disabled={busy}>📖 เรื่องราวทดสอบ</button>
               <button className="btn" onClick={() => dev('/dev/heal', {})} disabled={busy}>💖 เติม HP/MP เต็ม</button>

@@ -14,6 +14,37 @@ const DEV_PASS = process.env.DEV_PASS || 'admin';
 // token อยู่ในหน่วยความจำ — รีสตาร์ท server แล้วต้อง login ใหม่
 const tokens = new Set();
 
+// ระหว่างที่ dev dry-run middleware กำลังรัน request อยู่ (ลองเล่น) — ใช้กัน async write (เช่น LLM tale)
+// เขียนหลุดจาก transaction ที่จะ ROLLBACK (เช็คแบบ synchronous ใน handler เท่านั้น)
+let dryRunActive = false;
+export const isDevDryRun = () => dryRunActive;
+
+// ตัวกลาง: request ที่มี x-dev-token ถูกต้อง (ปุ่มใน dev panel ที่เรียก endpoint จริงของเกม
+// เช่น จบ session / event / ซื้อ / ภารกิจ) → รันทั้ง request ใน transaction แล้ว ROLLBACK ทันที
+// แสดงผลเหมือนจริง (XP/ทอง/เลเวลอัพ/ของ) แต่ไม่บันทึกอะไรลง DB — กันปั๊มเลเวล
+// ข้าม /dev/* เพราะจัดการ transaction เองอยู่แล้ว (dryRun ด้านล่าง)
+export const devDryRun = (req, res, next) => {
+  const token = req.headers['x-dev-token'];
+  if (!token || !tokens.has(token) || req.path.startsWith('/dev/')) return next();
+  dryRunActive = true;
+  try {
+    db.exec('BEGIN');
+  } catch (e) {
+    console.error('dev dry-run: เปิด transaction ไม่ได้:', e.message);
+    dryRunActive = false;
+    return next(); // เปิด transaction ไม่ได้ → รันแบบปกติ (กัน request ค้าง)
+  }
+  try {
+    next();
+    db.exec('ROLLBACK');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch { /* ไม่มี transaction ค้าง */ }
+    console.error('dev dry-run error:', e);
+  } finally {
+    dryRunActive = false;
+  }
+};
+
 const router = Router();
 
 router.post('/dev/login', (req, res) => {

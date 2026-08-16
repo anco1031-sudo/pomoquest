@@ -20,6 +20,7 @@ import {
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
 import { llmChat, llmEnabled } from './llm.js';
+import { isDevDryRun } from './dev.js';
 import { WRITABLE_TABLES, exportJsonData, restoreFromJson, checkDbSchema } from './data-io.js';
 
 const router = Router();
@@ -331,18 +332,21 @@ router.post('/adventure/complete', (req, res) => {
   };
 
   // สรุปการผจญภัยด้วย LLM (ถ้าเปิดใช้) — fire-and-forget: ไม่บล็อก response; ถ้าไม่ได้เรื่องก็ใช้สรุปเหตุการณ์แทน
+  // (dev ลองเล่น: ข้ามไปเลย — async write หลุดจาก transaction ที่จะ ROLLBACK ได้)
   const city = CITIES[c.city_index % CITIES.length];
-  llmChat({
-    system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story in Thai mixed with English (like the game\'s style). Narrate only what happened during this focus session, weaving in the events list below if provided — never invent rewards, numbers, items or levels. Keep it fun and concise.',
-    user: JSON.stringify({
-      character: c.name, class: CLASSES[c.class]?.name || c.class, level: c.level,
-      city: city.name, terrain: city.terrain,
-      focusMinutes: Math.round(focusSec / 60), streak: prog.streak,
-      xpGained: xp, goldGained: gold, sessionsCompleted: prog.sessions_completed,
-      events: sessionEvents.map((e) => e.detail || e.title),
-    }),
-  }).then((tale) => recordTale(tale || fallbackTale()))
-    .catch(() => recordTale(fallbackTale()));
+  if (!isDevDryRun()) {
+    llmChat({
+      system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story in Thai mixed with English (like the game\'s style). Narrate only what happened during this focus session, weaving in the events list below if provided — never invent rewards, numbers, items or levels. Keep it fun and concise.',
+      user: JSON.stringify({
+        character: c.name, class: CLASSES[c.class]?.name || c.class, level: c.level,
+        city: city.name, terrain: city.terrain,
+        focusMinutes: Math.round(focusSec / 60), streak: prog.streak,
+        xpGained: xp, goldGained: gold, sessionsCompleted: prog.sessions_completed,
+        events: sessionEvents.map((e) => e.detail || e.title),
+      }),
+    }).then((tale) => recordTale(tale || fallbackTale()))
+      .catch(() => recordTale(fallbackTale()));
+  }
   // ตัวนับรายวัน (Daily Quest)
   bumpDaily(c.id, 'sessions');
   bumpDaily(c.id, 'focus_sec', focusSec);
@@ -355,7 +359,7 @@ router.post('/adventure/complete', (req, res) => {
     ...dailyPayload(c),
     levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
     taleAfter,
-    talePending: llmEnabled(),
+    talePending: llmEnabled() && !isDevDryRun(),
     survivalFall,
   });
 });
