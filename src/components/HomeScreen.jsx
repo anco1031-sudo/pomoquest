@@ -28,7 +28,12 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const [showDev, setShowDev] = useState(false);
   const [showImportNote, setShowImportNote] = useState(false); // modal แจ้งรีสตาร์ทหลัง import
   const [showChallenge, setShowChallenge] = useState(false); // modal เปลี่ยนโหมดท้าทาย
-  const [showOnboard, setShowOnboard] = useState(() => !localStorage.getItem('pomoquest-onboarded')); // วิธีเล่นครั้งแรก
+  // วิธีเล่น — โชว์เฉพาะตอนเริ่มเกมใหม่จริง ๆ (สร้างตัวละครแรกจากลิสต์ว่าง / หลัง reset) — กดปิดแล้วไม่โผล่อีกจนกว่าจะเริ่มใหม่
+  const [showOnboard, setShowOnboard] = useState(() => {
+    const pending = localStorage.getItem('pomoquest-onboarded-pending') === '1';
+    if (pending) localStorage.removeItem('pomoquest-onboarded-pending');
+    return pending;
+  });
   const [notifyOn, setNotifyOn] = useState(isNotifyEnabled());
   const [notifyPerm, setNotifyPerm] = useState(() => {
     try {
@@ -127,6 +132,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
     if (!window.confirm('⚠️ ล้างข้อมูลเกมทั้งหมด (ตัวละคร/ไอเทม/ประวัติ session)? กู้คืนไม่ได้!')) return;
     const d = await post('/reset');
     if (d) {
+      localStorage.removeItem('pomoquest-onboarded-pending'); // ล้าง flag วิธีเล่น — เริ่มเกมใหม่ (สร้างตัวแรก) จะได้เห็น modal อีกครั้ง
       showToast(d.message || 'ล้างข้อมูลแล้ว');
       refresh();
     }
@@ -353,7 +359,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
             <p className="hint">ทุก 25 นาทีที่คุณโฟกัส = ตัวละครของคุณผจญภัย 1 ครั้ง — ยิ่งโฟกัส ยิ่งแข็งแกร่ง!</p>
             <button
               className="btn btn-primary btn-big"
-              onClick={() => { localStorage.setItem('pomoquest-onboarded', '1'); setShowOnboard(false); sfx.click(); }}
+              onClick={() => { setShowOnboard(false); sfx.click(); }}
             >
               🚀 เข้าใจแล้ว เริ่มผจญภัย!
             </button>

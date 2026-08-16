@@ -43,7 +43,9 @@ export default function CharacterCreation({ modal = false, onClose }) {
     if (!name.trim() || !cls || busy) return;
     setBusy(true);
     sfx.start();
-    await post('/character/create', { name, class: cls, challengeMode: challenge });
+    const d = await post('/character/create', { name, class: cls, challengeMode: challenge });
+    // เพิ่งสร้างตัวละครแรก (จากลิสต์ว่าง — เริ่มเกมใหม่จริง ๆ) → ให้หน้าแรกโชว์ modal วิธีเล่น
+    if (d && d.characters?.length === 1) localStorage.setItem('pomoquest-onboarded-pending', '1');
     setBusy(false);
   };
 
