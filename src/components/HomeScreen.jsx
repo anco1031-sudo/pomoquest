@@ -244,7 +244,15 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               </div>
             </div>
             <div className="hero-city">
-              📍 {city.icon} {city.name}
+              <span>📍 {city.icon} {city.name}</span>
+              {(character.cityRound || 0) > 0 && (
+                <span
+                  className="explore-round-badge"
+                  title={`🏠 สำรวจเมืองเดิมต่อรอบที่ ${character.cityRound} — ศัตรู/บอสแข็งขึ้น x${character.exploreMult} แต่รางวัล XP/ทอง x${character.exploreRewardMult} (เจอบอสลับที่รอบ ${character.altBossAtRound})`}
+                >
+                  🏠 รอบ {character.cityRound}
+                </span>
+              )}
             </div>
           </div>
           <Bar value={character.xp} max={character.xpToNext} color="linear-gradient(90deg,#8b5cf6,#f5b942)" label={`XP ${character.xp} / ${character.xpToNext}`} />

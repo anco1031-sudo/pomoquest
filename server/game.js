@@ -534,7 +534,7 @@ export function generateBoss(level, cityIndex, c = null) {
   const boss = isAlt ? ALT_BOSSES[cityIndex % ALT_BOSSES.length] : BOSSES[cityIndex % BOSSES.length];
   const loadout = BOSS_LOADOUTS[cityIndex % BOSS_LOADOUTS.length] || [];
   const skills = loadout.map((k) => BOSS_SKILLS[k]).filter(Boolean);
-  const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.25 : 1); // บอสลับโหดกว่า
+  const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.15 : 1); // บอสลับโหดกว่าเล็กน้อย (ของพิเศษเป็นรางวัล ไม่ใช่กำแพง)
   const maxHp = Math.round((90 + 32 * level) * em);
   return {
     name: boss.name,

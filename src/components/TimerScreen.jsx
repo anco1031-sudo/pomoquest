@@ -31,7 +31,14 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
         <span className="city-icon">{city.icon}</span>
         <div>
           <div className="timer-title">⚔️ ผจญภัยใน {city.name}</div>
-          <div className="timer-sub">{city.terrain} · Lv.{character.level} {character.classIcon}</div>
+          <div className="timer-sub">
+            {city.terrain} · Lv.{character.level} {character.classIcon}
+            {(character.cityRound || 0) > 0 && (
+              <span className="explore-round-note" title={`ศัตรู/บอสแข็งขึ้น x${character.exploreMult} · รางวัล XP/ทอง x${character.exploreRewardMult}`}>
+                🏠 รอบ {character.cityRound}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
