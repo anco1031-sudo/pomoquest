@@ -80,6 +80,12 @@ expect('bm_deal (ซื้อตลาดมืด 3 ครั้ง)', checkAch
 setProg({ bm_buys: 10 });
 expect('bm_king (ซื้อตลาดมืด 10 ครั้ง — bm_deal ปลดไปแล้วจากเคสก่อน)', checkAchievements(c, prog), ['bm_king']);
 
+// --- ตราของแถม: เก็บของแถม (ซื้อของราคา 0 จากพ่อค้า/ตลาดมืด) ---
+setProg({ freebies: 5 });
+expect('freebie_5 (เก็บของแถม 5 ชิ้น)', checkAchievements(c, prog), ['freebie_5']);
+setProg({ freebies: 15 });
+expect('freebie_15 (เก็บของแถม 15 ชิ้น)', checkAchievements(c, prog), ['freebie_15']);
+
 // --- ตราโหมดท้าทาย (รอบเมืองที่จบในโหมดนั้น) ---
 c.challenge_mode = 'hard';
 prog.hard_cycles = 1;

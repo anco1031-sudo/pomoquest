@@ -14,7 +14,7 @@ import {
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
-  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT,
+  rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT, campFreebieId,
   rewardMult, dropMult, priceMult, challengeOf, CHALLENGES, festivalFor, storyReqMet, storyReqLabel,
   exploreMult, exploreRewardMult, bmExtraChance,
 } from './game.js';
@@ -541,19 +541,22 @@ router.get('/camp', (req, res) => {
   const bm = blackMarketStock(visit, c);
   // โหมดโหด: ราคาในร้านแพงขึ้น x1.3 (ราคาที่โชว์ = ราคาที่จ่ายจริง)
   const pm = priceMult(c);
+  // ของแถมฟรี: สุ่ม 1 ชิ้นที่พ่อค้า/ตลาดมืด "ไม่อยากได้" (ราคา 0) — deterministic จาก visit (เปิดซ้ำหน้าเดิมได้ของเดิม)
+  const freebieId = campFreebieId(visit, c, stock);
   const shop = stock.map((s) => {
     const base = ITEM_BY_ID[s.item_id];
     if (!base) return null;
+    const free = s.item_id === freebieId;
     if (s.market === 'black') {
       const b = bm?.find((x) => x.id === s.item_id);
-      return { ...base, price: Math.round((b?.bmPrice ?? base.price) * pm), originalPrice: Math.round(base.price * pm), bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
+      return { ...base, price: free ? 0 : Math.round((b?.bmPrice ?? base.price) * pm), originalPrice: Math.round(base.price * pm), bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, free: free ? 1 : 0, bought: s.qty >= 1 ? 1 : 0 };
     }
     if (s.market === 'festival') {
       // สินค้าเทศกาล — ลด 20% (ราคาที่โชว์ = ราคาที่จ่ายจริง, originalPrice = ราคาปกติก่อนลด)
-      return { ...base, price: Math.round(base.price * 0.8 * pm), originalPrice: Math.round(base.price * pm), priceMult: 0.8, sale: 1, festival: 1, bought: s.qty >= 1 ? 1 : 0 };
+      return { ...base, price: Math.round(base.price * 0.8 * pm), originalPrice: Math.round(base.price * pm), priceMult: 0.8, sale: 1, festival: 1, free: 0, bought: s.qty >= 1 ? 1 : 0 };
     }
     const m = marketPrice(base, dayKey);
-    return { ...base, price: Math.round(m.price * pm), originalPrice: Math.round(base.price * pm), priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
+    return { ...base, price: free ? 0 : Math.round(m.price * pm), originalPrice: Math.round(base.price * pm), priceMult: free ? 1 : m.mult, hot: free ? false : m.hot, sale: free ? false : m.sale, free: free ? 1 : 0, bought: s.qty >= 1 ? 1 : 0 };
   }).filter(Boolean);
   // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ — จังหวะรายวัน (พ่อค้าอยากได้ของบางชิ้น → แพงขึ้น, เปลี่ยนทุกวัน)
   // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — ปรับราคาที่โชว์ให้ตรงกับที่จ่ายจริง
@@ -584,10 +587,16 @@ router.post('/shop/buy', (req, res) => {
   const row = db.prepare('SELECT qty, market FROM camp_shop WHERE character_id = ? AND visit = ? AND item_id = ?').get(c.id, visit, itemId);
   if (!row) return res.status(400).json({ error: 'สินค้านี้ไม่อยู่ในร้านค่ายพักนี้' });
   if (row.qty >= 1) return res.status(400).json({ error: 'ซื้อได้ครั้งเดียวต่อค่ายพัก — ขายหมดแล้ว' });
+  // ของแถมฟรี (พ่อค้า/ตลาดมืดไม่อยากได้ — ราคา 0) — คำนวณซ้ำจาก stock เดียวกับหน้า /camp (deterministic จาก visit)
+  const stockRows = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
+  const freebieId = campFreebieId(visit, c, stockRows);
   // ราคาตามแหล่งที่มา: ร้านปกติ = ราคาตลาดวันนี้ · ตลาดมืด = ราคาลดพิเศษ (เท่ากับที่โชว์ใน /camp)
   // โหมดโหด: ของทุกอย่างแพงขึ้น x1.3 (ราคาที่โชว์ในร้านก็ปรับให้ตรง)
-  let price, fromBm = false;
-  if (row.market === 'black') {
+  let price, fromBm = false, fromFree = false;
+  if (itemId === freebieId) {
+    price = 0;
+    fromFree = true;
+  } else if (row.market === 'black') {
     const bm = blackMarketStock(visit);
     const bmItem = bm?.find((x) => x.id === itemId);
     if (!bmItem) return res.status(400).json({ error: 'ของชิ้นนี้ไม่อยู่ในตลาดมืดค่ายนี้' });
@@ -603,18 +612,26 @@ router.post('/shop/buy', (req, res) => {
   addItem(c.id, itemId, 1);
   db.prepare('UPDATE camp_shop SET qty = qty + 1 WHERE character_id = ? AND visit = ? AND item_id = ?').run(c.id, visit, itemId);
   updateCharacter(c);
-  addLog(c.id, { type: 'shop', title: fromBm ? '🖤 ซื้อของตลาดมืด' : '🛒 ซื้อของ', detail: `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)${fromBm ? ' (ตลาดมืด)' : ''}`, gold: -price });
+  addLog(c.id, {
+    type: 'shop',
+    title: fromFree ? '🎁 ของแถมฟรี' : fromBm ? '🖤 ซื้อของตลาดมืด' : '🛒 ซื้อของ',
+    detail: fromFree ? `ได้ ${item.icon} ${item.name} ฟรี (พ่อค้าไม่อยากได้ — ของแถม)` : `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)${fromBm ? ' (ตลาดมืด)' : ''}`,
+    gold: -price,
+  });
   bumpDaily(c.id, 'items_bought', 1);
   let ach = { fresh: [], ups: 0 };
-  if (fromBm) {
-    // นับการค้ากับตลาดมืด (ตรา "สายค้าตลาดมืด" + เควสประจำวัน)
-    bumpDaily(c.id, 'bm_trades', 1);
+  if (fromBm || fromFree) {
     const prog = getProgress(c.id);
-    prog.bm_buys = (prog.bm_buys || 0) + 1;
-    db.prepare('UPDATE progress SET bm_buys = ? WHERE id = ?').run(prog.bm_buys, prog.id);
+    if (fromBm) {
+      // นับการค้ากับตลาดมืด (ตรา "สายค้าตลาดมืด" + เควสประจำวัน)
+      bumpDaily(c.id, 'bm_trades', 1);
+      prog.bm_buys = (prog.bm_buys || 0) + 1;
+    }
+    if (fromFree) prog.freebies = (prog.freebies || 0) + 1; // เก็บของแถม (ตรา "นักเก็บของแถม")
+    db.prepare('UPDATE progress SET bm_buys = ?, freebies = ? WHERE id = ?').run(prog.bm_buys || 0, prog.freebies || 0, prog.id);
     ach = checkAchievements(c, prog);
   }
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, achievements: ach.fresh, ...dailyPayload(c) });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: fromFree ? `🎁 ของแถม! ได้ ${item.name} ฟรี (พ่อค้าไม่อยากได้)` : `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, achievements: ach.fresh, ...dailyPayload(c) });
 });
 
 router.post('/shop/sell', (req, res) => {

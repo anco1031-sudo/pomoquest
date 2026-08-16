@@ -4,7 +4,7 @@ import { Panel } from './ui.jsx';
 import { sfx } from '../sound.js';
 
 export default function StoryQuests() {
-  const { get, post, showToast, character } = useGame();
+  const { get, post, character } = useGame();
   const [data, setData] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
@@ -21,10 +21,9 @@ export default function StoryQuests() {
   const claim = async (q) => {
     sfx.click();
     setBusyId(q.id);
-    const d = await post('/story/claim', { questId: q.id });
+    const d = await post('/story/claim', { questId: q.id }); // server โชว์ toast ยืนยันเองผ่าน d.message
     setBusyId(null);
     if (d) {
-      showToast(d.message || 'รับรางวัลแล้ว');
       const fresh = await get('/story');
       if (fresh) setData(fresh);
     }

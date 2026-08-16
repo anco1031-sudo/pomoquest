@@ -17,6 +17,7 @@ export function achievementValues(c, prog) {
     wanted_sales: prog.wanted_sales || 0,
     bm_buys: prog.bm_buys || 0,
     charge_breaks: prog.charge_breaks || 0, // สลายท่าไม้ตายบอส (ระบบต่อสู้บอส)
+    freebies: prog.freebies || 0,           // ของแถมที่เก็บได้ (ซื้อของราคา 0)
     level: c.level,
     gold: c.gold,
     equip: c.head_id && c.armor_id && c.arms_id && c.legs_id && c.feet_id ? 1 : 0,

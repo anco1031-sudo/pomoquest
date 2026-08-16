@@ -190,6 +190,8 @@ ensureColumn('progress', 'pause_sec', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'charge_breaks', 'INTEGER DEFAULT 0');
 // ขายของให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
 ensureColumn('progress', 'wanted_sales', 'INTEGER DEFAULT 0');
+// จำนวนของแถมที่เก็บได้ (ซื้อของราคา 0 จากพ่อค้า/ตลาดมืด — ตรา "นักเก็บของแถม")
+ensureColumn('progress', 'freebies', 'INTEGER DEFAULT 0');
 // รอบเมืองที่จบในแต่ละโหมดท้าทาย (ตราเฉพาะโหมด — นับตอนชนะบอส)
 ensureColumn('progress', 'hard_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'marathon_cycles', 'INTEGER DEFAULT 0');

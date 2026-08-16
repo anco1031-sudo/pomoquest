@@ -43,8 +43,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
     sfx.click();
     const d = await post('/shop/buy', { itemId: item.id, visit });
     if (d) {
-      showToast(`ซื้อ ${item.name} แล้ว`);
+      // ขึ้นป้าย "ขายแล้ว" ทั้งร้านปกติและตลาดมืด (server โชว์ toast ยืนยันเองผ่าน d.message)
       setShop((s) => s.map((i) => (i.id === item.id ? { ...i, bought: 1 } : i)));
+      setBlackMarket((bm) => (bm ? { ...bm, items: bm.items.map((i) => (i.id === item.id ? { ...i, bought: 1 } : i)) } : bm));
     }
   };
 
@@ -59,13 +60,12 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   };
 
   const useItem = async (i) => {
-    const d = await post('/inventory/use', { itemId: i.item_id });
-    if (d) showToast(d.message || 'ใช้แล้ว');
+    // server โชว์ toast ยืนยันเองผ่าน d.message (context apply)
+    await post('/inventory/use', { itemId: i.item_id });
   };
 
   const equipItem = async (i) => {
-    const d = await post('/inventory/equip', { itemId: i.item_id });
-    if (d) showToast(d.message || 'สวมแล้ว');
+    await post('/inventory/equip', { itemId: i.item_id });
   };
 
   // ขายของ — ถ้ามีซ้ำมากกว่า 1 ให้ถามจำนวนที่จะขาย (modal เลือกจำนวน)
@@ -83,8 +83,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
     const sp = sellPrices[i.item_id] || {};
     const bmNote = blackMarket && i.type === 'junk' ? ' (ตลาดมืดรับซื้อแพงกว่า +25%!)' : sp.wanted ? ' (พ่อค้าต้องการของชิ้นนี้ — ขายได้แพง!)' : '';
     if (qty === 1 && !window.confirm(`ขาย ${i.name} x1?${bmNote}`)) return;
-    const d = await post('/shop/sell', { itemId: i.item_id, qty, visit });
-    if (d) showToast(d.message || 'ขายแล้ว');
+    await post('/shop/sell', { itemId: i.item_id, qty, visit }); // server โชว์ toast ยืนยันเองผ่าน d.message
     setSellTarget(null);
   };
 
@@ -97,9 +96,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
 
   const rest = async () => {
     sfx.complete();
-    const d = await post('/camp/rest');
-    if (d) showToast('🔥 พลังเต็มเปี่ยม!');
-    // โหมดเอาชีวิตรอด: พักไม่ฟรี — ใช้ error จาก server เป็น toast
+    // server โชว์ toast ยืนยันเองผ่าน d.message / error (โหมดเอาชีวิตรอด: พักไม่ฟรี)
+    await post('/camp/rest');
   };
   const isSurvival = character?.challengeMode === 'survival';
 
@@ -140,28 +138,30 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
 
       {tab === 'shop' && (
         <>
-          {festival && (
+          {/* เจอตลาดมืด → พ่อค้าทั่วไปปิดร้าน ให้มีเพียงตลาดมืดเท่านั้น (เทศกาลของร้านก็เลื่อนไปด้วย) */}
+          {!blackMarket && festival && (
             <div className="panel festival-panel">
               <div className="panel-title festival-title">{festival.icon} {festival.name} กำลังจัด!</div>
               <p className="festival-desc">{festival.desc} — สินค้าพิเศษในร้านลด 20% (สัปดาห์นี้ของเมืองนี้เท่านั้น)</p>
             </div>
           )}
           {blackMarket && (
+          <>
             <div className="panel bm-panel">
               <div className="panel-title bm-title">🖤 ตลาดมืด (พ่อค้าเงาลึกลับ)</div>
-              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายาก + ของพิเศษ exclusive (ปกติได้จาก Daily Quest เท่านั้น!) ราคาลดพิเศษ — ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
+              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายาก + ของพิเศษ exclusive (ปกติได้จาก Daily Quest เท่านั้น!) ราคาลดพิเศษ — ซื้อได้ครั้งเดียวต่อค่ายพัก · บางชิ้นตลาดมืดไม่อยากได้ → ยกให้ฟรี 🎁</p>
               <div className="shop-list">
                 {blackMarket.items.map((i) => (
                   <div className="shop-row" key={i.id}>
                     <span className="inv-icon">{i.icon}</span>
                     <div className="inv-info">
                       <div className="inv-name">
-                        {i.name} <span className="bm-tag">{i.bmTag}</span>
+                        {i.name} {i.free ? <span className="free-tag">🎁 ของแถม</span> : null} <span className="bm-tag">{i.bmTag}</span>
                       </div>
                       <ItemStatChips item={i} character={character} />
                       <div className="inv-desc">{i.desc}</div>
                       {i.bmNormal > 0 && (
-                        <div className="bm-normal">ปกติ {i.bmNormal} ทอง → <b>{i.price} ทอง</b></div>
+                        <div className="bm-normal">ปกติ {i.bmNormal} ทอง → {i.free ? <b className="free-price">ฟรี!</b> : <b>{i.price} ทอง</b>}</div>
                       )}
                       {itemReqMissing(i, character).length > 0 && (
                         <div className="inv-req-block shop-warn">⚠️ ซื้อแล้วสวมไม่ได้ตอนนี้: {itemReqMissing(i, character).join(' · ')}</div>
@@ -171,18 +171,21 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       <span className="sold-tag">ขายแล้ว</span>
                     ) : (
                       <button
-                        className="btn btn-sm bm-buy"
+                        className={`btn btn-sm ${i.free ? 'free-buy' : 'bm-buy'}`}
                         disabled={character.gold < i.price}
                         onClick={() => buy(i)}
                       >
-                        🖤 {i.price}
+                        {i.free ? '🎁 ฟรี' : `🖤 ${i.price}`}
                       </button>
                     )}
                   </div>
                 ))}
               </div>
             </div>
+            <div className="shop-closed-note">🛒 พ่อค้าเร่ร่อนหลบไปให้ตลาดมืดคืนนี้ — ร้านปกติปิด (จะกลับมาเปิดอีกครั้งค่ายหน้า)</div>
+          </>
           )}
+          {!blackMarket && (
           <div className="panel">
             <div className="panel-title">🛒 ร้านค้าของพ่อค้าเร่ร่อน</div>
             <div className="shop-list">
@@ -192,7 +195,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                   <div className="inv-info">
                     <div className="inv-name">
                       {i.name} {twoHandTag(i)}
-                      {i.festival ? <span className="festival-tag">{festival?.icon} ของเทศกาล -20%</span> : i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
+                      {i.free ? <span className="free-tag">🎁 ของแถม (พ่อค้าไม่อยากได้)</span> : i.festival ? <span className="festival-tag">{festival?.icon} ของเทศกาล -20%</span> : i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
                     </div>
                     <ItemStatChips item={i} character={character} />
                     <div className="inv-desc">{i.desc}</div>
@@ -205,23 +208,24 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                   ) : (
                     <div className="shop-buy">
                       {/* ราคาเดิม (ก่อนลด/ขึ้น) — ขีดฆ่าให้เห็นว่าราคาต่างจากปกติ */}
-                      {(i.sale || i.hot) && i.originalPrice > 0 && i.originalPrice !== i.price && (
+                      {(i.sale || i.hot || i.free) && i.originalPrice > 0 && i.originalPrice !== i.price && (
                         <s className="price-original">{i.originalPrice}</s>
                       )}
                       <button
-                        className="btn btn-sm"
+                        className={`btn btn-sm ${i.free ? 'free-buy' : ''}`}
                         disabled={character.gold < i.price}
                         onClick={() => buy(i)}
                       >
-                        💰 {i.price}
+                        {i.free ? '🎁 ฟรี' : `💰 ${i.price}`}
                       </button>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-            <p className="hint">ทองของคุณ: 💰 {character.gold} — ราคาตามตลาดวันนี้ (🔥 ขึ้น / 🏷️ ลด) สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก</p>
+            <p className="hint">ทองของคุณ: 💰 {character.gold} — ราคาตามตลาดวันนี้ (🔥 ขึ้น / 🏷️ ลด) สินค้าสุ่มเปลี่ยนทุกค่ายพัก ซื้อได้ครั้งเดียวต่อค่ายพัก · บางชิ้นพ่อค้าไม่อยากได้ → ยกให้ฟรี 🎁 (ของแถม)</p>
           </div>
+          )}
         </>
       )}
 

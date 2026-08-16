@@ -207,6 +207,49 @@ try {
     expect('stats: bmStats กำไร = รายได้ขาย - ทองที่ใช้ซื้อ', bs?.profit === bs.sellGold - bs.buyGold && bs.sellGold > 0 && bs.buyGold > 0, JSON.stringify(bs));
   }
 
+  // --- ของแถม (พ่อค้า/ตลาดมืดไม่อยากได้ — ราคา 0) — สุ่มรายค่ายพัก deterministic จาก visit ---
+  {
+    const { campFreebieId } = await import('../server/game.js');
+    const rows = [{ item_id: 1, qty: 0, market: 'camp' }, { item_id: 2, qty: 0, market: 'camp' }, { item_id: 3, qty: 0, market: 'camp' }];
+    // deterministic: visit เดียวกัน + stock เดียวกัน → ของแถมคนเดิม (เปิดซ้ำหน้าเดิมได้ของเดิม)
+    expect('freebie: deterministic จาก visit (เปิดซ้ำได้ของเดิม)', campFreebieId('freebie-unit-1', cid, rows) === campFreebieId('freebie-unit-1', cid, rows));
+    // มีโอกาสเจอของแถมจริง (35%) — สแกน seed หลายค่า
+    let anyFree = false;
+    for (let i = 0; i < 40 && !anyFree; i++) anyFree = campFreebieId(`freebie-scan-${i}`, cid, rows) !== null;
+    expect('freebie: มีโอกาสเจอของแถมจริง (35%)', anyFree);
+    // ของพิเศษ exclusive ไม่สุ่มให้ฟรี (กันลดคุณค่ารางวัล daily quest)
+    const exclId = Object.values(ITEM_BY_ID).find((i) => i.exclusive)?.id;
+    expect('freebie: ของพิเศษ exclusive ไม่สุ่มให้ฟรี', campFreebieId('freebie-unit-2', cid, [{ item_id: exclId, qty: 0, market: 'camp' }]) === null);
+    // ของเทศกาลไม่สุ่มให้ฟรี (ลด 20% อยู่แล้ว)
+    expect('freebie: ของเทศกาลไม่สุ่มให้ฟรี', campFreebieId('freebie-unit-3', cid, [{ item_id: 1, qty: 0, market: 'festival' }]) === null);
+    // มีตลาดมืด → สุ่มจากของตลาดมืดเท่านั้น (พ่อค้าทั่วไปปิดร้าน)
+    const picked = campFreebieId('freebie-unit-4', cid, [{ item_id: 1, qty: 0, market: 'camp' }, { item_id: 2, qty: 0, market: 'black' }]);
+    expect('freebie: มีตลาดมืด → สุ่มจากของตลาดมืดเท่านั้น', picked === null || picked === 2, `picked=${picked}`);
+
+    // API: หาค่ายพักที่มีของแถม (สแกน visit — deterministic) → ราคา 0 + ซื้อฟรีได้ ทองไม่ลด
+    let freeVisit = null, freeItem = null;
+    for (let i = 0; i < 80 && !freeVisit; i++) {
+      const v = `freebie-api-${i}`;
+      const d = await api(`/camp?visit=${encodeURIComponent(v)}`);
+      const fi = d.json.shop?.find((x) => x.free);
+      if (fi) { freeVisit = v; freeItem = fi; }
+    }
+    expect('freebie api: เจอค่ายพักที่มีของแถม', !!freeVisit && !!freeItem);
+    if (freeVisit && freeItem) {
+      expect('freebie api: ราคาของแถมเป็น 0', freeItem.price === 0, `${freeItem.name} price=${freeItem.price}`);
+      const d2 = await api(`/camp?visit=${encodeURIComponent(freeVisit)}`);
+      const fi2 = d2.json.shop?.find((x) => x.free);
+      expect('freebie api: เปิดซ้ำของแถมคนเดิม (deterministic)', fi2?.id === freeItem.id && fi2?.price === 0);
+      const goldBefore = (await api('/state')).json.character.gold;
+      r = await api('/shop/buy', { method: 'POST', body: { itemId: freeItem.id, visit: freeVisit } });
+      expect('freebie api: ซื้อของแถมได้ฟรี (ทองไม่ลด) + ข้อความของแถม', r.status === 200 && r.json.character.gold === goldBefore && (r.json.message || '').includes('ของแถม'), r.json.error || r.json.message);
+      const freebies = db.prepare('SELECT freebies FROM progress WHERE character_id = ?').get(cid)?.freebies || 0;
+      expect('freebie api: นับ freebies +1 หลังซื้อของแถม (ตรา)', freebies === 1, `freebies=${freebies}`);
+      r = await api('/shop/buy', { method: 'POST', body: { itemId: freeItem.id, visit: freeVisit } });
+      expect('freebie api: ซื้อของแถมซ้ำไม่ได้ (ครั้งเดียวต่อค่ายพัก)', r.status === 400);
+    }
+  }
+
   // --- loot มอนสเตอร์ → นับ daily quest "คนเก็บขยะ" (ขาย junk เพิ่ม counter) ---
   {
     addItem(cid, 122, 1); // ขนหมาป่า (loot ของหมาป่าเถื่อน)

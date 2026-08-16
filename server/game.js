@@ -55,6 +55,32 @@ export function blackMarketStock(visit, c = null) {
   return bmStockFor(visit);
 }
 
+// ----- ของแถม (พ่อค้า/ตลาดมืด "ไม่อยากได้" ของชิ้นนี้ — ราคา 0) -----
+// สุ่มรายค่ายพัก (deterministic จาก visit — เปิดซ้ำหน้าเดิมได้ของเดิม) ไม่ใช่รายวันแบบ demand
+// เพราะ stock ร้านสุ่มใหม่ทุกค่ายพัก — ถ้าสุ่มรายวัน ของฟรีวันนั้นอาจไม่อยู่ในร้านพอดี → แทบไม่เคยเห็น
+// ถ้าค่ายนี้มีตลาดมืด → สุ่มจากของตลาดมืดเท่านั้น (พ่อค้าทั่วไปปิดร้าน) · ไม่มีตลาดมืด → สุ่มจากของร้านปกติ
+// ของพิเศษ exclusive ไม่สุ่มให้ฟรี (กันลดคุณค่ารางวัล daily quest) · ของเทศกาลไม่สุ่มให้ฟรี (ลด 20% อยู่แล้ว)
+export const FREEBIE_CHANCE = 0.35;
+export function campFreebieId(visit, c, stockRows) {
+  if (!visit || !Array.isArray(stockRows) || !stockRows.length) return null;
+  const hasBm = stockRows.some((s) => s.market === 'black');
+  const pool = hasBm
+    ? stockRows.filter((s) => s.market === 'black')
+    : stockRows.filter((s) => s.market !== 'festival');
+  const eligible = pool.filter((s) => {
+    const it = ITEM_BY_ID[s.item_id];
+    if (!it || it.exclusive) return false;
+    // เกียร์ที่ยังสวมไม่ได้ (เลเวลเกิน c.level+1) ไม่สุ่มให้ฟรี — กันของแถมที่กดซื้อไม่ได้
+    if (it.type !== 'consumable' && (it.lvl || 1) > (c?.level ?? 1) + 1) return false;
+    return true;
+  });
+  if (!eligible.length) return null;
+  const charId = c && typeof c === 'object' ? (c.id ?? 0) : (c ?? 0); // รองรับทั้ง character row และ id ตัวเลข (เทสต์)
+  const rng = seededRng(`freebie-${visit}-${charId}`);
+  if (rng() > FREEBIE_CHANCE) return null; // ~35% โอกาสเจอของแถม 1 ชิ้น
+  return eligible[Math.floor(rng() * eligible.length)].item_id;
+}
+
 // PRNG deterministic จาก string — ใช้สุ่มของที่ต้อง "เหมือนเดิมทุกครั้งที่เปิดหน้าเดิม" (ตลาดมืด)
 export function seededRng(str) {
   let t = hashSeed(str);

@@ -161,7 +161,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
         if (k.startsWith('pomoquest-timer-') || k.startsWith('pomoquest-challenge-')) localStorage.removeItem(k);
       }
       localStorage.removeItem('pomoquest-onboarded-pending'); // ล้าง flag วิธีเล่น — เริ่มเกมใหม่ (สร้างตัวแรก) จะได้เห็น modal อีกครั้ง
-      showToast(d.message || 'ล้างข้อมูลแล้ว');
+      // server โชว์ toast ยืนยันเองผ่าน d.message (post → apply) — ไม่ต้องโชว์ซ้ำ
       refresh();
     }
   };

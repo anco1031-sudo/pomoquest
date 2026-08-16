@@ -460,6 +460,9 @@ export const ACHIEVEMENTS = [
   // ระบบต่อสู้บอส: สลายท่าไม้ตาย (ชาร์จพลัง) — นับรวมทุกครั้งที่สลายได้ตลอดการเล่น
   { id: 'break_5',     name: 'จอมสลาย',       icon: '🛡️', stat: 'charge_breaks', target: 5,  reward: { gold: 150 }, desc: 'สลายท่าไม้ตายบอส 5 ครั้ง' },
   { id: 'break_15',    name: 'ราชันย์จอมสลาย', icon: '💥', stat: 'charge_breaks', target: 15, reward: { gold: 400 }, desc: 'สลายท่าไม้ตายบอส 15 ครั้ง' },
+  // ของแถม: ซื้อของราคา 0 ที่พ่อค้า/ตลาดมืด "ไม่อยากได้" — นับรวมทุกครั้งที่เก็บได้ตลอดการเล่น
+  { id: 'freebie_5',   name: 'นักเก็บของแถม',  icon: '🎁', stat: 'freebies', target: 5,  reward: { gold: 150 }, desc: 'เก็บของแถม (ซื้อของราคา 0) 5 ชิ้น' },
+  { id: 'freebie_15',  name: 'ราชาแห่งของแถม', icon: '🎁', stat: 'freebies', target: 15, reward: { gold: 400 }, desc: 'เก็บของแถม (ซื้อของราคา 0) 15 ชิ้น' },
 ];
 
 // ----- ตราลับ: เงื่อนไขซ่อน (check(ctx) คืน true เมื่อผ่าน) ctx ดูใน achievements.js -----

@@ -457,8 +457,7 @@ export default function Game() {
   // ทิ้งเซสชัน (จากหน้าจอโฟกัส หรือจากแถบโฟกัสต่อที่หน้าหลัก) — ถามยืนยันก่อน คอมโบจะหายเว้นแต่มีโล่
   const doAbort = async (confirmMsg) => {
     if (!window.confirm(confirmMsg)) return;
-    const d = await post('/adventure/abort');
-    if (d?.shieldUsed) showToast('🛡️ โล่โฟกัสกันคอมโบไว้ได้! คอมโบไม่หาย (โล่แตก)');
+    await post('/adventure/abort'); // ถ้าใช้โล่ กันคอมโบ — server โชว์ toast ยืนยันเองผ่าน d.message (กัน toast ซ้อน)
     setPhase('idle');
     setRunning(false);
     setPausedAtHome(false);
@@ -518,8 +517,7 @@ export default function Game() {
 
   // หลังชนะบอส — เลือก "เดินทางต่อ" (เมืองใหม่) หรือ "สำรวจเมืองเดิมต่อ" (ความยาก/รางวัล/ตลาดมืดเพิ่ม)
   const bossWinChoice = async (choice) => {
-    const d = await post('/boss/after', { choice });
-    if (d) showToast(d.message);
+    await post('/boss/after', { choice }); // server โชว์ toast ยืนยันเองผ่าน d.message
     await finishBreak();
   };
 

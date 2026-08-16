@@ -186,7 +186,7 @@ function SkillList({ skills }) {
 }
 
 export default function CharacterSheet() {
-  const { character, inventory, post, showToast, cities } = useGame();
+  const { character, inventory, post, cities } = useGame();
   if (!character) return null;
 
   const eq = character.equipment || {};
@@ -218,19 +218,16 @@ export default function CharacterSheet() {
 
   const unequip = async (s) => {
     sfx.click();
-    const d = await post('/inventory/unequip', { slot: s.col });
-    if (d) showToast(d.message || 'ถอดแล้ว');
+    await post('/inventory/unequip', { slot: s.col }); // server โชว์ toast ยืนยันเองผ่าน d.message
   };
 
   const useItem = async (i) => {
-    const d = await post('/inventory/use', { itemId: i.item_id });
-    if (d) showToast(d.message || 'ใช้แล้ว');
+    await post('/inventory/use', { itemId: i.item_id }); // server โชว์ toast ยืนยันเองผ่าน d.message
   };
 
   const equipItem = async (i) => {
     sfx.click();
-    const d = await post('/inventory/equip', { itemId: i.item_id });
-    if (d) showToast(d.message || 'สวมแล้ว');
+    await post('/inventory/equip', { itemId: i.item_id }); // server โชว์ toast ยืนยันเองผ่าน d.message
   };
 
   return (
