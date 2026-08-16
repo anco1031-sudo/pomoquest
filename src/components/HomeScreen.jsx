@@ -156,6 +156,10 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
     if (!window.confirm('⚠️ ล้างข้อมูลเกมทั้งหมด (ตัวละคร/ไอเทม/ประวัติ session)? กู้คืนไม่ได้!')) return;
     const d = await post('/reset');
     if (d) {
+      // ล้าง session ที่พักค้างไว้ (timer ใน localStorage) + ชาเลนจ์รายสัปดาห์ — เริ่มใหม่แบบสะอาด ไม่มีของค้าง
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith('pomoquest-timer-') || k.startsWith('pomoquest-challenge-')) localStorage.removeItem(k);
+      }
       localStorage.removeItem('pomoquest-onboarded-pending'); // ล้าง flag วิธีเล่น — เริ่มเกมใหม่ (สร้างตัวแรก) จะได้เห็น modal อีกครั้ง
       showToast(d.message || 'ล้างข้อมูลแล้ว');
       refresh();

@@ -12,8 +12,8 @@ function fmtAgo(ms) {
   return new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 }
 
-export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '', pausedSec = 0 }) {
-  const { character } = useGame();
+export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '', pausedSec = 0, onEditTask = null }) {
+  const { character, progress } = useGame();
   const logRef = useRef(null);
 
   // เหตุการณ์ใหม่ → เลื่อนไปโชว์เหตุการณ์ล่าสุด (เรียงล่าสุดบนสุด)
@@ -51,8 +51,25 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
         <span className="session-text">session {sessionIdx}/{sessionsPerCycle}</span>
       </div>
 
-      <div className="event-chip">🎲 เหตุการณ์ถัดไปใน {fmtTime(nextEventIn)}</div>
-      {focusTask && <div className="focus-task-chip">📋 โฟกัส: {focusTask}</div>}
+      <div className="timer-chip-row">
+        <div className="event-chip">🎲 เหตุการณ์ถัดไปใน {fmtTime(nextEventIn)}</div>
+        {progress?.combo_shield > 0 && (
+          <span
+            className="shield-badge shield-chip"
+            title="🛡️ โล่โฟกัสติดตั้งอยู่ — พัก/ทิ้ง session ครั้งถัดไป คอมโบจะไม่หาย (โล่จะแตก)"
+          >
+            🛡️ โล่โฟกัส
+          </span>
+        )}
+      </div>
+      {focusTask && (
+        <div className="focus-task-chip">
+          📋 โฟกัส: {focusTask}
+          {onEditTask && (
+            <button className="task-edit-btn" onClick={onEditTask} title="แก้ไขชื่องานนี้">✏️</button>
+          )}
+        </div>
+      )}
 
       <div className="timer-hp">
         <div className="hp-row"><span>❤️ HP</span><span>{character.hp}/{character.maxHp}</span></div>

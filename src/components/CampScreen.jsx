@@ -22,6 +22,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const [questResults, setQuestResults] = useState({});
   const [blackMarket, setBlackMarket] = useState(null); // null = ไม่เจอตลาดมืดในค่ายนี้
   const [festival, setFestival] = useState(null); // เทศกาลประจำสัปดาห์ของเมืองนี้ (null = ไม่มี)
+  const [sellTarget, setSellTarget] = useState(null); // ของที่กำลังกดขาย (มีซ้ำ >1 — ถามจำนวน)
+  const [sellQty, setSellQty] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -66,12 +68,29 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
     if (d) showToast(d.message || 'สวมแล้ว');
   };
 
-  const sellItem = async (i) => {
+  // ขายของ — ถ้ามีซ้ำมากกว่า 1 ให้ถามจำนวนที่จะขาย (modal เลือกจำนวน)
+  const openSell = (i) => {
+    sfx.click();
+    if (i.qty > 1) {
+      setSellTarget(i);
+      setSellQty(1);
+    } else {
+      sellItem(i, 1);
+    }
+  };
+
+  const sellItem = async (i, qty) => {
     const sp = sellPrices[i.item_id] || {};
     const bmNote = blackMarket && i.type === 'junk' ? ' (ตลาดมืดรับซื้อแพงกว่า +25%!)' : sp.wanted ? ' (พ่อค้าต้องการของชิ้นนี้ — ขายได้แพง!)' : '';
-    if (!window.confirm(`ขาย ${i.name} x1?${bmNote}`)) return;
-    const d = await post('/shop/sell', { itemId: i.item_id, qty: 1, visit });
+    if (qty === 1 && !window.confirm(`ขาย ${i.name} x1?${bmNote}`)) return;
+    const d = await post('/shop/sell', { itemId: i.item_id, qty, visit });
     if (d) showToast(d.message || 'ขายแล้ว');
+    setSellTarget(null);
+  };
+
+  const confirmSell = async () => {
+    if (!sellTarget || sellQty < 1) return;
+    await sellItem(sellTarget, Math.min(sellQty, sellTarget.qty));
   };
 
   const twoHandTag = (i) => (i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null);
@@ -267,7 +286,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
                     )}
                     {i.type !== 'scroll' && (
-                      <button className={`btn btn-sm ${blackMarket && i.type === 'junk' ? 'bm-buy' : sp.wanted ? 'btn-wanted' : 'btn-danger-soft'}`} onClick={() => sellItem(i)}>
+                      <button className={`btn btn-sm ${blackMarket && i.type === 'junk' ? 'bm-buy' : sp.wanted ? 'btn-wanted' : 'btn-danger-soft'}`} onClick={() => openSell(i)}>
                         💰 {sp.price ?? Math.round(i.price * 0.5)}
                       </button>
                     )}
@@ -289,6 +308,29 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
           )}
           <CharacterSheet />
         </>
+      )}
+
+      {/* ถามจำนวนที่จะขาย — เมื่อมีของชนิดเดียวกันมากกว่า 1 ชิ้น */}
+      {sellTarget && (
+        <div className="modal-backdrop" onClick={() => setSellTarget(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>💰 ขาย {sellTarget.icon} {sellTarget.name}</h2>
+            <p className="hint">
+              มีอยู่ x{sellTarget.qty} — ขายกี่ชิ้น? (ชิ้นละ {sellPrices[sellTarget.item_id]?.price ?? Math.round(sellTarget.price * 0.5)} ทอง)
+            </p>
+            <div className="qty-picker">
+              <button className="btn" onClick={() => setSellQty((q) => Math.max(1, q - 1))}>−</button>
+              <span className="qty-picker-num">{sellQty}</span>
+              <button className="btn" onClick={() => setSellQty((q) => Math.min(sellTarget.qty, q + 1))}>+</button>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={confirmSell}>
+                💰 ขาย {sellQty} ชิ้น — {(sellPrices[sellTarget.item_id]?.price ?? Math.round(sellTarget.price * 0.5)) * sellQty} ทอง
+              </button>
+              <button className="btn" onClick={() => setSellTarget(null)}>ยกเลิก</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

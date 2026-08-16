@@ -3,8 +3,8 @@ import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 
-export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onContinue }) {
-  const { character, inventory } = useGame();
+export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onWinChoice }) {
+  const { character, inventory, cities } = useGame();
   const [potionOpen, setPotionOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const logRef = useRef(null);
@@ -28,6 +28,13 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
 
   const consumables = inventory.filter((i) => i.type === 'consumable');
   const skills = character.skills || [];
+  // ---- ข้อมูลการสำรวจเมืองเดิมต่อ (รอบถัดไป) — โชว์บนปุ่มเลือกหลังชนะบอส ----
+  const cityList = cities && cities.length ? cities : [];
+  const nextCity = cityList.length ? cityList[(character.cityIndex + 1) % cityList.length] : null;
+  const stayRound = (character.cityRound || 0) + 1;
+  const stayEnemy = +(1 + 0.15 * stayRound).toFixed(2);
+  const stayReward = +(1 + 0.2 * stayRound).toFixed(2);
+  const altNext = stayRound >= (character.altBossAtRound || 99);
 
   const act = async (action, arg) => {
     sfx.click();
@@ -53,7 +60,15 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
       {/* boss card */}
       <div className="boss-card">
         <div className="boss-avatar">{boss.icon}</div>
-        <div className="boss-name">{boss.name}</div>
+        <div className="boss-name">
+          {boss.name}
+          {boss.isAlt && <span className="alt-boss-tag" title="บอสลับ — เจอเมื่อสำรวจเมืองเดิมครบรอบ ให้ของพิเศษ">👁️ บอสลับ</span>}
+        </div>
+        {(character.cityRound || 0) > 0 && (
+          <div className="boss-explore-note">
+            🏠 สำรวจรอบที่ {character.cityRound} — ศัตรู x{character.exploreMult} · รางวัล x{character.exploreRewardMult}
+          </div>
+        )}
         <div className="hp-row"><span>💢 HP</span><span>{boss.hp}/{boss.maxHp}</span></div>
         <div className="hp-bar">
           <div
@@ -138,14 +153,29 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
         ))}
       </div>
 
-      {/* victory */}
+      {/* victory — เลือก: เดินทางต่อ (เมืองใหม่) หรือสำรวจเมืองเดิมต่อ (ความยาก/รางวัล/ตลาดมืดเพิ่ม) */}
       {outcome === 'win' && (
         <div className="victory-panel">
           <div className="victory-title">🏆 ชัยชนะ!</div>
-          <p>กำราบ {boss.name} ได้! เมืองถัดไปรอคุณอยู่ — {character.city.icon} {character.city.name}</p>
-          <button className="btn btn-primary btn-big" onClick={() => { sfx.levelup(); onContinue(); }}>
-            🚶 เดินทางต่อ (เริ่ม session ใหม่)
-          </button>
+          <p>
+            กำราบ {boss.name} ได้!{boss.isAlt ? ' (👁️ บอสลับ — ของพิเศษการันตี!)' : ''} — จะเดินทางต่อ หรือสำรวจเมืองเดิมต่อ?
+          </p>
+          <div className="victory-choices">
+            <button
+              className="btn btn-primary btn-big"
+              onClick={() => { sfx.levelup(); onWinChoice('travel'); }}
+              disabled={!nextCity}
+            >
+              🚶 เดินทางต่อ{nextCity ? ` — ${nextCity.icon} ${nextCity.name}` : ''}
+              <span className="stay-detail">เมืองใหม่ ความยากกลับสู่ปกติ</span>
+            </button>
+            <button className="btn btn-big btn-stay" onClick={() => { sfx.levelup(); onWinChoice('stay'); }}>
+              🏠 สำรวจ {character.city.name} ต่อ (รอบที่ {stayRound})
+              <span className="stay-detail">
+                ศัตรู x{stayEnemy} · รางวัล x{stayReward}{altNext ? ' · 👁️ บอสลับมาแล้ว!' : ` · บอสลับอีกรอบ ${Math.max(0, character.altBossAtRound - stayRound)} รอบ`}
+              </span>
+            </button>
+          </div>
         </div>
       )}
     </div>

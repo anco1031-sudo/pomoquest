@@ -1696,3 +1696,111 @@ body {
   .tabs { flex-wrap: wrap; }
   .tab { flex: 1 1 0; }
 }
+
+/* ---------- โฟกัส: แถวชิป (เหตุการณ์ถัดไป + โล่โฟกัส) ---------- */
+.timer-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  align-items: center;
+}
+.shield-chip { font-size: 12px; padding: 5px 12px; }
+/* ปุ่มแก้ไขชื่องานบนชิปโฟกัส */
+.task-edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 6px;
+  padding: 0 2px;
+  opacity: 0.75;
+}
+.task-edit-btn:hover { opacity: 1; }
+
+/* ---------- สรุป session: รายการเหตุการณ์แต่ละอัน (modal จบ session) ---------- */
+.session-summary-list {
+  margin-top: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.session-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.session-summary-item-title { font-weight: 700; }
+.session-summary-item-reward { color: var(--gold); font-size: 11.5px; white-space: nowrap; }
+
+/* ---------- บอส: บอสลับ + การสำรวจเมืองเดิมต่อ ---------- */
+.alt-boss-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #c4b5fd;
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  background: rgba(167, 139, 250, 0.12);
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: 3px;
+}
+.boss-explore-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  background: rgba(245, 185, 66, 0.08);
+  border: 1px solid rgba(245, 185, 66, 0.25);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.victory-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.victory-choices .btn { flex-direction: column; gap: 2px; }
+.stay-detail {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.btn-stay {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #86efac;
+}
+.btn-stay:hover { background: rgba(34, 197, 94, 0.2); }
+
+/* ---------- ขายของหลายชิ้น: เลือกจำนวน ---------- */
+.qty-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 14px 0 4px;
+}
+.qty-picker .btn {
+  min-width: 44px;
+  font-size: 18px;
+  font-weight: 800;
+}
+.qty-picker-num {
+  font-size: 26px;
+  font-weight: 900;
+  color: var(--gold);
+  min-width: 44px;
+  text-align: center;
+}

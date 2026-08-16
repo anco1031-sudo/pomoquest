@@ -9,13 +9,14 @@ import {
   getSkillRow, learnSkill,
 } from './db.js';
 import {
-  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID,
+  CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ALT_BOSSES, altBossAt,
   ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT,
   rewardMult, dropMult, priceMult, challengeOf, CHALLENGES, festivalFor, storyReqMet, storyReqLabel,
+  exploreMult, exploreRewardMult, bmExtraChance,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -519,7 +520,8 @@ router.get('/camp', (req, res) => {
     for (const i of chosen) ins.run(c.id, visit, i.id, 'camp');
     // ตลาดมืด (ถ้าเจอ) — เพิ่มสินค้าเข้าร้านค่ายพักนี้ (market='black')
     // UPSERT: ถ้าสินค้าชิ้นนั้นอยู่ในร้านปกติด้วย (เช่น ของเถื่อนที่สุ่มมาเป็นเกียร์ชิ้นเดียวกัน) ให้ตลาดมืดแย่งช่อง
-    const bm = blackMarketStock(visit);
+    // สำรวจเมืองเดิมต่อ → โอกาสเจอตลาดมืดเพิ่มขึ้น
+    const bm = blackMarketStock(visit, c);
     if (bm) {
       const bmIns = db.prepare(`INSERT INTO camp_shop (character_id, visit, item_id, qty, market) VALUES (?, ?, ?, 0, ?)
         ON CONFLICT(character_id, visit, item_id) DO UPDATE SET market = 'black'`);
@@ -531,9 +533,9 @@ router.get('/camp', (req, res) => {
     }
     stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   }
-  // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของไม่ดังลดราคา
+  // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของส่วนใหญ่ราคาปกติ, สุ่มไม่กี่ชิ้นลดราคา
   const dayKey = today();
-  const bm = blackMarketStock(visit);
+  const bm = blackMarketStock(visit, c);
   // โหมดโหด: ราคาในร้านแพงขึ้น x1.3 (ราคาที่โชว์ = ราคาที่จ่ายจริง)
   const pm = priceMult(c);
   const shop = stock.map((s) => {
@@ -619,8 +621,8 @@ router.post('/shop/sell', (req, res) => {
   if (!inv || inv.qty < qty) return res.status(400).json({ error: 'ไม่มีไอเทมพอจะขาย' });
   // ราคาขายตามวันนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น) — ราคาเดียวกับที่โชว์ใน /camp
   const sell = campSellPrice(inv, today());
-  // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25%
-  const bmOpen = req.body.visit ? blackMarketOpen(req.body.visit) : false;
+  // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — สำรวจเมืองเดิมต่อ → เจอบ่อยขึ้น
+  const bmOpen = req.body.visit ? blackMarketOpen(req.body.visit, bmExtraChance(c)) : false;
   const toBm = bmOpen && inv.type === 'junk';
   const price = toBm ? Math.round(sell.price * BM_JUNK_MULT) : sell.price;
   const gain = price * qty;
@@ -953,19 +955,32 @@ router.post('/boss/act', (req, res) => {
     db.prepare(`UPDATE progress SET cycles_completed=@cycles_completed, bosses_defeated=@bosses_defeated, gold_earned=@gold_earned,
       hard_cycles=@hard_cycles, marathon_cycles=@marathon_cycles, survival_cycles=@survival_cycles WHERE id=@id`).run(prog);
     if (result.item) addItem(c.id, result.item.id);
-    c.city_index = (c.city_index + 1) % CITIES.length;
-    updateCharacter(c);
+    // เมืองยังไม่ย้ายอัตโนมัติ — client จะถามว่า "เดินทางต่อ" หรือ "สำรวจเมืองเดิมต่อ" (POST /boss/after)
     fights.delete(c.id);
-    // ของรางวัลเฉพาะบอส — โอกาส ~50% ได้ของขวัญหายากประจำตัว (ขายได้ที่แคมป์)
+    // ของรางวัลเฉพาะบอส — ปกติโอกาส ~50% ได้ของขวัญประจำตัว (ขายได้ที่แคมป์)
+    // บอสลับ (สำรวจเมืองเดิมครบรอบ) → ได้ของพิเศษการันตีครั้งแรกของเมืองนั้น · มีแล้วได้ค่าหัวทองแทน (กันฟาร์มซ้ำ)
     let lootNote = '';
-    if (fight.boss.loot && Math.random() < 0.5) {
+    if (fight.boss.isAlt && fight.boss.loot) {
+      const owned = getInventory(c.id).some((i) => i.item_id === fight.boss.loot);
+      if (owned) {
+        c.gold += 150;
+        lootNote = ' และได้ค่าหัวบอสลับ +150 ทอง';
+      } else {
+        const loot = ITEM_BY_ID[fight.boss.loot];
+        if (loot) {
+          addItem(c.id, loot.id);
+          lootNote = ` และได้ ${loot.icon} ${loot.name}! (ของพิเศษบอสลับ)`;
+        }
+      }
+    } else if (fight.boss.loot && Math.random() < 0.5) {
       const loot = ITEM_BY_ID[fight.boss.loot];
       if (loot) {
         addItem(c.id, loot.id);
         lootNote = ` และได้ ${loot.icon} ${loot.name}!`;
       }
     }
-    addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} และเดินทางสู่ ${CITIES[c.city_index].name}!${lootNote}`, xp: result.xp, gold: result.gold });
+    updateCharacter(c);
+    addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} ได้!${lootNote}`, xp: result.xp, gold: result.gold });
     ach = checkAchievements(c, prog, {
       bossWin: {
         hp: c.hp,
@@ -990,14 +1005,45 @@ router.post('/boss/act', (req, res) => {
   });
 });
 
+// ----- หลังชนะบอส: เลือก "เดินทางต่อ" (เมืองใหม่) หรือ "สำรวจเมืองเดิมต่อ" (รอบเพิ่ม — ความยาก/รางวัล/ตลาดมืดเพิ่ม) -----
+router.post('/boss/after', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { choice } = req.body || {};
+  const city = CITIES[c.city_index % CITIES.length];
+  if (choice === 'travel') {
+    c.city_index = (c.city_index + 1) % CITIES.length;
+    c.city_rounds = 0; // ย้ายเมือง = เริ่มสำรวจรอบใหม่
+    updateCharacter(c);
+    const next = CITIES[c.city_index % CITIES.length];
+    addLog(c.id, { type: 'travel', title: '🗺️ เดินทางต่อ', detail: `จาก ${city.name} สู่ ${next.name} — เริ่มรอบการผจญภัยใหม่!` });
+    return res.json({ ...serialize(c), message: `🗺️ เดินทางถึง ${next.name} แล้ว — เริ่มรอบใหม่!` });
+  }
+  if (choice === 'stay') {
+    c.city_rounds = (c.city_rounds || 0) + 1;
+    updateCharacter(c);
+    const round = c.city_rounds;
+    const em = exploreMult(c);
+    const rm = exploreRewardMult(c);
+    // เจอบอสลับในรอบนี้ไหม (รอบถัดไปที่ต้องสู้)
+    const altNext = round >= altBossAt(c.city_index % CITIES.length);
+    const altNote = altNext ? ` — และบอสลับจะปรากฏตัว! (${ALT_BOSSES[c.city_index % ALT_BOSSES.length].icon} ${ALT_BOSSES[c.city_index % ALT_BOSSES.length].name})` : '';
+    addLog(c.id, { type: 'city_stay', title: '🏠 สำรวจเมืองเดิมต่อ', detail: `อยู่ต่อที่ ${city.name} — รอบที่ ${round} (ศัตรู x${em}, รางวัล x${rm})${altNote}` });
+    return res.json({
+      ...serialize(c),
+      message: `🏠 สำรวจ ${city.name} ต่อ — รอบที่ ${round}: ศัตรูแข็งขึ้น x${em} แต่รางวัล x${rm}${altNext ? ' · บอสลับมาแล้ว!' : ''}`,
+    });
+  }
+  return res.status(400).json({ error: 'ระบุทางเลือกไม่ถูกต้อง (travel / stay)' });
+});
+
 router.post('/boss/retreat', (req, res) => {
   const c = requireChar(res); if (!c) return;
   fights.delete(c.id);
   const stats = computeStats(c);
   c.hp = Math.max(1, c.hp - Math.round(stats.maxHp * 0.2));
   updateCharacter(c);
-  addLog(c.id, { type: 'boss_lose', title: '💨 ถอยทัพ', detail: 'สู้ไม่ไหว ถอยกลับไปพักก่อน…' });
-  res.json({ ...serialize(c), message: 'ถอยกลับแคมป์ พลังเสียไปเล็กน้อย' });
+  addLog(c.id, { type: 'boss_lose', title: '💨 ถอยทัพ', detail: 'สู้บอสไม่ไหว ถอยกลับไปสำรวจใหม่ — ไม่นับรอบและไม่เพิ่มความยาก' });
+  res.json({ ...serialize(c), message: 'ถอยกลับไปสำรวจใหม่ (ไม่นับรอบ — ความยากเท่าเดิม)' });
 });
 
 // ----- สรุปรายสัปดาห์: 7 วันล่าสุด เทียบ 7 วันก่อนหน้า -----

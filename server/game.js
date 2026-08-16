@@ -1,4 +1,4 @@
-import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS } from './data.js';
+import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -23,10 +23,13 @@ const mulberry32 = (a) => () => {
 };
 
 // ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
+// เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส → โอกาสเจอตลาดมืดเพิ่มขึ้น (+10% ต่อรอบ สูงสุด +35%)
 // รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%), ของพิเศษ exclusive (ลด 10%)
 export const BM_OPEN_CHANCE = 0.25;
 export const BM_JUNK_MULT = 1.25;
-export const blackMarketOpen = (visit) => seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE;
+// โบนัสโอกาสเจอตลาดมืดจากการสำรวจเมืองเดิมต่อ — +10% ต่อรอบ สูงสุด +35% (รวมสูงสุด 60%)
+export const bmExtraChance = (c) => Math.round(Math.min(0.35, (c?.city_rounds || 0) * 0.1) * 100) / 100;
+export const blackMarketOpen = (visit, extraChance = 0) => seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE + extraChance;
 const bmDisc = (item, mult) => ({ bmPrice: Math.max(1, Math.round(item.price * mult)), bmNormal: item.price });
 
 // stock ของตลาดมืด (ไม่เช็คว่าเจอหรือเปล่า — ใช้ preview ได้) — deterministic จาก visit
@@ -47,8 +50,8 @@ export function bmStockFor(visit) {
   ];
 }
 
-export function blackMarketStock(visit) {
-  if (!visit || !blackMarketOpen(visit)) return null;
+export function blackMarketStock(visit, c = null) {
+  if (!visit || !blackMarketOpen(visit, bmExtraChance(c))) return null;
   return bmStockFor(visit);
 }
 
@@ -78,20 +81,21 @@ export function campSellPrice(item, dayKey) {
 }
 
 // ราคาซื้อในร้านค้าค่ายพักตามวัน — เชื่อมกับระบบ demand เดียวกันกับราคาขาย (seed เดียวกัน)
-// ของที่พ่อค้าต้องการวันนี้ → ราคาในร้านก็แพงขึ้น (x1.2–1.5), ของธรรมดา → ปกติ/ลดราคา (x0.85–1.05)
+// ของที่พ่อค้าต้องการวันนี้ → ราคาในร้านแพงขึ้น (x1.2–1.5) · ของส่วนใหญ่ราคาปกติ · มีสุ่มไม่กี่ชิ้นที่ลดราคา (x0.7–0.9)
 export function marketPrice(item, dayKey) {
   const base = item?.price || 0;
   const id = item?.item_id ?? item?.id ?? 0;
   if (!dayKey) return { price: base, mult: 1, hot: false, sale: false };
   const rng = mulberry32(hashSeed(`${dayKey}:sell:${id}`)); // seed เดียวกับ campSellPrice → wanted ตรงกัน
-  const wanted = rng() < 0.25;
-  const mult = wanted ? 1.2 + rng() * 0.3 : 0.85 + rng() * 0.2;
-  return {
-    price: Math.max(1, Math.round(base * mult)),
-    mult,
-    hot: mult > 1.15, // ความต้องการสูง → ราคาขึ้น
-    sale: mult < 0.95, // ไม่เป็นที่ต้องการ → ลดราคา
-  };
+  const wanted = rng() < 0.25; // ของที่พ่อค้าต้องการวันนี้ (สุ่มรายวัน — เปลี่ยนทุกวัน)
+  if (wanted) {
+    const mult = 1.2 + rng() * 0.3;
+    return { price: Math.max(1, Math.round(base * mult)), mult, hot: true, sale: false };
+  }
+  // ไม่ใช่ของที่ต้องการ → ราคาปกติเป็นหลัก มีสุ่ม ~15% ที่พ่อค้าลดราคาล้างสต็อก
+  const sale = rng() < 0.15;
+  const mult = sale ? 0.7 + rng() * 0.2 : 1;
+  return { price: Math.max(1, Math.round(base * mult)), mult, hot: false, sale };
 }
 
 export const xpToNext = (level) => Math.floor(80 * Math.pow(level, 1.6));
@@ -218,6 +222,11 @@ export function serializeCharacter(c) {
     statPoints: c.stat_points,
     cityIndex: c.city_index,
     city: CITIES[c.city_index % CITIES.length],
+    // รอบที่สำรวจเมืองเดิมต่อ (หลังชนะบอสเลือกอยู่ต่อ) — ความยาก/รางวัล/ตลาดมืดเพิ่มตามรอบ
+    cityRound: c.city_rounds || 0,
+    exploreMult: +(1 + 0.15 * (c.city_rounds || 0)).toFixed(2),
+    exploreRewardMult: +(1 + 0.2 * (c.city_rounds || 0)).toFixed(2),
+    altBossAtRound: altBossAt(c.city_index % CITIES.length),
     challengeMode: c.challenge_mode || '',
     skills: getCharacterSkills(c), // สกิลคลาส + สกิลจากคัมภีร์ พร้อมเลเวล/XP — ใช้ตอนสู้บอส
     equipment: {
@@ -277,10 +286,17 @@ export function dodgeChance(spd) {
   return Math.min(20, Math.round(spd * 0.8));
 }
 
+// ----- การสำรวจเมืองเดิมต่อ (หลังชนะบอสเลือก "อยู่ต่อ") -----
+// แต่ละรอบที่สำรวจเมืองเดิม: ศัตรู/บอสแข็งขึ้น (x1.15/รอบ) แต่รางวัล XP/ทองก็เพิ่มขึ้น (x1.2/รอบ) +
+// โอกาสเจอตลาดมืดเพิ่มขึ้น — ยิ่งอยู่ต่อ ยิ่งเสี่ยงแต่คุ้มค่า (เจอบอสลับเมื่อครบรอบของเมืองนั้น)
+export const exploreRound = (c) => c?.city_rounds || 0;
+export const exploreMult = (c) => 1 + 0.15 * exploreRound(c);            // ตัวคูณพลังศัตรู/บอส
+export const exploreRewardMult = (c) => 1 + 0.2 * exploreRound(c);       // ตัวคูณรางวัล XP/ทอง
+
 // ----- ระบบมอนสเตอร์ / ต่อสู้อัตโนมัติ (ช่วง work session — ไม่รบกวนสมาธิ) -----
 export function rollMonster(level, c = null) {
   const m = pick(MONSTERS);
-  const power = Math.round((12 + 5 * level) * m.power * enemyMult(c));
+  const power = Math.round((12 + 5 * level) * m.power * enemyMult(c) * exploreMult(c));
   return { ...m, power };
 }
 
@@ -329,17 +345,18 @@ export function resolveCombat(c, monster) {
   const p = playerPower(c);
   const win = Math.random() < p / (p + monster.power);
   const stats = computeStats(c);
+  const rMult = exploreRewardMult(c); // สำรวจเมืองเดิมต่อ → รางวัลสูงขึ้น
   let hpLoss = 0;
   let xp = 0;
   let gold = 0;
   let detail = '';
   if (win) {
-    xp = monster.xp + rand(0, 8) + c.level;
-    gold = monster.gold + rand(0, 6);
+    xp = Math.round((monster.xp + rand(0, 8) + c.level) * rMult);
+    gold = Math.round((monster.gold + rand(0, 6)) * rMult);
     hpLoss = rand(3, 9);
     detail = `🗡️ กำราบ ${monster.name} ได้สำเร็จ! (+${xp} XP, +${gold} ทอง)`;
   } else {
-    xp = Math.max(2, Math.round(monster.xp * 0.25));
+    xp = Math.max(2, Math.round(monster.xp * 0.25 * rMult));
     hpLoss = Math.round(stats.maxHp * 0.08) + rand(2, 6);
     detail = `💨 โดน ${monster.name} ต้อนจนต้องหนี… (ได้ ${xp} XP แต่เสียพลังไป ${hpLoss})`;
   }
@@ -420,8 +437,9 @@ export function rollEvent(c, forceKey = null) {
   }
 
   if (ev.key === 'treasure') {
-    const xp = rand(10, 25) + c.level;
-    const gold = rand(15, 45) + c.level * 2;
+    const rMult = exploreRewardMult(c); // สำรวจเมืองเดิมต่อ → รางวัลสูงขึ้น
+    const xp = Math.round((rand(10, 25) + c.level) * rMult);
+    const gold = Math.round((rand(15, 45) + c.level * 2) * rMult);
     c.gold += gold;
     const ups = gainXp(c, xp);
     base.xp = xp; base.gold = gold;
@@ -459,7 +477,7 @@ export function rollEvent(c, forceKey = null) {
   if (ev.key === 'shrine') {
     const stats = computeStats(c);
     if (Math.random() < 0.5 || c.mp >= stats.maxMp) {
-      const xp = rand(20, 40) + c.level;
+      const xp = Math.round((rand(20, 40) + c.level) * exploreRewardMult(c));
       base.ups = gainXp(c, xp);
       base.xp = xp;
       base.detail = `สวดมนต์ที่ศาลเจ้า ได้แรงบันดาลใจ (+${xp} XP)`;
@@ -475,7 +493,7 @@ export function rollEvent(c, forceKey = null) {
 
   if (ev.key === 'merchant') {
     if (Math.random() < 0.5) {
-      const gold = rand(5, 15);
+      const gold = Math.round(rand(5, 15) * exploreRewardMult(c));
       c.gold += gold;
       base.gold = gold;
       base.detail = `ซื้อของที่ระลึกจากพ่อค้าและขายต่อ ได้กำไร ${gold} ทอง`;
@@ -496,7 +514,7 @@ export function rollEvent(c, forceKey = null) {
     base.hpChange = -hpLoss;
     base.detail = `หลบไม่ทัน เสียพลังไป ${hpLoss} — แต่เก็บเศษสมบัติได้นิดหน่อย`;
     if (Math.random() < 0.4) {
-      const xp = rand(5, 12);
+      const xp = Math.round(rand(5, 12) * exploreRewardMult(c));
       base.ups = gainXp(c, xp);
       base.xp = xp;
       base.detail += ` (+${xp} XP)`;
@@ -509,15 +527,19 @@ export function rollEvent(c, forceKey = null) {
 
 // ----- บอส (พักใหญ่หลังครบ 4 session) -----
 // บอสแต่ละเมืองมีสกิล (ท่าเด็ด) ของตัวเอง — ใช้แทนโจมตีปกติเป็นครั้งคราว
+// สำรวจเมืองเดิมต่อ → บอสแข็งขึ้นตามรอบ · เจอบอสลับ (👁️/😈/🗿) เมื่อครบรอบของเมืองนั้น — ให้ของพิเศษ
 export function generateBoss(level, cityIndex, c = null) {
-  const boss = BOSSES[cityIndex % BOSSES.length];
+  const round = exploreRound(c);
+  const isAlt = round >= altBossAt(cityIndex);
+  const boss = isAlt ? ALT_BOSSES[cityIndex % ALT_BOSSES.length] : BOSSES[cityIndex % BOSSES.length];
   const loadout = BOSS_LOADOUTS[cityIndex % BOSS_LOADOUTS.length] || [];
   const skills = loadout.map((k) => BOSS_SKILLS[k]).filter(Boolean);
-  const em = enemyMult(c);
+  const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.25 : 1); // บอสลับโหดกว่า
   const maxHp = Math.round((90 + 32 * level) * em);
   return {
     name: boss.name,
     icon: boss.icon,
+    isAlt,
     loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
     maxHp,
     hp: maxHp,
@@ -707,8 +729,9 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
 
   if (fight.boss.hp <= 0) {
     outcome = 'win';
-    const xp = 250 + 60 * c.level;
-    const gold = 120 + 40 * c.level;
+    const rMult = exploreRewardMult(c); // สำรวจเมืองเดิมต่อ → รางวัลบอสสูงขึ้น
+    const xp = Math.round((250 + 60 * c.level) * rMult);
+    const gold = Math.round((120 + 40 * c.level) * rMult);
     const ups = gainXp(c, xp);
     c.gold += gold;
     const drop = Math.random() < 0.35 ? pick(Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll' && (i.lvl || 1) <= c.level + 1)) : null;

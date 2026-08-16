@@ -210,6 +210,8 @@ ensureColumn('log', 'challenge_mode', "TEXT DEFAULT ''");
 ensureColumn('log', 'focus_task', 'TEXT');
 // โล่โฟกัส: 1 = กันคอมโบหาย 1 ครั้ง (ใช้ไอเทม 🛡️ โล่โฟกัสแล้ว) — แตกเมื่อพัก/ทิ้ง session
 ensureColumn('progress', 'combo_shield', 'INTEGER DEFAULT 0');
+// จำนวนรอบที่เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส — ความยาก/รางวัล/ตลาดมืดเพิ่มตามรอบ (รีเซ็ตเมื่อย้ายเมือง)
+ensureColumn('character', 'city_rounds', 'INTEGER DEFAULT 0');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
 // ตลาดมืด (black market) — สินค้าที่ขายในค่ายพักนี้ ระบุแหล่งที่มา ('camp' = ร้านปกติ, 'black' = ตลาดมืด)
 ensureColumn('camp_shop', 'market', "TEXT DEFAULT 'camp'");
@@ -360,6 +362,6 @@ export const updateCharacter = (c) => {
     weapon_id=@weapon_id, offhand_id=@offhand_id, head_id=@head_id, armor_id=@armor_id,
     arms_id=@arms_id, legs_id=@legs_id, feet_id=@feet_id,
     accessory_id=@accessory_id, accessory_2_id=@accessory_2_id, accessory_3_id=@accessory_3_id, accessory_4_id=@accessory_4_id,
-    city_index=@city_index, challenge_mode=@challenge_mode
+    city_index=@city_index, city_rounds=@city_rounds, challenge_mode=@challenge_mode
     WHERE id=@id`).run(c);
 };

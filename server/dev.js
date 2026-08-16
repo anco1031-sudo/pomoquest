@@ -6,7 +6,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { db, getCharacter, getProgress, getInventory, addItem, addLog, updateCharacter, bumpDaily, getSkillRow, learnSkill } from './db.js';
 import { ITEM_BY_ID, CITIES, ACHIEVEMENTS, SECRET_ACHIEVEMENTS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID } from './data.js';
-import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSkills, grantSkillXp, bmStockFor, BM_JUNK_MULT } from './game.js';
+import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSkills, grantSkillXp, bmStockFor, BM_JUNK_MULT, exploreRewardMult } from './game.js';
 import { checkAchievements } from './achievements.js';
 
 const DEV_USER = process.env.DEV_USER || 'admin';
@@ -221,13 +221,14 @@ router.post('/dev/skill-xp', requireDev, (req, res) => {
   });
 });
 
-// ชนะบอสทันที (ทดสอบรอบเมือง / วัฏจักร)
+// ชนะบอสทันที (ทดสอบรอบเมือง / วัฏจักร) — ไม่ย้ายเมืองอัตโนมัติ (เหมือนเกมจริง: เลือกเดินทางต่อ/อยู่ต่อ)
 router.post('/dev/boss-win', requireDev, (req, res) => {
   dryRun(res, (c) => {
     const boss = generateBoss(c.level, c.city_index, c);
     const prog = getProgress(c.id);
-    const xp = 250 + 60 * c.level;
-    const gold = 120 + 40 * c.level;
+    const rMult = exploreRewardMult(c);
+    const xp = Math.round((250 + 60 * c.level) * rMult);
+    const gold = Math.round((120 + 40 * c.level) * rMult);
     const ups = gainXp(c, xp);
     c.gold += gold;
     prog.cycles_completed += 1;
@@ -240,9 +241,9 @@ router.post('/dev/boss-win', requireDev, (req, res) => {
       ? pickGear(c.level)
       : null;
     if (drop) addItem(c.id, drop.id);
-    c.city_index = (c.city_index + 1) % CITIES.length;
+    const altNote = boss.isAlt ? ` (บอสลับ — ของพิเศษการันตี!)` : '';
     updateCharacter(c);
-    addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส! (dev)', detail: `กำราบ ${boss.name} และเดินทางสู่ ${CITIES[c.city_index].name}!`, xp, gold });
+    addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส! (dev)', detail: `กำราบ ${boss.name} ได้!${altNote}`, xp, gold });
     bumpDaily(c.id, 'boss_wins');
     const stats = computeStats(c);
     const ach = checkAchievements(c, prog, {
@@ -251,7 +252,7 @@ router.post('/dev/boss-win', requireDev, (req, res) => {
     return {
       achievements: ach.fresh,
       levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
-      message: `🏆 ลองเล่น: ชนะบอส ${boss.name} +${xp} XP, +${gold} ทอง → ${CITIES[c.city_index].name} (ไม่บันทึก)`,
+      message: `🏆 ลองเล่น: ชนะบอส ${boss.name}${altNote} +${xp} XP, +${gold} ทอง → ยังอยู่ที่ ${CITIES[c.city_index].name} (เลือกเดินทางต่อ/อยู่ต่อในเกมจริง) (ไม่บันทึก)`,
     };
   });
 });

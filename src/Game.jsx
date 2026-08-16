@@ -158,6 +158,7 @@ export default function Game() {
       setSessionEvents(t.sessionEvents || []);
       setSessionKey(t.sessionKey || null);
       setBreakVisit(t.breakVisit || null);
+      if (t.focusTask) setFocusTask(t.focusTask); // ชื่องาน session นี้ (ตั้งตอนเริ่ม) — กู้คืนหลังรีโหลด
       setAwaitingBreak(t.awaitingBreak || false);
       setBreakOver(t.breakOver || false);
       setOverrun(t.overrun || 0);
@@ -217,10 +218,11 @@ export default function Game() {
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
       awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec,
+      focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -319,6 +321,14 @@ export default function Game() {
     setPausedAtHome(false);
     setRunning(true);
     sfx.start();
+  };
+
+  // แก้ไขชื่องานของ session นี้ (จากหน้าจอโฟกัส) — session ต่อ ๆ ไปในรอบใช้ชื่อใหม่
+  const editFocusTask = () => {
+    const v = window.prompt('📋 ตั้งชื่องานนี้ (เว้นว่างเพื่อลบ)', focusTaskRef.current || '');
+    if (v === null) return;
+    setFocusTask(v.trim());
+    if (v.trim()) showToast('📋 เปลี่ยนชื่องานเป็น "' + v.trim() + '" แล้ว');
   };
 
   const beginWork = (idx = 1, task) => {
@@ -498,6 +508,13 @@ export default function Game() {
     await finishBreak();
   };
 
+  // หลังชนะบอส — เลือก "เดินทางต่อ" (เมืองใหม่) หรือ "สำรวจเมืองเดิมต่อ" (ความยาก/รางวัล/ตลาดมืดเพิ่ม)
+  const bossWinChoice = async (choice) => {
+    const d = await post('/boss/after', { choice });
+    if (d) showToast(d.message);
+    await finishBreak();
+  };
+
   // กำลังโฟกัสงานอยู่ → ซ่อน notification (เลเวลอัพ/รางวัล) ไว้แจ้งหลังจบ session แทน
   const inActiveWork = phase === 'work' && running;
   // กำลังพักกลาง session (กดหยุดพัก/กลับหน้าหลัก) → ซ่อน modal รางวัล/เลเวลอัพไว้ก่อน — พัก = หยุดทุกอย่างจริง ๆ
@@ -552,6 +569,7 @@ export default function Game() {
           sessionEvents={sessionEvents}
           focusTask={focusTask}
           pausedSec={pausedSec}
+          onEditTask={editFocusTask}
         />
       )}
 
@@ -577,7 +595,7 @@ export default function Game() {
           overrun={overrun}
           onAct={bossAct}
           onRetreat={bossRetreat}
-          onContinue={() => finishBreak()}
+          onWinChoice={bossWinChoice}
         />
       )}
 
@@ -631,6 +649,23 @@ export default function Game() {
                     ))}
                   </div>
                 )}
+                {/* รายการเหตุการณ์ที่เจอใน session นี้ — โชว์ทีละอัน (สรุปย่อ) ดูรายละเอียดเต็มในแท็บ Session */}
+                <div className="session-summary-list">
+                  {[...sessionEvents].reverse().map((ev, i) => {
+                    const parts = [];
+                    if (ev.xp > 0) parts.push(`+${ev.xp} XP`);
+                    if (ev.gold > 0) parts.push(`+${ev.gold} ทอง`);
+                    if (ev.hpChange < 0) parts.push(`-${Math.abs(ev.hpChange)} HP`);
+                    if (ev.mpChange > 0) parts.push(`+${ev.mpChange} MP`);
+                    if (ev.item) parts.push(`${ev.item.icon} ${ev.item.name}`);
+                    return (
+                      <div className="session-summary-item" key={i}>
+                        <span className="session-summary-item-title">{ev.title}</span>
+                        {parts.length > 0 && <span className="session-summary-item-reward">{parts.join(' · ')}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             <div className="modal-actions">
