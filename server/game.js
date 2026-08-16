@@ -1,4 +1,4 @@
-import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS } from './data.js';
+import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -532,12 +532,13 @@ export function rollEvent(c, forceKey = null) {
 // ระบบต่อสู้ (ยากขึ้น + เลือกกลยุทธ์ได้):
 //  - 🛡️ ตั้งรับ (guard): ผู้เล่นลดดาเมจ 60% ในเทิร์นนั้น + ฟื้น MP 10%
 //  - 😡 โกรธจัด: HP บอส ≤ 50% → ATK x1.4 + ใช้ท่าเด็ดถี่ขึ้น + ใช้ท่าไม้ตาย (💥) ได้ + แช่แข็งต้านทาน
-//  - ⚠️ ชาร์จพลัง: ทุก 5 เทิร์น บอสชาร์จท่าไม้ตาย (x2.6) — เทิร์นหน้าปล่อย ถ้าผู้เล่นทำดาเมจ ≥12% HP สูงสุด
+//  - ⚠️ ชาร์จพลัง: ทุก 5 เทิร์น บอสชาร์จท่าไม้ตาย — เทิร์นหน้าปล่อย ถ้าผู้เล่นทำดาเมจ ≥12% HP สูงสุด
 //       ในเทิร์นที่ชาร์จ → สลายได้! บอสชะงัก (ข้ามเทิร์น) · ถ้าไม่สลาย ต้องตั้งรับ (guard) กันเอาไว้
+//       แต่ละบอสมีท่าไม้ตายต่างกัน (BOSS_ULTS): 💥 โจมตีมหึมา · 🛡️ เกราะมหึมา (กันดาเมจ) · 💚 พลังฟื้นฟู (ฟื้น HP) · 💨 เงามายา (หลบโจมตี)
 //  - 🔥 สุดทน: สู้ยืดเยื้อเกิน 30 เทิร์น → ATK บอสพุ่ง x1.6 ถาวร (กันกักยาไว้เฉย ๆ)
 //  - เมืองยิ่งลึก บอสยิ่งแข็ง (x1.05/เมือง)
 const BOSS_CHARGE_EVERY = 5;    // ชาร์จท่าไม้ตายทุก 5 เทิร์น
-const BOSS_CHARGE_MULT = 2.6;   // ความแรงท่าไม้ตาย (x ของ ATK)
+const BOSS_CHARGE_MULT = 2.6;   // ความแรงท่าไม้ตายแบบ smash (x ของ ATK) — สำรองถ้าไม่มี ult
 const BOSS_CHARGE_BREAK = 0.12; // สลายการชาร์จ: ทำดาเมจ ≥ 12% HP สูงสุดบอสในเทิร์นที่ชาร์จ
 const BOSS_FURY_TURN = 30;      // สู้ยืดเยื้อเกิน 30 เทิร์น → บอสสุดทน (ATK พุ่งถาวร)
 
@@ -565,6 +566,7 @@ export function generateBoss(level, cityIndex, c = null) {
     icon: boss.icon,
     isAlt,
     loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
+    ult: BOSS_ULTS[boss.ult] || BOSS_ULTS.smash, // ท่าไม้ตายเฉพาะตัว (ชาร์จพลัง) — สไตล์ต่างกันตามบอส
     maxHp,
     hp: maxHp,
     atk,
@@ -580,8 +582,14 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
   const log = [];
   let outcome = null; // null = ยังสู้, 'win' | 'lose'
 
-  // ดาเมจที่บอสได้รับ — ถ้าบอสใช้ "เกราะแข็ง" (ลดดาเมจ) ให้ลดก่อน
-  const bossHit = (dmg) => {
+  // ดาเมจที่บอสได้รับ — ถ้าบอสใช้ "เกราะแข็ง" (ลดดาเมจ) ให้ลดก่อน · "เงามายา" (หลบโจมตี) มีโอกาสไม่โดนเลย
+  // poison = ดาเมจพิษ (โดนแน่นอน ไม่โดนหลบ — พิษเป็นดาเมจต่อเนื่องไม่ใช่การโจมตี)
+  const bossHit = (dmg, poison = false) => {
+    // 💨 เงามายา — บอสหลบการโจมตี (โอกาสตาม ult.dodge) — พิษไม่โดนหลบ
+    if (!poison && fight.bossDodge && Math.random() < fight.bossDodge.chance) {
+      log.push(`💨 ${fight.boss.icon} ${fight.boss.name} หลบการโจมตีด้วย เงามายา!`);
+      return 0;
+    }
     let d = dmg;
     if (fight.bossGuard) d = Math.round(d * fight.bossGuard.mult);
     fight.boss.hp = Math.max(0, fight.boss.hp - d);
@@ -717,19 +725,24 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       if (p.turns <= 0) fight.playerPoison = null;
       log.push(`☠️ พิษร้ายกัดกินร่าง เสีย ${pd} HP${p.turns > 0 ? ` (เหลือ ${p.turns} เทิร์น)` : ''}`);
     }
-    // พิษบอส (ยาพิษของโจร)
+    // พิษบอส (ยาพิษของโจร) — โดนแน่นอน (พิษไม่โดนหลบเงามายา)
     if (fight.bossPoison) {
       const p = fight.bossPoison;
       const pd = Math.max(1, Math.round(fight.boss.maxHp * p.pct));
-      const dealt = bossHit(pd);
+      const dealt = bossHit(pd, true);
       p.turns -= 1;
       if (p.turns <= 0) fight.bossPoison = null;
       log.push(`☠️ บอสโดนพิษ เสีย ${dealt} HP${p.turns > 0 ? ` (เหลือ ${p.turns} เทิร์น)` : ''}`);
     }
-    // เกราะแข็งของบอส — นับถอยหลังเทิร์น (เริ่มนับตอนเทิร์นบอส)
+    // เกราะแข็ง/เกราะมหึมาของบอส — นับถอยหลังเทิร์น (เริ่มนับตอนเทิร์นบอส)
     if (fight.bossGuard) {
       fight.bossGuard.turns -= 1;
       if (fight.bossGuard.turns <= 0) fight.bossGuard = null;
+    }
+    // เงามายา (หลบโจมตี) ของบอส — นับถอยหลังเทิร์น
+    if (fight.bossDodge) {
+      fight.bossDodge.turns -= 1;
+      if (fight.bossDodge.turns <= 0) fight.bossDodge = null;
     }
     const dodge = dodgeChance(stats.spd); // โอกาสหลบโจมตีบอส (SPD สูง = หลบเก่ง)
     const playerHit = (dmg) => {
@@ -749,24 +762,44 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       log.push('❄️ บอสถูกแช่แข็ง — ข้ามเทิร์นโจมตี!');
     } else if (fight.bossCharging) {
       // ท่าไม้ตายปล่อยออกมาแล้ว! (เทิร์นที่แล้วชาร์จไว้ — เทิร์นนี้ไม่สลาย = โดนเต็ม ๆ)
+      // เอฟเฟกต์ต่างกันตาม ult ของบอส: 💥 โจมตี · 🛡️ กันดาเมจ · 💚 ฟื้น HP · 💨 หลบโจมตี
       fight.bossCharging = false;
       fight.bossChargeIn = BOSS_CHARGE_EVERY;
       fight.chargeDmg = 0;
-      const crit = Math.random() * 100 < fight.boss.crit;
-      let dmg = attackDamage(fight.boss.atk * BOSS_CHARGE_MULT, stats.def);
-      if (crit) dmg = Math.round(dmg * 1.5);
-      const dealt = playerHit(dmg);
-      log.push(dealt === 0
-        ? `💨 ${c.name} หลบท่าไม้ตายของ ${fight.boss.icon} ได้อย่างเหลือเชื่อ!`
-        : `💥 ${fight.boss.icon} ${fight.boss.name} ปล่อยท่าไม้ตาย โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
+      const ult = fight.boss.ult || BOSS_ULTS.smash;
+      const bossName = `${fight.boss.icon} ${fight.boss.name}`;
+      if (ult.type === 'shield') {
+        // 🛡️ เกราะมหึมา — บอสติดเกราะลดดาเมจ 60% (guard = ตัวคูณดาเมจที่เหลือ) เป็นเวลา N เทิร์น
+        fight.bossGuard = { mult: ult.guard, turns: ult.turns };
+        log.push(`🛡️ ${bossName} ปล่อย ${ult.icon} ${ult.name} — เกราะมหึมาปกคลุมร่าง! ลดดาเมจที่บอสได้รับ 60% (${ult.turns} เทิร์น)`);
+      } else if (ult.type === 'heal') {
+        // 💚 พลังฟื้นฟู — บอสฟื้น HP 40% ของ HP สูงสุดทันที
+        const h = Math.round(fight.boss.maxHp * ult.heal);
+        fight.boss.hp = Math.min(fight.boss.maxHp, fight.boss.hp + h);
+        log.push(`💚 ${bossName} ปล่อย ${ult.icon} ${ult.name} — ฟื้น HP +${h}!`);
+      } else if (ult.type === 'dodge') {
+        // 💨 เงามายา — บอสหลบโจมตีผู้เล่นได้ (โอกาสตาม ult.dodge) เป็นเวลา N เทิร์น
+        fight.bossDodge = { chance: ult.dodge, turns: ult.turns };
+        log.push(`💨 ${bossName} ปล่อย ${ult.icon} ${ult.name} — ร่างพร่าเลือน! หลบโจมตีของคุณ ${Math.round(ult.dodge * 100)}% (${ult.turns} เทิร์น)`);
+      } else {
+        // 💥 ท่าไม้ตาย — โจมตีมหึมา x2.6 (ตั้งรับ/หลบได้)
+        const crit = Math.random() * 100 < fight.boss.crit;
+        let dmg = attackDamage(fight.boss.atk * (ult.mult || BOSS_CHARGE_MULT), stats.def);
+        if (crit) dmg = Math.round(dmg * 1.5);
+        const dealt = playerHit(dmg);
+        log.push(dealt === 0
+          ? `💨 ${c.name} หลบท่าไม้ตายของ ${bossName} ได้อย่างเหลือเชื่อ!`
+          : `💥 ${bossName} ปล่อย ${ult.icon} ${ult.name} โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
+      }
     } else {
       // นับถอยหลังชาร์จ — ครบกำหนด → เริ่มชาร์จท่าไม้ตาย (เทิร์นนี้ไม่โจมตี ให้ผู้เล่นเตรียมตัว)
       fight.bossChargeIn = (fight.bossChargeIn ?? BOSS_CHARGE_EVERY) - 1;
       if (fight.bossChargeIn <= 0) {
         fight.bossCharging = true;
         fight.chargeDmg = 0;
+        const ult = fight.boss.ult || BOSS_ULTS.smash;
         const need = chargeBreakAt(fight);
-        log.push(`⚠️ ${fight.boss.icon} ${fight.boss.name} กำลังรวบรวมพลัง… ท่าไม้ตายกำลังมา! (โจมตีให้ถึง ${need} ดาเมจในเทิร์นหน้าเพื่อสลาย)`);
+        log.push(`⚠️ ${fight.boss.icon} ${fight.boss.name} กำลังรวบรวมพลัง… จะปล่อย ${ult.icon} ${ult.name} (${ult.desc})! โจมตีให้ถึง ${need} ดาเมจในเทิร์นหน้าเพื่อสลาย`);
       } else {
         // โอกาส 30% (โกรธจัด = 45%) ที่บอสใช้ท่าเด็ด (สกิล) แทนโจมตีปกติ · โกรธจัดมีโอกาส 25% ใช้ท่าไม้ตาย 💥
         let bossSkill = fight.boss.skills?.length && Math.random() < (0.3 + (fight.bossRage ? 0.15 : 0)) ? pick(fight.boss.skills) : null;

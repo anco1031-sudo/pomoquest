@@ -67,6 +67,8 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
           {boss.isAlt && <span className="alt-boss-tag" title="บอสลับ — เจอเมื่อสำรวจเมืองเดิมครบรอบ ให้ของพิเศษ">👁️ บอสลับ</span>}
           {fight.rage && <span className="boss-rage-tag" title="HP เหลือไม่ถึงครึ่ง — บอสโกรธจัด! ATK พุ่ง x1.4 และใช้ท่าเด็ดถี่ขึ้น">😡 โกรธจัด</span>}
           {fight.fury && <span className="boss-rage-tag boss-fury-tag" title="สู้ยืดเยื้อเกิน 30 เทิร์น — ATK บอสพุ่งถาวร x1.6">🔥 สุดทน</span>}
+          {fight.armor && <span className="boss-status-chip boss-armor-chip" title="เกราะติดอยู่ — ดาเมจที่บอสได้รับลดลง">🛡️ กันดาเมจ ({fight.armorTurns} เทิร์น)</span>}
+          {fight.dodge && <span className="boss-status-chip boss-dodge-chip" title="เงามายา — บอสหลบโจมตีของคุณ">💨 หลบโจมตี ({fight.dodgeTurns} เทิร์น)</span>}
         </div>
         {(character.cityRound || 0) > 0 && (
           <div className="boss-explore-note">
@@ -83,9 +85,15 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
         <div className="boss-stats">
           <span>⚔️ {boss.atk}</span><span>🛡️ {boss.def}</span>
         </div>
+        {boss.ult && (
+          <div className="boss-skills">
+            <span className="boss-skills-title">ท่าไม้ตาย:</span>
+            <span className="boss-skill-chip boss-ult-chip" title={boss.ult.desc}>{boss.ult.icon} {boss.ult.name}</span>
+          </div>
+        )}
         {fight.charging && !outcome && (
           <div className="boss-charge-note">
-            ⚠️ กำลังชาร์จท่าไม้ตาย! โจมตีให้ถึง <b>{chargeNeed} ดาเมจ</b> ในเทิร์นนี้เพื่อสลาย — หรือตั้งรับ 🛡️ ไว้
+            ⚠️ กำลังชาร์จ <b>{boss.ult?.icon} {boss.ult?.name}</b>! โจมตีให้ถึง <b>{chargeNeed} ดาเมจ</b> ในเทิร์นนี้เพื่อสลาย — หรือตั้งรับ 🛡️ ไว้
           </div>
         )}
         {boss.skills?.length > 0 && (

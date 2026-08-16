@@ -920,6 +920,10 @@ const fightFlags = (f) => ({
   fury: !!f?.bossFury,      // 🔥 สุดทน (สู้ยืดเยื้อเกิน 30 เทิร์น — ATK พุ่งถาวร)
   charging: !!f?.bossCharging, // ⚠️ กำลังชาร์จท่าไม้ตาย (โจมตีให้ถึงเกณฑ์เพื่อสลาย)
   stun: !!f?.bossStun,
+  armor: !!f?.bossGuard,    // 🛡️ เกราะมหึมา/เกราะแข็งติดอยู่ (บอสกันดาเมจ)
+  dodge: !!f?.bossDodge,    // 💨 เงามายา — บอสหลบโจมตี
+  armorTurns: f?.bossGuard?.turns || 0,
+  dodgeTurns: f?.bossDodge?.turns || 0,
 });
 
 router.get('/boss', (req, res) => {

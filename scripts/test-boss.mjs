@@ -103,6 +103,66 @@ try {
   expect('unleash: log บอกปล่อยท่าไม้ตาย', u2.log.some((l) => l.includes('ท่าไม้ตาย')));
   expect('unleash: สถานะชาร์จเคลียร์แล้ว', uf.bossCharging === false && uf.bossChargeIn === 5);
 
+  // --- 🎭 ท่าไม้ตายเฉพาะตัว: แต่ละบอสมี ult ต่างกัน (smash/shield/regen/dodge) ---
+  expect('ult: เมือง 0 (โจรป่า) = smash (โจมตี)', generateBoss(5, 0).ult?.type === 'attack');
+  expect('ult: เมือง 2 (แม่ทัพเงา) = dodge (เงามายา)', generateBoss(5, 2).ult?.type === 'dodge');
+  expect('ult: เมือง 3 (ราชินีแม่มด) = regen (พลังฟื้นฟู)', generateBoss(5, 3).ult?.type === 'heal');
+  expect('ult: เมือง 4 (โกลเลมไฟ) = shield (เกราะมหึมา)', generateBoss(5, 4).ult?.type === 'shield');
+  expect('ult: บอสลับ (ปีศาจทมิฬ) = regen', generateBoss(5, 4, makeChar({ city_rounds: 4 })).ult?.type === 'heal');
+
+  // --- 🛡️ เกราะมหึมา (shield): ปล่อยแล้ว bossGuard ติด กันดาเมจ 60% (2 เทิร์น) ---
+  const shBoss = generateBoss(50, 5); // คริสตัลการ์เดี้ยน — ult shield (loadout ไม่มีสกิลฟื้น)
+  const shf = { boss: shBoss, bossCharging: true };
+  const shWeak = makeChar({ level: 50, atk: 1, max_hp: 100000, hp: 100000, def: 0, spd: 0 });
+  const shRes = bossPlayerTurn(shWeak, shf, 'attack', null, null); // โจมตีเบา ไม่สลาย → ปล่อยเกราะ
+  expect('ult shield: bossGuard ติด (กัน 60% = mult 0.4, 2 เทิร์น)', shf.bossGuard?.mult === 0.4 && shf.bossGuard?.turns === 2,
+    JSON.stringify(shf.bossGuard));
+  expect('ult shield: log บอกปล่อยเกราะมหึมา', shRes.log.some((l) => l.includes('เกราะมหึมา')));
+  // เทิร์นถัดไป: ดาเมจที่ทำได้ถูกลดลง (เทียบกับบอสไม่มีเกราะ)
+  const ctrlBoss = generateBoss(50, 5);
+  const ctrlChar = makeChar({ level: 50, atk: 400, max_hp: 100000, hp: 100000 });
+  const ctrlHp = ctrlBoss.hp;
+  bossPlayerTurn(ctrlChar, { boss: ctrlBoss }, 'attack', null, null);
+  const dmgCtrl = ctrlHp - ctrlBoss.hp;
+  const hpBeforeG = shBoss.hp;
+  const shStrong = makeChar({ level: 50, atk: 400, max_hp: 100000, hp: 100000 });
+  bossPlayerTurn(shStrong, shf, 'attack', null, null);
+  const dmgGuarded = hpBeforeG - shBoss.hp;
+  expect('ult shield: ดาเมจมีเกราะ < ไม่มีเกราะ (ลดลงชัดเจน)', dmgGuarded < dmgCtrl * 0.6, `guarded=${dmgGuarded} ctrl=${dmgCtrl}`);
+
+  // --- 💚 พลังฟื้นฟู (regen): ปล่อยแล้วฟื้น HP 40% ของ HP สูงสุด ---
+  const rgBoss = generateBoss(50, 3); // ราชินีแม่มด — ult regen
+  rgBoss.hp = Math.round(rgBoss.maxHp * 0.4);
+  const rgf = { boss: rgBoss, bossCharging: true };
+  const rgChar = makeChar({ level: 50, atk: 1, max_hp: 100000, hp: 100000, def: 0, spd: 0 });
+  const rgRes = bossPlayerTurn(rgChar, rgf, 'attack', null, null); // ไม่สลาย → ปล่อยพลังฟื้นฟู
+  expect('ult regen: HP เพิ่มขึ้น ~40% ของ HP สูงสุด', rgBoss.hp > Math.round(rgBoss.maxHp * 0.75) && rgBoss.hp < rgBoss.maxHp,
+    `hp=${rgBoss.hp} maxHp=${rgBoss.maxHp}`);
+  expect('ult regen: log บอกฟื้น HP', rgRes.log.some((l) => l.includes('ฟื้น HP')));
+
+  // --- 💨 เงามายา (dodge): ปล่อยแล้วบอสหลบโจมตี 50% (2 เทิร์น) + พิษโดนแน่นอน ---
+  const dgBoss = generateBoss(50, 2); // แม่ทัพเงา — ult dodge
+  const dgf = { boss: dgBoss, bossCharging: true };
+  const dgChar = makeChar({ level: 50, atk: 1, max_hp: 100000, hp: 100000, def: 0, spd: 0 });
+  const dgRes = bossPlayerTurn(dgChar, dgf, 'attack', null, null); // โจมตีเบา ไม่สลาย → ปล่อยเงามายา
+  expect('ult dodge: bossDodge ติด (หลบ 50%, 2 เทิร์น)', dgf.bossDodge?.chance === 0.5 && dgf.bossDodge?.turns === 2,
+    JSON.stringify(dgf.bossDodge));
+  expect('ult dodge: log บอกปล่อยเงามายา', dgRes.log.some((l) => l.includes('เงามายา')));
+  // บังคับหลบ 100% → การโจมตีไม่โดนเลย (HP บอสไม่ลด)
+  const dgBoss2 = generateBoss(50, 2);
+  const dgf2 = { boss: dgBoss2, bossDodge: { chance: 1, turns: 1 } };
+  const dgChar2 = makeChar({ level: 50, atk: 400, max_hp: 100000, hp: 100000 });
+  const hpBeforeD = dgBoss2.hp;
+  bossPlayerTurn(dgChar2, dgf2, 'attack', null, null);
+  expect('ult dodge: หลบ 100% → ผู้เล่นทำดาเมจไม่ได้', dgBoss2.hp === hpBeforeD, `hp ${hpBeforeD} → ${dgBoss2.hp}`);
+  // พิษไม่โดนหลบ (ดาเมจต่อเนื่อง — ยังลด HP บอสได้ตอนเงามายาติด)
+  const pBoss = generateBoss(5, 2);
+  const pf = { boss: pBoss, bossDodge: { chance: 1, turns: 2 }, bossPoison: { pct: 0.05, turns: 1 } };
+  const pChar = makeChar({ atk: 1, max_hp: 100000, hp: 100000, def: 0, spd: 0 });
+  const hpBeforeP = pBoss.hp;
+  bossPlayerTurn(pChar, pf, 'attack', null, null);
+  expect('ult dodge: พิษโดนแน่นอน (ไม่โดนหลบเงามายา)', pBoss.hp < hpBeforeP, `hp ${hpBeforeP} → ${pBoss.hp}`);
+
   // --- 🔥 สุดทน: สู้ยืดเยื้อเกิน 30 เทิร์น → ATK พุ่งถาวร x1.6 ---
   const fBoss = generateBoss(5, 0);
   const ff = { boss: fBoss, turn: 29 };
@@ -151,6 +211,10 @@ try {
   r = await api('/boss');
   expect('api /boss: มี fight state (rage/fury/charging)', r.status === 200 && r.json.fight && typeof r.json.fight.rage === 'boolean' && typeof r.json.fight.charging === 'boolean',
     JSON.stringify(r.json.fight));
+  expect('api /boss: มี flags armor/dodge (สถานะเกราะ/หลบ)', r.status === 200 && r.json.fight && typeof r.json.fight.armor === 'boolean' && typeof r.json.fight.dodge === 'boolean',
+    JSON.stringify(r.json.fight));
+  expect('api /boss: บอสมี ult (ท่าไม้ตายเฉพาะตัว)', r.status === 200 && r.json.boss?.ult?.type === 'attack' && !!r.json.boss.ult.name,
+    JSON.stringify(r.json.boss?.ult));
   r = await api('/boss/act', { method: 'POST', body: { action: 'guard' } });
   expect('api /boss/act guard: ไม่ error + มี fight state', r.status === 200 && !r.json.error && r.json.fight && r.json.fight.rage === false,
     JSON.stringify(r.json.fight));
