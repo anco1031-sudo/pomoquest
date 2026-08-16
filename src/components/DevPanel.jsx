@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGame } from '../context.jsx';
-import { apiDevPost } from '../api.js';
+import { apiGet, apiDevPost } from '../api.js';
 import { sfx } from '../sound.js';
 
 // ราคา/โบนัสของไอเทมสำหรับแสดงในตัวอย่างตลาดมืด
@@ -86,17 +86,53 @@ export default function DevPanel({ onClose }) {
     if (d?.items) setBmPreview(d);
   };
 
+  // สรุปผลจาก response ของ endpoint จริง — โชว์เหมือนของจริง (XP/ทอง/ไอเทม/เลเวลอัพ) แต่ server ROLLBACK แล้ว (ไม่บันทึก)
+  const summarize = (d, fallback) => {
+    if (!d) return `${fallback || 'เรียบร้อย'} (ไม่บันทึก)`;
+    const parts = [];
+    if (d.event) {
+      const ev = d.event;
+      const rw = [];
+      if (ev.xp > 0) rw.push(`+${ev.xp} XP`);
+      if (ev.gold > 0) rw.push(`+${ev.gold} ทอง`);
+      if (ev.hpChange < 0) rw.push(`-${Math.abs(ev.hpChange)} HP`);
+      if (ev.mpChange > 0) rw.push(`+${ev.mpChange} MP`);
+      if (ev.item) rw.push(`${ev.item.icon} ${ev.item.name}`);
+      parts.push([ev.title || 'เหตุการณ์', ...(rw.length ? [rw.join(' · ')] : [])].join(' — '));
+    }
+    if (d.reward) {
+      parts.push(`+${d.reward.xp} XP · +${d.reward.gold} ทอง${d.reward.bonus > 1 ? ` (คอมโบ x${d.reward.bonus.toFixed(1)})` : ''}`);
+    }
+    if (d.result) {
+      const rw = [];
+      if (d.result.xp > 0) rw.push(`+${d.result.xp} XP`);
+      if (d.result.gold > 0) rw.push(`+${d.result.gold} ทอง`);
+      if (d.result.item) rw.push(`${d.result.item.icon} ${d.result.item.name}`);
+      parts.push([d.result.detail || d.result.title || (d.result.success ? 'ภารกิจสำเร็จ!' : 'ภารกิจล้มเหลว'), ...(rw.length ? [rw.join(' · ')] : [])].join(' — '));
+    }
+    if (d.message) parts.push(d.message);
+    if (d.levelUps && d.levelUps.levels > 0) parts.push(`✨ อัพ ${d.levelUps.levels} เลเวล! (+${d.levelUps.statPoints} แต้ม)`);
+    return `${parts.length ? parts.join(' — ') : fallback || 'เรียบร้อย'} (ไม่บันทึก)`;
+  };
+
   // เรียก endpoint จริงของเกมแบบลองเล่น — ส่ง dev token → server รันใน transaction แล้ว ROLLBACK (ไม่บันทึก)
   const act = async (fn, msg) => {
     setBusy(true);
     try {
       const d = await fn();
-      toast(`${d?.message || msg || 'เรียบร้อย'} (ไม่บันทึก)`);
+      toast(summarize(d, msg));
     } catch (e) {
       toast(e.message);
     } finally {
       setBusy(false);
     }
+  };
+
+  // ซื้อของ — ต้องมี stock ร้านค่ายพักก่อน (เปิด /camp ก่อนแบบบันทึกจริง ให้ stock อยู่จริง, แล้วซื้อแบบลองเล่น)
+  const shopBuy = async () => {
+    const visit = `dev-${Date.now()}`;
+    await apiGet(`/camp?visit=${encodeURIComponent(visit)}`);
+    return apiDevPost('/shop/buy', { itemId: 1, visit });
   };
 
   return (
@@ -153,7 +189,7 @@ export default function DevPanel({ onClose }) {
             <div className="dev-section">⚔️ ระบบอื่น</div>
             <div className="dev-grid">
               <button className="btn" onClick={() => act(() => apiDevPost('/quest/do', { questId: QUEST_IDS[Math.floor(Math.random() * QUEST_IDS.length)] }), '📜 ทำภารกิจ')} disabled={busy}>📜 ภารกิจสุ่ม</button>
-              <button className="btn" onClick={() => act(() => apiDevPost('/shop/buy', { itemId: 1, visit: `dev-${Date.now()}` }), '🛒 ซื้อยา')} disabled={busy}>🛒 ซื้อของ (ยาบำบัดน้อย)</button>
+              <button className="btn" onClick={() => act(shopBuy, '🛒 ซื้อยา')} disabled={busy}>🛒 ซื้อของ (ยาบำบัดน้อย)</button>
               <button className="btn" onClick={() => dev('/dev/boss-win', {})} disabled={busy}>👹 ชนะบอสทันที</button>
               <button className="btn" onClick={() => dev('/dev/tale', {})} disabled={busy}>📖 เรื่องราวทดสอบ</button>
               <button className="btn" onClick={() => dev('/dev/heal', {})} disabled={busy}>💖 เติม HP/MP เต็ม</button>
