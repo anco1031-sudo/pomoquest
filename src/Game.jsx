@@ -17,10 +17,14 @@ import Toast from './components/Toast.jsx';
 
 const storeKey = (charId) => `pomoquest-timer-${charId}`;
 
-function loadTimer(charId) {
+// กู้คืน timer ที่พักไว้จาก localStorage — epoch ต้องตรงกับ server ("โลกเวอร์ชัน")
+// ถ้าไม่ตรง แปลว่า session นี้มาจากโลกเก่า (เช่น reset/ลบ DB ผ่าน run.sh ที่ไม่ล้าง browser) → ทิ้ง
+// (timer เก่าที่ยังไม่มี epoch = เก็บไว้ก่อนอัปเดต — ยังกู้คืนได้ตามเดิม)
+function loadTimer(charId, epoch) {
   try {
     const t = JSON.parse(localStorage.getItem(storeKey(charId)));
     if (!t || t.phase === 'idle') return null;
+    if (t.epoch && epoch && t.epoch !== epoch) return null;
     if (t.expiresAt) t.remain = Math.max(0, Math.round((t.expiresAt - Date.now()) / 1000));
     return t;
   } catch {
@@ -41,7 +45,7 @@ const randomEventDelay = (remainSec) => {
 const EXTEND_OPTIONS = [1, 5, 10];
 
 export default function Game() {
-  const { loading, hasCharacter, character, characters, settings, refresh, post, get, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp } = useGame();
+  const { loading, hasCharacter, character, characters, settings, refresh, post, get, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp, epoch } = useGame();
 
   const [phase, setPhase] = useState('idle'); // idle | work | short_break | long_break
   const [sessionIdx, setSessionIdx] = useState(1);
@@ -148,7 +152,7 @@ export default function Game() {
     setBreakExtends(0);
     setBreakStartedAt(null);
 
-    const t = loadTimer(character.id);
+    const t = loadTimer(character.id, epoch);
     if (t) {
       setPhase(t.phase);
       setSessionIdx(t.sessionIdx || 1);
@@ -210,7 +214,7 @@ export default function Game() {
       if (t.pausedAtHome) setRunning(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCharacter, loading, character?.id]);
+  }, [hasCharacter, loading, character?.id, epoch]);
 
   // ---- บันทึกสถานะ timer ----
   useEffect(() => {
@@ -219,10 +223,11 @@ export default function Game() {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
       awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
+      epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -495,9 +500,12 @@ export default function Game() {
     if (!d) return null;
     setBossState((s) => ({
       boss: d.boss,
+      fight: d.fight || null,
       log: [...(s?.log || []), ...(d.log || [])],
       outcome: d.outcome || null,
       drop: d.item || null,
+      breaks: d.breaks || 0,      // สลายท่าไม้ตายในไฟต์นี้ — โชว์รางวัลฝีมือตอนชนะ
+      furyWin: !!d.furyWin,       // ชนะตอนบอสสุดทน
     }));
     return d;
   };

@@ -528,6 +528,28 @@ export function rollEvent(c, forceKey = null) {
 // ----- บอส (พักใหญ่หลังครบ 4 session) -----
 // บอสแต่ละเมืองมีสกิล (ท่าเด็ด) ของตัวเอง — ใช้แทนโจมตีปกติเป็นครั้งคราว
 // สำรวจเมืองเดิมต่อ → บอสแข็งขึ้นตามรอบ · เจอบอสลับ (👁️/😈/🗿) เมื่อครบรอบของเมืองนั้น — ให้ของพิเศษ
+//
+// ระบบต่อสู้ (ยากขึ้น + เลือกกลยุทธ์ได้):
+//  - 🛡️ ตั้งรับ (guard): ผู้เล่นลดดาเมจ 60% ในเทิร์นนั้น + ฟื้น MP 10%
+//  - 😡 โกรธจัด: HP บอส ≤ 50% → ATK x1.4 + ใช้ท่าเด็ดถี่ขึ้น + ใช้ท่าไม้ตาย (💥) ได้ + แช่แข็งต้านทาน
+//  - ⚠️ ชาร์จพลัง: ทุก 5 เทิร์น บอสชาร์จท่าไม้ตาย (x2.6) — เทิร์นหน้าปล่อย ถ้าผู้เล่นทำดาเมจ ≥12% HP สูงสุด
+//       ในเทิร์นที่ชาร์จ → สลายได้! บอสชะงัก (ข้ามเทิร์น) · ถ้าไม่สลาย ต้องตั้งรับ (guard) กันเอาไว้
+//  - 🔥 สุดทน: สู้ยืดเยื้อเกิน 30 เทิร์น → ATK บอสพุ่ง x1.6 ถาวร (กันกักยาไว้เฉย ๆ)
+//  - เมืองยิ่งลึก บอสยิ่งแข็ง (x1.05/เมือง)
+const BOSS_CHARGE_EVERY = 5;    // ชาร์จท่าไม้ตายทุก 5 เทิร์น
+const BOSS_CHARGE_MULT = 2.6;   // ความแรงท่าไม้ตาย (x ของ ATK)
+const BOSS_CHARGE_BREAK = 0.12; // สลายการชาร์จ: ทำดาเมจ ≥ 12% HP สูงสุดบอสในเทิร์นที่ชาร์จ
+const BOSS_FURY_TURN = 30;      // สู้ยืดเยื้อเกิน 30 เทิร์น → บอสสุดทน (ATK พุ่งถาวร)
+
+// ATK บอสปัจจุบันตามสถานะ: สุดทน (x1.6) > โกรธจัด (x1.4) > ปกติ
+export const setBossAtk = (fight) => {
+  const base = fight.boss.baseAtk || fight.boss.atk;
+  fight.boss.atk = fight.bossFury ? Math.round(base * 1.6) : fight.bossRage ? Math.round(base * 1.4) : base;
+};
+
+// ดาเมจขั้นต่ำที่ต้องทำในเทิร์นที่บอสชาร์จ เพื่อสลายท่าไม้ตาย
+const chargeBreakAt = (fight) => Math.max(1, Math.round(fight.boss.maxHp * BOSS_CHARGE_BREAK));
+
 export function generateBoss(level, cityIndex, c = null) {
   const round = exploreRound(c);
   const isAlt = round >= altBossAt(cityIndex);
@@ -535,7 +557,9 @@ export function generateBoss(level, cityIndex, c = null) {
   const loadout = BOSS_LOADOUTS[cityIndex % BOSS_LOADOUTS.length] || [];
   const skills = loadout.map((k) => BOSS_SKILLS[k]).filter(Boolean);
   const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.15 : 1); // บอสลับโหดกว่าเล็กน้อย (ของพิเศษเป็นรางวัล ไม่ใช่กำแพง)
-  const maxHp = Math.round((90 + 32 * level) * em);
+  const cityPow = 1 + cityIndex * 0.05; // เมืองยิ่งลึก ยิ่งแข็ง (x1.05/เมือง)
+  const maxHp = Math.round((90 + 32 * level) * em * cityPow);
+  const atk = Math.round((9 + 2.5 * level) * em * cityPow);
   return {
     name: boss.name,
     icon: boss.icon,
@@ -543,8 +567,9 @@ export function generateBoss(level, cityIndex, c = null) {
     loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
     maxHp,
     hp: maxHp,
-    atk: Math.round((9 + 2.5 * level) * em),
-    def: Math.round((3 + level) * em),
+    atk,
+    baseAtk: atk, // ATK ฐาน — ใช้ตอนโกรธจัด/สุดทน (คูณเพิ่ม)
+    def: Math.round((3 + level) * em * cityPow),
     crit: 10,
     skills,
   };
@@ -560,10 +585,26 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
     let d = dmg;
     if (fight.bossGuard) d = Math.round(d * fight.bossGuard.mult);
     fight.boss.hp = Math.max(0, fight.boss.hp - d);
+    // สะสมดาเมจในเทิร์นที่บอสกำลังชาร์จ — ใช้เช็คว่าสลายท่าไม้ตายได้ไหม
+    if (fight.bossCharging) fight.chargeDmg = (fight.chargeDmg || 0) + d;
     return d;
   };
 
-  if (action === 'attack') {
+  // ---- นับเทิร์น — สู้ยืดเยื้อเกินกำหนด → บอสสุดทน (ATK พุ่งถาวร กันกักยาเฉย ๆ) ----
+  fight.turn = (fight.turn || 0) + 1;
+  if (fight.turn >= BOSS_FURY_TURN && !fight.bossFury) {
+    fight.bossFury = true;
+    setBossAtk(fight);
+    log.push(`🔥 ${fight.boss.icon} ${fight.boss.name} สุดทน! พลังโจมตีพุ่งขึ้น x1.6 — อย่าปล่อยให้ยืดเยื้อ!`);
+  }
+
+  if (action === 'guard') {
+    // 🛡️ ตั้งรับ — ลดดาเมจที่ได้รับ 60% ในเทิร์นนี้ + ฟื้น MP 10% (ไม่มีค่าใช้จ่าย)
+    fight.playerGuard = 0.6;
+    const mpGain = Math.round(stats.maxMp * 0.1);
+    c.mp = clamp(c.mp + mpGain, 0, stats.maxMp);
+    log.push(`🛡️ ${c.name} ตั้งรับ — ลดดาเมจที่ได้รับ 60% ในเทิร์นนี้ (ฟื้น MP +${mpGain})`);
+  } else if (action === 'attack') {
     const buff = fight.buffAtk || 1; // อวยพร: โจมตีเทิร์นนี้ x1.5
     if (fight.buffAtk) { fight.buffAtk = null; log.push(`🙏 พลังอวยพรยังคุกรุ่น — โจมตี x${buff}!`); }
     const crit = isCrit(stats.crit);
@@ -603,11 +644,13 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       log.push(`${skill.icon} ${skill.name}: ฟื้น MP +${skill.mpHeal}`);
     }
     if (skill.freeze) {
-      if (Math.random() < skill.freeze) {
+      // โกรธจัด/สุดทน → บอสข่มความหนาวได้ (โอกาสแช่แข็งลดลงครึ่งหนึ่ง)
+      const chance = fight.bossRage || fight.bossFury ? skill.freeze * 0.5 : skill.freeze;
+      if (Math.random() < chance) {
         fight.bossFrozen = true;
         log.push(`❄️ ${skill.name} แช่แข็งบอส! บอสข้ามเทิร์นถัดไป`);
       } else {
-        log.push(`❄️ บอสหลบการแช่แข็งได้…`);
+        log.push(fight.bossRage || fight.bossFury ? `❄️ บอสข่มความหนาว (โกรธจัด) — หลบการแช่แข็งได้…` : `❄️ บอสหลบการแช่แข็งได้…`);
       }
     }
     if (skill.poison) {
@@ -647,8 +690,24 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
     if (!item.use_xp && !item.use_gold) log.push(`🧪 ใช้ ${item.icon} ${item.name} — ฟื้นพลัง! (HP ${c.hp}/${stats.maxHp}, MP ${c.mp}/${stats.maxMp})`);
   }
 
+  // ---- สลายการชาร์จ: ผู้เล่นทำดาเมจถึงเกณฑ์ในเทิร์นที่บอสชาร์จ → บอสชะงัก (ข้ามเทิร์น) ----
+  if (fight.bossCharging && fight.boss.hp > 0 && (fight.chargeDmg || 0) >= chargeBreakAt(fight)) {
+    fight.bossCharging = false;
+    fight.bossChargeIn = BOSS_CHARGE_EVERY;
+    fight.bossStun = 1;
+    fight.chargeDmg = 0;
+    fight.breaks = (fight.breaks || 0) + 1; // นับสลายท่าไม้ตาย — โบนัสรางวัลตอนชนะ + ตรา
+    log.push('💥 ท่าไม้ตายถูกสลาย! บอสชะงัก — ข้ามเทิร์นโจมตีของมัน! อย่าให้มันตั้งหลัก!');
+  }
+
   // เทิร์นบอส
   if (fight.boss.hp > 0) {
+    // 😡 โกรธจัด — ครั้งเดียว เมื่อ HP ≤ 50% (ATK พุ่ง + ท่าเด็ดถี่ขึ้น + ใช้ท่าไม้ตายได้)
+    if (!fight.bossRage && fight.boss.hp <= Math.round(fight.boss.maxHp * 0.5)) {
+      fight.bossRage = true;
+      setBossAtk(fight);
+      log.push(`😡 ${fight.boss.icon} ${fight.boss.name} โกรธจัด! พลังโจมตีพุ่งขึ้น x1.4 และท่าเด็ดถี่ขึ้น!`);
+    }
     // พิษผู้เล่น (สกิลบอส "พิษร้าย") — ผู้เล่นเสีย HP ก่อนบอสลงมือ
     if (fight.playerPoison) {
       const p = fight.playerPoison;
@@ -672,71 +731,107 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       fight.bossGuard.turns -= 1;
       if (fight.bossGuard.turns <= 0) fight.bossGuard = null;
     }
+    const dodge = dodgeChance(stats.spd); // โอกาสหลบโจมตีบอส (SPD สูง = หลบเก่ง)
+    const playerHit = (dmg) => {
+      if (Math.random() * 100 < dodge) return 0; // 💨 หลบได้ — ไม่เสียดาเมจ
+      let d = dmg;
+      if (fight.playerGuard) { d = Math.max(1, Math.round(d * (1 - fight.playerGuard))); }
+      c.hp = Math.max(1, c.hp - d);
+      return d;
+    };
     if (fight.boss.hp <= 0) {
       log.push('💀 บอสทรุดลงจากพิษ…');
+    } else if (fight.bossStun) {
+      fight.bossStun = 0;
+      log.push('💫 บอสชะงักจากท่าไม้ตายที่ถูกสลาย — ข้ามเทิร์นนี้!');
     } else if (fight.bossFrozen) {
       fight.bossFrozen = false;
       log.push('❄️ บอสถูกแช่แข็ง — ข้ามเทิร์นโจมตี!');
+    } else if (fight.bossCharging) {
+      // ท่าไม้ตายปล่อยออกมาแล้ว! (เทิร์นที่แล้วชาร์จไว้ — เทิร์นนี้ไม่สลาย = โดนเต็ม ๆ)
+      fight.bossCharging = false;
+      fight.bossChargeIn = BOSS_CHARGE_EVERY;
+      fight.chargeDmg = 0;
+      const crit = Math.random() * 100 < fight.boss.crit;
+      let dmg = attackDamage(fight.boss.atk * BOSS_CHARGE_MULT, stats.def);
+      if (crit) dmg = Math.round(dmg * 1.5);
+      const dealt = playerHit(dmg);
+      log.push(dealt === 0
+        ? `💨 ${c.name} หลบท่าไม้ตายของ ${fight.boss.icon} ได้อย่างเหลือเชื่อ!`
+        : `💥 ${fight.boss.icon} ${fight.boss.name} ปล่อยท่าไม้ตาย โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
     } else {
-      // โอกาส 30% ที่บอสใช้ท่าเด็ด (สกิล) แทนโจมตีปกติ
-      const bossSkill = fight.boss.skills?.length && Math.random() < 0.3 ? pick(fight.boss.skills) : null;
-      const bossName = `${fight.boss.icon} ${fight.boss.name}`;
-      const dodge = dodgeChance(stats.spd); // โอกาสหลบโจมตีบอส (SPD สูง = หลบเก่ง)
-      const playerHit = (dmg) => {
-        if (Math.random() * 100 < dodge) return 0; // 💨 หลบได้ — ไม่เสียดาเมจ
-        let d = dmg;
-        if (fight.playerGuard) { d = Math.max(1, Math.round(d * (1 - fight.playerGuard))); }
-        c.hp = Math.max(1, c.hp - d);
-        return d;
-      };
-      if (bossSkill) {
-        const sk = bossSkill;
-        if (sk.heal) {
-          const h = Math.round(fight.boss.maxHp * sk.heal);
-          fight.boss.hp = Math.min(fight.boss.maxHp, fight.boss.hp + h);
-          log.push(`💚 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — ฟื้น HP +${h}!`);
-        } else if (sk.poison) {
-          fight.playerPoison = { pct: sk.poison, turns: 2 };
-          log.push(`☠️ ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — คุณจะเสีย ${Math.round(sk.poison * 100)}% HP ต่อเทิร์น (2 เทิร์น)!`);
-        } else if (sk.guard) {
-          fight.bossGuard = { mult: sk.guard, turns: 2 };
-          log.push(`🛡️ ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — ลดดาเมจที่ได้รับลง 2 เทิร์น!`);
-        } else if (sk.drainMp) {
-          const lost = Math.min(c.mp, Math.round(stats.maxMp * sk.drainMp));
-          c.mp = Math.max(0, c.mp - lost);
-          log.push(`🧿 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — มานาของคุณถูกดูดไป ${lost} MP!`);
+      // นับถอยหลังชาร์จ — ครบกำหนด → เริ่มชาร์จท่าไม้ตาย (เทิร์นนี้ไม่โจมตี ให้ผู้เล่นเตรียมตัว)
+      fight.bossChargeIn = (fight.bossChargeIn ?? BOSS_CHARGE_EVERY) - 1;
+      if (fight.bossChargeIn <= 0) {
+        fight.bossCharging = true;
+        fight.chargeDmg = 0;
+        const need = chargeBreakAt(fight);
+        log.push(`⚠️ ${fight.boss.icon} ${fight.boss.name} กำลังรวบรวมพลัง… ท่าไม้ตายกำลังมา! (โจมตีให้ถึง ${need} ดาเมจในเทิร์นหน้าเพื่อสลาย)`);
+      } else {
+        // โอกาส 30% (โกรธจัด = 45%) ที่บอสใช้ท่าเด็ด (สกิล) แทนโจมตีปกติ · โกรธจัดมีโอกาส 25% ใช้ท่าไม้ตาย 💥
+        let bossSkill = fight.boss.skills?.length && Math.random() < (0.3 + (fight.bossRage ? 0.15 : 0)) ? pick(fight.boss.skills) : null;
+        if (!bossSkill && fight.bossRage && Math.random() < 0.25) bossSkill = BOSS_SKILLS.fury;
+        const bossName = `${fight.boss.icon} ${fight.boss.name}`;
+        if (bossSkill) {
+          const sk = bossSkill;
+          if (sk.heal) {
+            const h = Math.round(fight.boss.maxHp * sk.heal);
+            fight.boss.hp = Math.min(fight.boss.maxHp, fight.boss.hp + h);
+            log.push(`💚 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — ฟื้น HP +${h}!`);
+          } else if (sk.poison) {
+            fight.playerPoison = { pct: sk.poison, turns: 2 };
+            log.push(`☠️ ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — คุณจะเสีย ${Math.round(sk.poison * 100)}% HP ต่อเทิร์น (2 เทิร์น)!`);
+          } else if (sk.guard) {
+            fight.bossGuard = { mult: sk.guard, turns: 2 };
+            log.push(`🛡️ ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — ลดดาเมจที่ได้รับลง 2 เทิร์น!`);
+          } else if (sk.drainMp) {
+            const lost = Math.min(c.mp, Math.round(stats.maxMp * sk.drainMp));
+            c.mp = Math.max(0, c.mp - lost);
+            log.push(`🧿 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} — มานาของคุณถูกดูดไป ${lost} MP!`);
+          } else {
+            const crit = Math.random() * 100 < fight.boss.crit;
+            let dmg = attackDamage(fight.boss.atk * (sk.mult || 1), stats.def);
+            if (crit) dmg = Math.round(dmg * 1.5);
+            const dealt = playerHit(dmg);
+            log.push(dealt === 0
+              ? `💨 ${c.name} หลบสกิล ${sk.icon} ${sk.name} ได้!`
+              : `💢 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
+          }
         } else {
           const crit = Math.random() * 100 < fight.boss.crit;
-          let dmg = attackDamage(fight.boss.atk * (sk.mult || 1), stats.def);
+          let dmg = attackDamage(fight.boss.atk, stats.def);
           if (crit) dmg = Math.round(dmg * 1.5);
           const dealt = playerHit(dmg);
           log.push(dealt === 0
-            ? `💨 ${c.name} หลบสกิล ${sk.icon} ${sk.name} ได้!`
-            : `💢 ${bossName} ใช้สกิล ${sk.icon} ${sk.name} โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
+            ? `💨 ${c.name} หลบการโจมตีได้!`
+            : `💢 ${bossName} ตอบโต้ โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
         }
-      } else {
-        const crit = Math.random() * 100 < fight.boss.crit;
-        let dmg = attackDamage(fight.boss.atk, stats.def);
-        if (crit) dmg = Math.round(dmg * 1.5);
-        const dealt = playerHit(dmg);
-        log.push(dealt === 0
-          ? `💨 ${c.name} หลบการโจมตีได้!`
-          : `💢 ${bossName} ตอบโต้ โดน ${dealt} ดาเมจ${crit ? ' — คริติคอล!' : ''}`);
       }
-      fight.playerGuard = null; // โล่เวท (ผู้เล่น) คุ้มกันแค่เทิร์นนี้เท่านั้น
     }
+    fight.playerGuard = null; // โล่เวท/ตั้งรับ คุ้มกันแค่เทิร์นเดียวเท่านั้น
   }
 
   if (fight.boss.hp <= 0) {
     outcome = 'win';
     const rMult = exploreRewardMult(c); // สำรวจเมืองเดิมต่อ → รางวัลบอสสูงขึ้น
-    const xp = Math.round((250 + 60 * c.level) * rMult);
-    const gold = Math.round((120 + 40 * c.level) * rMult);
+    // รางวัลฝีมือ: สลายท่าไม้ตาย +8% XP/ทอง ต่อครั้ง (สูงสุด +24%) · ชนะตอนบอสสุดทน (30+ เทิร์น) +15% ทอง
+    const breaks = fight.breaks || 0;
+    const furyWin = !!fight.bossFury;
+    const breakMult = 1 + Math.min(3, breaks) * 0.08;
+    const patienceMult = furyWin ? 1.15 : 1;
+    const xp = Math.round((250 + 60 * c.level) * rMult * breakMult);
+    const gold = Math.round((120 + 40 * c.level) * rMult * breakMult * patienceMult);
     const ups = gainXp(c, xp);
     c.gold += gold;
     const drop = Math.random() < 0.35 ? pick(Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll' && (i.lvl || 1) <= c.level + 1)) : null;
     log.push(`🏆 กำราบ ${fight.boss.name} ได้! +${xp} XP, +${gold} ทอง${drop ? ` และได้ ${drop.icon} ${drop.name}` : ''}`);
-    return { log, outcome, xp, gold, item: drop, boss: fight.boss, ups };
+    if (breaks > 0 || furyWin) {
+      const parts = [];
+      if (breaks > 0) parts.push(`💥 สลายท่าไม้ตาย ${breaks} ครั้ง (+${Math.round((breakMult - 1) * 100)}% XP/ทอง)`);
+      if (furyWin) parts.push(`🔥 อดทนสู้จนบอสสุดทน (+15% ทอง)`);
+      log.push(`✨ รางวัลฝีมือ: ${parts.join(' · ')}`);
+    }
+    return { log, outcome, xp, gold, item: drop, boss: fight.boss, ups, breaks, furyWin };
   }
 
   return { log, outcome, boss: fight.boss };

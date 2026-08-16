@@ -16,6 +16,7 @@ export function achievementValues(c, prog) {
     gold_earned: prog.gold_earned,
     wanted_sales: prog.wanted_sales || 0,
     bm_buys: prog.bm_buys || 0,
+    charge_breaks: prog.charge_breaks || 0, // สลายท่าไม้ตายบอส (ระบบต่อสู้บอส)
     level: c.level,
     gold: c.gold,
     equip: c.head_id && c.armor_id && c.arms_id && c.legs_id && c.feet_id ? 1 : 0,
@@ -50,6 +51,9 @@ export function buildCtx(c, prog, extra = {}) {
     bossHpPct: bossWin.pct ?? -1,
     bossNoEquip: bossWin.noEquip === true,
     bossCityIndex: bossWin.cityIndex ?? -1,
+    // ระบบต่อสู้บอส: สลายท่าไม้ตายกี่ครั้งในไฟต์นี้ / ชนะตอนบอสสุดทน (30+ เทิร์น) หรือไม่
+    bossBreaks: bossWin.breaks ?? 0,
+    bossFury: bossWin.fury === true,
     // โหมดท้าทาย — รอบเมืองที่จบในโหมดนั้น (counter แยกต่อโหมด)
     challengeMode: c.challenge_mode || '',
     challengeCycles: prog[`${c.challenge_mode || 'none'}_cycles`] || 0,

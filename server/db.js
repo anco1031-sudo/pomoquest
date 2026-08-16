@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ITEMS, ITEM_BY_ID } from './data.js';
 
@@ -185,6 +186,8 @@ ensureColumn('progress', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'break_extended', 'INTEGER DEFAULT 0');
 // พักกลาง session (กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส จนกว่าจะกดโฟกัสต่อ) — แยกจาก break_sec (พักระหว่าง session)
 ensureColumn('progress', 'pause_sec', 'INTEGER DEFAULT 0');
+// จำนวนครั้งที่สลายท่าไม้ตายบอส (ระบบต่อสู้บอส — ตรา "จอมสลาย")
+ensureColumn('progress', 'charge_breaks', 'INTEGER DEFAULT 0');
 // ขายของให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
 ensureColumn('progress', 'wanted_sales', 'INTEGER DEFAULT 0');
 // รอบเมืองที่จบในแต่ละโหมดท้าทาย (ตราเฉพาะโหมด — นับตอนชนะบอส)
@@ -192,6 +195,10 @@ ensureColumn('progress', 'hard_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'marathon_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'survival_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('settings', 'active_character_id', 'INTEGER');
+// reset_epoch — "โลกเวอร์ชัน" ของข้อมูลเกม: เปลี่ยนทุกครั้งที่ล้างข้อมูล (reset / ลบ DB / restore)
+// client เก็บ epoch ไว้กับ timer ที่พักค้างใน localStorage — ถ้าไม่ตรงกับ server แปลว่า session นั้น
+// มาจากโลกเก่า (เช่น reset ผ่าน run.sh ที่ลบ DB แต่ไม่ล้าง browser) → ทิ้ง session นั้นทิ้ง
+ensureColumn('settings', 'epoch', 'TEXT');
 ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'break_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'break_overrun_sec', 'INTEGER DEFAULT 0');
@@ -310,6 +317,23 @@ export const getProgress = (charId) =>
   db.prepare('INSERT INTO progress (character_id) VALUES (?)').run(charId) && db.prepare('SELECT * FROM progress WHERE character_id = ?').get(charId);
 
 export const getSettings = () => db.prepare('SELECT * FROM settings WHERE id = 1').get();
+
+// ----- "world epoch" — เปลี่ยนทุกครั้งที่ข้อมูลเกมถูกล้าง (reset / ลบ DB / restore backup) -----
+// lazy seed: DB เก่า/import backup เก่าที่ไม่มี epoch → สร้างใหม่ให้อัตโนมัติ (กันค้าง null)
+export const getEpoch = () => {
+  const row = db.prepare('SELECT epoch FROM settings WHERE id = 1').get();
+  if (row?.epoch) return row.epoch;
+  const e = randomUUID();
+  db.prepare('UPDATE settings SET epoch = ? WHERE id = 1').run(e);
+  return e;
+};
+
+// หมุน epoch ใหม่ — เรียกตอนล้างข้อมูลเกมทั้งหมด (reset) → session ที่พักค้างในเครื่องเก่าถูกทิ้ง
+export const rotateEpoch = () => {
+  const e = randomUUID();
+  db.prepare('UPDATE settings SET epoch = ? WHERE id = 1').run(e);
+  return e;
+};
 
 export const getInventory = (charId) => db.prepare(`
   SELECT inv.item_id, inv.qty, item.name, item.icon, item.type, item.price, item.heal_pct, item.mana_pct,

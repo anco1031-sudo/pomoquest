@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import {
   db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
-  getSkillRow, learnSkill,
+  getSkillRow, learnSkill, getEpoch, rotateEpoch,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ALT_BOSSES, altBossAt,
@@ -61,9 +61,12 @@ const nameTaken = (name, excludeId = null) => {
 // ----- สถานะรวม -----
 router.get('/state', (req, res) => {
   const c = getCharacter();
-  if (!c) return res.json({ hasCharacter: false, settings: getSettings(), ...charsPayload() });
+  // epoch = "โลกเวอร์ชัน" — client เทียบกับ epoch ที่เก็บใน timer (localStorage) เพื่อทิ้ง session ที่พักค้างจากโลกเก่า
+  const epoch = getEpoch();
+  if (!c) return res.json({ hasCharacter: false, epoch, settings: getSettings(), ...charsPayload() });
   res.json({
     hasCharacter: true,
+    epoch,
     ...serialize(c),
     inventory: getInventory(c.id),
     progress: getProgress(c.id),
@@ -912,6 +915,13 @@ router.post('/story/claim', (req, res) => {
 });
 
 // ----- บอส (long break) -----
+const fightFlags = (f) => ({
+  rage: !!f?.bossRage,      // 😡 โกรธจัด (HP ≤ 50% — ATK พุ่ง + ท่าไม้ตายบ่อยขึ้น)
+  fury: !!f?.bossFury,      // 🔥 สุดทน (สู้ยืดเยื้อเกิน 30 เทิร์น — ATK พุ่งถาวร)
+  charging: !!f?.bossCharging, // ⚠️ กำลังชาร์จท่าไม้ตาย (โจมตีให้ถึงเกณฑ์เพื่อสลาย)
+  stun: !!f?.bossStun,
+});
+
 router.get('/boss', (req, res) => {
   const c = requireChar(res); if (!c) return;
   let fight = fights.get(c.id);
@@ -919,7 +929,7 @@ router.get('/boss', (req, res) => {
     fight = { boss: generateBoss(c.level, c.city_index, c) };
     fights.set(c.id, fight);
   }
-  res.json({ ...serialize(c), boss: { ...fight.boss, hp: fight.boss.hp } });
+  res.json({ ...serialize(c), boss: { ...fight.boss, hp: fight.boss.hp }, fight: fightFlags(fight) });
 });
 
 router.post('/boss/act', (req, res) => {
@@ -952,13 +962,18 @@ router.post('/boss/act', (req, res) => {
       const col = `${c.challenge_mode}_cycles`;
       prog[col] = (prog[col] || 0) + 1;
     }
+    // สลายท่าไม้ตายสะสม (ตรา "จอมสลาย")
+    prog.charge_breaks = (prog.charge_breaks || 0) + (result.breaks || 0);
     db.prepare(`UPDATE progress SET cycles_completed=@cycles_completed, bosses_defeated=@bosses_defeated, gold_earned=@gold_earned,
-      hard_cycles=@hard_cycles, marathon_cycles=@marathon_cycles, survival_cycles=@survival_cycles WHERE id=@id`).run(prog);
+      hard_cycles=@hard_cycles, marathon_cycles=@marathon_cycles, survival_cycles=@survival_cycles,
+      charge_breaks=@charge_breaks WHERE id=@id`).run(prog);
     if (result.item) addItem(c.id, result.item.id);
     // เมืองยังไม่ย้ายอัตโนมัติ — client จะถามว่า "เดินทางต่อ" หรือ "สำรวจเมืองเดิมต่อ" (POST /boss/after)
     fights.delete(c.id);
     // ของรางวัลเฉพาะบอส — ปกติโอกาส ~50% ได้ของขวัญประจำตัว (ขายได้ที่แคมป์)
     // บอสลับ (สำรวจเมืองเดิมครบรอบ) → ได้ของพิเศษการันตีครั้งแรกของเมืองนั้น · มีแล้วได้ค่าหัวทองแทน (กันฟาร์มซ้ำ)
+    // ชนะด้วยฝีมือ (สลายท่าไม้ตาย ≥1 ครั้ง หรืออดทนสู้จนบอสสุดทน) → การันตีของรางวัลบอส (แทนสุ่ม 50%)
+    const masterWin = (result.breaks || 0) > 0 || result.furyWin;
     let lootNote = '';
     if (fight.boss.isAlt && fight.boss.loot) {
       const owned = getInventory(c.id).some((i) => i.item_id === fight.boss.loot);
@@ -972,11 +987,11 @@ router.post('/boss/act', (req, res) => {
           lootNote = ` และได้ ${loot.icon} ${loot.name}! (ของพิเศษบอสลับ)`;
         }
       }
-    } else if (fight.boss.loot && Math.random() < 0.5) {
+    } else if (fight.boss.loot && (masterWin || Math.random() < 0.5)) {
       const loot = ITEM_BY_ID[fight.boss.loot];
       if (loot) {
         addItem(c.id, loot.id);
-        lootNote = ` และได้ ${loot.icon} ${loot.name}!`;
+        lootNote = ` และได้ ${loot.icon} ${loot.name}!${masterWin ? ' (รางวัลฝีมือ — การันตี)' : ''}`;
       }
     }
     updateCharacter(c);
@@ -987,6 +1002,8 @@ router.post('/boss/act', (req, res) => {
         pct: (c.hp / stats.maxHp) * 100,
         noEquip: !SLOT_COLS.some((col) => c[col]),
         cityIndex: foughtCity,
+        breaks: result.breaks || 0,   // สลายท่าไม้ตายในไฟต์นี้ (ตราลับ "สยบจอมชาร์จ")
+        fury: !!result.furyWin,       // ชนะตอนบอสสุดทน (ตราลับ "อดทนที่สุด")
       },
     });
     bumpDaily(c.id, 'boss_wins');
@@ -994,12 +1011,15 @@ router.post('/boss/act', (req, res) => {
   res.json({
     ...serialize(c),
     boss: { ...fight.boss, hp: fight.boss.hp },
+    fight: fightFlags(fight),
     log: result.log,
     outcome: result.outcome,
     item: result.item || null,
     inventory: getInventory(c.id),
     progress: getProgress(c.id),
     achievements: ach.fresh,
+    breaks: result.breaks || 0,
+    furyWin: !!result.furyWin,
     ...dailyPayload(c),
     levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
@@ -1305,6 +1325,7 @@ router.post('/reset', (req, res) => {
   }
   db.prepare('DELETE FROM sqlite_sequence').run(); // รีเซ็ต autoincrement
   db.prepare("UPDATE settings SET work_min=25, short_break_min=5, long_break_min=15, sessions_per_cycle=4, event_every_sec=90, active_character_id=NULL WHERE id=1").run();
+  rotateEpoch(); // หมุน "โลกเวอร์ชัน" — session ที่พักค้างในเครื่อง (localStorage) จากโลกเก่าถูกทิ้งอัตโนมัติ
   res.json({ message: 'ล้างข้อมูลเกมทั้งหมดแล้ว — เริ่มต้นใหม่ได้เลย' });
 });
 

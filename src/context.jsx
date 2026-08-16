@@ -16,6 +16,8 @@ export function GameProvider({ children }) {
     inventory: [],
     log: [],
     daily: null,
+    // "โลกเวอร์ชัน" จาก server — ใช้ทิ้ง session ที่พักค้าง (localStorage) เมื่อข้อมูลถูกล้าง/กู้คืน
+    epoch: null,
   });
   // toast แบบคิว — โชว์เรียงกัน ไม่ทับ/ไม่หายเมื่อมี toast ใหม่ (แต่ละอันหายเองหลัง 3.5 วิ)
   const [toasts, setToasts] = useState([]);

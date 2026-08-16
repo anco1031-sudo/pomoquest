@@ -12,6 +12,8 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
   const boss = bossState?.boss;
   const log = bossState?.log || [];
   const outcome = bossState?.outcome;
+  const fight = bossState?.fight || {};
+  const chargeNeed = boss && fight.charging ? Math.max(1, Math.round(boss.maxHp * 0.12)) : 0;
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -63,6 +65,8 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
         <div className="boss-name">
           {boss.name}
           {boss.isAlt && <span className="alt-boss-tag" title="บอสลับ — เจอเมื่อสำรวจเมืองเดิมครบรอบ ให้ของพิเศษ">👁️ บอสลับ</span>}
+          {fight.rage && <span className="boss-rage-tag" title="HP เหลือไม่ถึงครึ่ง — บอสโกรธจัด! ATK พุ่ง x1.4 และใช้ท่าเด็ดถี่ขึ้น">😡 โกรธจัด</span>}
+          {fight.fury && <span className="boss-rage-tag boss-fury-tag" title="สู้ยืดเยื้อเกิน 30 เทิร์น — ATK บอสพุ่งถาวร x1.6">🔥 สุดทน</span>}
         </div>
         {(character.cityRound || 0) > 0 && (
           <div className="boss-explore-note">
@@ -79,6 +83,11 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
         <div className="boss-stats">
           <span>⚔️ {boss.atk}</span><span>🛡️ {boss.def}</span>
         </div>
+        {fight.charging && !outcome && (
+          <div className="boss-charge-note">
+            ⚠️ กำลังชาร์จท่าไม้ตาย! โจมตีให้ถึง <b>{chargeNeed} ดาเมจ</b> ในเทิร์นนี้เพื่อสลาย — หรือตั้งรับ 🛡️ ไว้
+          </div>
+        )}
         {boss.skills?.length > 0 && (
           <div className="boss-skills">
             <span className="boss-skills-title">ท่าเด็ด:</span>
@@ -106,6 +115,13 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
       {!outcome && (
         <div className="boss-actions">
           <button className="btn btn-primary" onClick={() => act('attack')}>⚔️ โจมตี</button>
+          <button
+            className="btn btn-guard"
+            onClick={() => act('guard')}
+            title="🛡️ ตั้งรับ — ลดดาเมจที่ได้รับ 60% ในเทิร์นนี้ + ฟื้น MP 10% (ไม่มีค่าใช้จ่าย) — ใช้รับมือท่าไม้ตายได้"
+          >
+            🛡️ ตั้งรับ
+          </button>
           <button className="btn btn-skill" onClick={() => setSkillsOpen((o) => !o)} title="ดูสกิลของคลาส">
             ⚡ สกิล
           </button>
@@ -157,6 +173,15 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
       {outcome === 'win' && (
         <div className="victory-panel">
           <div className="victory-title">🏆 ชัยชนะ!</div>
+          {(bossState.breaks > 0 || bossState.furyWin) && (
+            <div className="master-win-note">
+              ✨ รางวัลฝีมือ:{' '}
+              {bossState.breaks > 0 && <>💥 สลายท่าไม้ตาย {bossState.breaks} ครั้ง (+{Math.min(3, bossState.breaks) * 8}% XP/ทอง)</>}
+              {bossState.breaks > 0 && bossState.furyWin && ' · '}
+              {bossState.furyWin && <>🔥 อดทนสู้จนบอสสุดทน (+15% ทอง)</>}
+              {' '}— ของรางวัลบอสการันตี!
+            </div>
+          )}
           <p>
             กำราบ {boss.name} ได้!{boss.isAlt ? ' (👁️ บอสลับ — ของพิเศษการันตี!)' : ''} — จะเดินทางต่อ หรือสำรวจเมืองเดิมต่อ?
           </p>

@@ -877,6 +877,56 @@ body {
 .boss-actions { display: flex; gap: 8px; margin-bottom: 10px; }
 .boss-actions .btn { flex: 1; }
 
+/* ตั้งรับ — ลดดาเมจ 60% + ฟื้น MP (เทิร์นเดียว) */
+.btn-guard {
+  background: linear-gradient(135deg, #1e3a5f, #2563eb22);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #93c5fd;
+}
+.btn-guard:active { background: #2563eb33; }
+
+/* 😡 โกรธจัด / 🔥 สุดทน — สถานะบอส */
+.boss-rage-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: 3px;
+  animation: rage-pulse 1.2s ease-in-out infinite;
+}
+.boss-fury-tag {
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.6);
+  background: rgba(249, 115, 22, 0.2);
+}
+@keyframes rage-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 10px 2px rgba(239, 68, 68, 0.25); }
+}
+
+/* ⚠️ กำลังชาร์จท่าไม้ตาย — เตือนให้ผู้เล่นตัดสินใจ (สลาย / ตั้งรับ) */
+.boss-charge-note {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 8px;
+  padding: 6px 10px;
+  animation: charge-pulse 0.9s ease-in-out infinite;
+}
+.boss-charge-note b { color: #fff; }
+@keyframes charge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
 .potion-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .potion-btn { background: var(--panel); }
 
@@ -965,6 +1015,19 @@ body {
 }
 .victory-title { font-size: 24px; font-weight: 900; color: var(--gold); margin-bottom: 6px; }
 .victory-panel p { color: var(--muted); font-size: 13.5px; margin-bottom: 12px; }
+
+/* รางวัลฝีมือ — ชนะด้วยการสลายท่าไม้ตาย / อดทนสู้จนบอสสุดทน */
+.master-win-note {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #c4b5fd;
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 8px;
+  padding: 6px 10px;
+  animation: fadeUp 0.4s ease;
+}
 
 /* ---------- modals ---------- */
 .modal-backdrop {

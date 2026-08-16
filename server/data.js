@@ -252,6 +252,8 @@ export const BOSS_SKILLS = {
   venom: { name: 'พิษร้าย',     icon: '☠️', desc: 'ผู้เล่นเสีย 5% HP/เทิร์น (2 เทิร์น)', poison: 0.05 },
   guard: { name: 'เกราะแข็ง',   icon: '🛡️', desc: 'ลดดาเมจที่บอสได้รับ 35% (2 เทิร์น)', guard: 0.65 },
   drain: { name: 'ดูดมานา',     icon: '🧿', desc: 'ผู้เล่นเสีย MP 25%',      drainMp: 0.25 },
+  // ท่าไม้ตาย — ใช้เฉพาะตอนบอสโกรธจัด (HP ≤ 50%) หรือสุดทน (สู้ยืดเยื้อ)
+  fury:  { name: 'ท่าไม้ตาย',   icon: '💥', desc: 'โจมตี x2.2 (หนักที่สุด)', mult: 2.2 },
 };
 
 // ท่าเด็ดของบอสแต่ละเมือง (index ตรงกับ BOSSES) — บอสลับใช้ท่าเด็ดของเมืองนั้น ๆ
@@ -438,6 +440,9 @@ export const ACHIEVEMENTS = [
   { id: 'boss_10',     name: 'ราชันย์นักล่าบอส', icon: '🐲', stat: 'bosses',   target: 10,   reward: { gold: 500 }, desc: 'ชนะบอส 10 ตัว' },
   { id: 'focus_100',   name: 'ตำนานแห่งโฟกัส', icon: '👑', stat: 'sessions',  target: 100,  reward: { gold: 500 }, desc: 'ทำโฟกัสครบ 100 session' },
   { id: 'level_20',    name: 'ตำนานมีชีวิต',    icon: '🌟', stat: 'level',     target: 20,   reward: { gold: 400 }, desc: 'อัพเป็นเลเวล 20' },
+  // ระบบต่อสู้บอส: สลายท่าไม้ตาย (ชาร์จพลัง) — นับรวมทุกครั้งที่สลายได้ตลอดการเล่น
+  { id: 'break_5',     name: 'จอมสลาย',       icon: '🛡️', stat: 'charge_breaks', target: 5,  reward: { gold: 150 }, desc: 'สลายท่าไม้ตายบอส 5 ครั้ง' },
+  { id: 'break_15',    name: 'ราชันย์จอมสลาย', icon: '💥', stat: 'charge_breaks', target: 15, reward: { gold: 400 }, desc: 'สลายท่าไม้ตายบอส 15 ครั้ง' },
 ];
 
 // ----- ตราลับ: เงื่อนไขซ่อน (check(ctx) คืน true เมื่อผ่าน) ctx ดูใน achievements.js -----
@@ -462,5 +467,8 @@ export const SECRET_ACHIEVEMENTS = [
   { id: 'challenge_hard',     name: 'นักสู้สุดหิน',   icon: '⚔️', hint: 'เลือกทางที่ยากกว่าเสมอ…',                        reward: { gold: 500 }, check: (ctx) => ctx.challengeMode === 'hard' && ctx.challengeCycles >= 1 },
   { id: 'challenge_marathon', name: 'จิตใจเหนือเหล็ก', icon: '⏱️', hint: 'ไม่มีวันพัก ไม่มีวันแพ้…',                      reward: { gold: 500 }, check: (ctx) => ctx.challengeMode === 'marathon' && ctx.challengeCycles >= 1 },
   { id: 'challenge_survival', name: 'เอาชีวิตรอด',    icon: '🩸', hint: 'เลือดทุกหยดมีค่า…',                           reward: { gold: 500 }, check: (ctx) => ctx.challengeMode === 'survival' && ctx.challengeCycles >= 1 },
+  // ระบบต่อสู้บอส: ชนะด้วยการสลายท่าไม้ตาย (breaks ≥ 1 ในไฟต์นั้น) / ชนะตอนบอสสุดทน (สู้ยืดเยื้อ 30+ เทิร์น)
+  { id: 'break_win',       name: 'สยบจอมชาร์จ',    icon: '⚡', hint: 'ท่าไม้ตาย… อย่าปล่อยให้มันตั้งหลัก',                  reward: { gold: 300 }, check: (ctx) => ctx.bossBreaks >= 1 },
+  { id: 'fury_win',        name: 'อดทนที่สุด',      icon: '🔥', hint: 'ความอดทนมีรางวัลของมันเสมอ',                     reward: { gold: 350 }, check: (ctx) => ctx.bossFury === true },
   { id: 'master',         name: 'จ้าวแห่งการโฟกัส', icon: '🏆', hint: 'เมื่อความสำเร็จทั้งหมดมารวมกัน…',                  reward: { gold: 1000 }, check: (ctx) => ctx.normalUnlocked >= ACHIEVEMENTS.length },
 ];
