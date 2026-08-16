@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useGame } from '../context.jsx';
 import { Panel } from './ui.jsx';
 
@@ -5,7 +6,7 @@ export const TYPE_ICON = {
   battle_win: '🗡️', battle_lose: '💨', treasure: '🎁', shrine: '⛩️', merchant: '🧙', trap: '⚠️',
   session_done: '✅', session_summary: '📋', abort: '💨', shop: '🛒', equip: '🔧', rest: '🔥',
   quest_win: '📜', quest_fail: '📜', boss_win: '🏆', boss_lose: '💨', system: '🎒',
-  achievement: '🏅',
+  achievement: '🏅', llm_tale: '📖',
 };
 
 export function fmtLogTime(iso) {
@@ -20,7 +21,12 @@ export function fmtLogTime(iso) {
 }
 
 export default function AdventureLog({ limit = 20 }) {
-  const { log } = useGame();
+  const { log, refresh } = useGame();
+  // log ฝั่ง client อัปเดตจาก /state ตอนโหลดหน้าเท่านั้น — ดึงข้อมูลใหม่ทุกครั้งที่เปิด tab บันทึก
+  // (ไม่งั้นจะเห็นแต่ข้อมูลเก่า เช่น เห็นแค่ "เริ่มผจญภัย" ทั้งที่เล่นไปหลาย session แล้ว)
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
   const items = [...(log || [])].sort((a, b) => b.id - a.id).slice(0, limit); // ล่าสุดก่อนเสมอ
 
   return (

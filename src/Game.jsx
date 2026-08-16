@@ -519,14 +519,21 @@ export default function Game() {
         />
       )}
 
-      {eventQueue.length > 0 && !inActiveWork && <EventModal event={eventQueue[0]} onClose={closeEvent} />}
-
-      {achieveQueue.length > 0 && !inActiveWork && <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />}
-
-      {levelUpQueue.length > 0 && !inActiveWork && <LevelUpModal levelUp={levelUpQueue[0]} onClose={dismissLevelUp} />}
-
-      {/* เรื่องราวการผจญภัย — แสดงก่อนถามพัก/ข้าม (ปิดเรื่องแล้วถึงจะเจอ modal พัก/ข้าม) */}
+      {/* modal แบบคิว — โชว์ทีละอัน ไม่ทับกัน: เรื่องราว LLM ก่อนเสมอ → เลเวลอัพ → ตรา → เหตุการณ์ → แล้วค่อยถามพัก/ข้าม */}
+      {/* ระหว่างรอเรื่องราว (awaitingBreak && !storyDone) ให้ modal อื่นรอด้วย — กัน modal มาทับเรื่อง LLM */}
       {story && !inActiveWork && <StoryModal story={story} onClose={() => { setStory(null); setStoryDone(true); }} />}
+
+      {!story && !inActiveWork && (!awaitingBreak || storyDone) && levelUpQueue.length > 0 && (
+        <LevelUpModal levelUp={levelUpQueue[0]} onClose={dismissLevelUp} />
+      )}
+
+      {!story && !inActiveWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length > 0 && (
+        <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />
+      )}
+
+      {!story && !inActiveWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length > 0 && (
+        <EventModal event={eventQueue[0]} onClose={closeEvent} />
+      )}
 
       {/* กำลังรอเรื่องราว (LLM เขียนเรื่อง) — โชว์สถานะแทนหน้าจอว่าง */}
       {awaitingBreak && !storyDone && !story && (
@@ -536,8 +543,8 @@ export default function Game() {
         </div>
       )}
 
-      {/* จบ session — ถามว่าจะพักเบรกหรือข้ามไปโฟกัสต่อ (หลังเรื่องราวจบแล้วเท่านั้น) */}
-      {awaitingBreak && storyDone && (
+      {/* จบ session — ถามว่าจะพักเบรกหรือข้ามไปโฟกัสต่อ (หลังเรื่องราว + modal รางวัลทั้งหมดจบแล้วเท่านั้น) */}
+      {awaitingBreak && storyDone && !story && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length === 0 && (
         <div className="modal-backdrop">
           <div className="modal">
             <h2>🎉 จบเซสชันที่ {sessionIdx}!</h2>

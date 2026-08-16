@@ -181,13 +181,19 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                   {i.bought ? (
                     <span className="sold-tag">ขายแล้ว</span>
                   ) : (
-                    <button
-                      className="btn btn-sm"
-                      disabled={character.gold < i.price}
-                      onClick={() => buy(i)}
-                    >
-                      💰 {i.price}
-                    </button>
+                    <div className="shop-buy">
+                      {/* ราคาเดิม (ก่อนลด/ขึ้น) — ขีดฆ่าให้เห็นว่าราคาต่างจากปกติ */}
+                      {(i.sale || i.hot) && i.originalPrice > 0 && i.originalPrice !== i.price && (
+                        <s className="price-original">{i.originalPrice}</s>
+                      )}
+                      <button
+                        className="btn btn-sm"
+                        disabled={character.gold < i.price}
+                        onClick={() => buy(i)}
+                      >
+                        💰 {i.price}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

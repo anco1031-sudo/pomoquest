@@ -716,6 +716,19 @@ body {
   border-bottom: 1px dashed var(--border);
 }
 .session-card-event:last-child { border-bottom: none; }
+/* เรื่องราว LLM ในประวัติ session — แยกให้เด่น เหมือนเปิดหนังสือ */
+.session-card-event.tale {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.1), transparent);
+  border-left: 3px solid var(--purple);
+  border-radius: 8px;
+  padding-left: 10px;
+}
+.session-card-event.tale .log-detail {
+  white-space: pre-line;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
 
 /* ---------- adventure log ---------- */
 .log-list { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; padding-right: 4px; }
@@ -1036,6 +1049,17 @@ body {
 
 /* ---------- camp shop sold-out ---------- */
 .sold-tag { color: var(--muted); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+
+/* ราคาเดิม (ก่อนลด/ขึ้น) แบบขีดฆ่า ข้างปุ่มซื้อ */
+.shop-buy { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.price-original {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 99, 99, 0.75);
+  text-decoration-thickness: 1.5px;
+}
 
 /* ---------- two-hand weapon tag ---------- */
 .twohand-tag {

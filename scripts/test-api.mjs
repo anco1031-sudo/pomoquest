@@ -114,6 +114,19 @@ try {
   expect('session-history: คืน session ที่จบไป (มี session_key)', r.status === 200 && r.json.sessions?.length === 1 && r.json.sessions[0].session_key === 'api-test-key');
   expect('session-history: session มี challenge_mode (ตอนนั้นเล่นโหมดอะไร)', r.status === 200 && r.json.sessions[0].challenge_mode === '', JSON.stringify(r.json.sessions[0]?.challenge_mode));
 
+  // --- เรื่องราว LLM ในประวัติ session: llm_tale เกาะกลุ่ม session ด้วย session_key (ค้นหา/อ่านได้) ---
+  db.prepare("INSERT INTO log (character_id, type, title, detail, session_key, created_at) VALUES (?, 'llm_tale', '📖 เรื่องราวการผจญภัย', 'ทดสอบเรื่องราว: กำราบหมาป่าแล้วพบสมบัติกลางป่า', 'api-test-key', datetime('now','localtime'))").run(cid);
+  r = await api('/session-history');
+  const taleSess = r.json.sessions?.find((s) => s.session_key === 'api-test-key');
+  expect('session-history: เรื่องราว LLM ถูกเก็บไว้ใน session (อ่านย้อนหลังได้)', !!taleSess && taleSess.events.some((e) => e.type === 'llm_tale' && e.detail.includes('กำราบหมาป่า')), JSON.stringify(taleSess?.events?.map((e) => e.type)));
+
+  // --- ราคาร้าน: originalPrice = ราคาเดิมก่อนลด/ขึ้น (ใช้ขีดฆ่าในร้าน) ---
+  r = await api('/camp?visit=v-price-test');
+  const shopItems = r.json.shop || [];
+  expect('camp: ไอเทมร้านมี originalPrice (ราคาเดิม) ครบทุกชิ้น', shopItems.length > 0 && shopItems.every((i) => typeof i.originalPrice === 'number' && i.originalPrice > 0), JSON.stringify(shopItems.slice(0, 2).map((i) => [i.name, i.price, i.originalPrice])));
+  const priceDiff = shopItems.filter((i) => i.sale || i.hot);
+  expect('camp: ของลด/ขึ้นราคา — originalPrice ต่างจากราคาจริง (เห็นการขีดฆ่า)', priceDiff.every((i) => i.originalPrice !== i.price));
+
   // --- /weekly-summary ---
   r = await api('/weekly-summary');
   expect('weekly-summary: คืนตัวเลขครบ (thisWeek/lastWeek)', r.status === 200 && r.json.thisWeek?.sessions === 1 && r.json.lastWeek?.sessions === 0, JSON.stringify(r.json));

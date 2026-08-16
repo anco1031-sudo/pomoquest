@@ -98,7 +98,7 @@ export default function SessionHistory() {
                       <div className="session-card-events">
                         <div className="session-card-events-title">เหตุการณ์ ({events.length})</div>
                         {events.map((e) => (
-                          <div className="session-card-event" key={e.id}>
+                          <div className={`session-card-event ${e.type === 'llm_tale' ? 'tale' : ''}`} key={e.id}>
                             <span className="log-icon">{TYPE_ICON[e.type] || '📜'}</span>
                             <div className="log-body">
                               <div className="log-title">

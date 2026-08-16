@@ -339,8 +339,9 @@ router.post('/adventure/complete', (req, res) => {
       `รวมแล้วได้ +${xp} XP และ +${gold} ทอง (คอมโบโฟกัส x${bonus.toFixed(1)})`,
     ].join('\n');
   };
+  // บันทึกเรื่องราว LLM พร้อม sessionKey — จับกลุ่มในประวัติ session (หน้าประวัติ/ค้นหาเจอเรื่องนี้ด้วย)
   const recordTale = (text) => {
-    if (text) addLog(c.id, { type: 'llm_tale', title: '📖 เรื่องราวการผจญภัย', detail: text.slice(0, 500) });
+    if (text) addLog(c.id, { type: 'llm_tale', title: '📖 เรื่องราวการผจญภัย', detail: text.slice(0, 500), sessionKey });
   };
 
   // สรุปการผจญภัยด้วย LLM (ถ้าเปิดใช้) — fire-and-forget: ไม่บล็อก response; ถ้าไม่ได้เรื่องก็ใช้สรุปเหตุการณ์แทน
@@ -404,7 +405,7 @@ router.get('/session-history', (req, res) => {
   if (keys.length) {
     const events = db.prepare(`
       SELECT * FROM log WHERE character_id = ? AND session_key IN (${keys.map(() => '?').join(',')})
-      AND type NOT IN ('session_summary', 'session_done', 'llm_tale') ORDER BY id
+      AND type NOT IN ('session_summary', 'session_done') ORDER BY id
     `).all(c.id, ...keys);
     for (const e of events) {
       (eventsByKey[e.session_key] ||= []).push(e);
@@ -534,14 +535,14 @@ router.get('/camp', (req, res) => {
     if (!base) return null;
     if (s.market === 'black') {
       const b = bm?.find((x) => x.id === s.item_id);
-      return { ...base, price: Math.round((b?.bmPrice ?? base.price) * pm), bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
+      return { ...base, price: Math.round((b?.bmPrice ?? base.price) * pm), originalPrice: Math.round(base.price * pm), bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
     }
     if (s.market === 'festival') {
-      // สินค้าเทศกาล — ลด 20% (ราคาที่โชว์ = ราคาที่จ่ายจริง)
-      return { ...base, price: Math.round(base.price * 0.8 * pm), priceMult: 0.8, sale: 1, festival: 1, bought: s.qty >= 1 ? 1 : 0 };
+      // สินค้าเทศกาล — ลด 20% (ราคาที่โชว์ = ราคาที่จ่ายจริง, originalPrice = ราคาปกติก่อนลด)
+      return { ...base, price: Math.round(base.price * 0.8 * pm), originalPrice: Math.round(base.price * pm), priceMult: 0.8, sale: 1, festival: 1, bought: s.qty >= 1 ? 1 : 0 };
     }
     const m = marketPrice(base, dayKey);
-    return { ...base, price: Math.round(m.price * pm), priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
+    return { ...base, price: Math.round(m.price * pm), originalPrice: Math.round(base.price * pm), priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
   }).filter(Boolean);
   // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ — จังหวะรายวัน (พ่อค้าอยากได้ของบางชิ้น → แพงขึ้น, เปลี่ยนทุกวัน)
   // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — ปรับราคาที่โชว์ให้ตรงกับที่จ่ายจริง
