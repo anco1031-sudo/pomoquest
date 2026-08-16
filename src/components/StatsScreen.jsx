@@ -221,6 +221,21 @@ export default function StatsScreen() {
         </div>
       </Panel>
 
+      {data.tasks && data.tasks.length > 0 && (
+        <Panel title="📋 สถิติแยกตามงาน (30 วัน)">
+          <div className="task-list">
+            {data.tasks.map((t) => (
+              <div className="task-row" key={t.task}>
+                <span className="task-name">📌 {t.task}</span>
+                <span className="task-val">{fmtDuration(t.focus_sec)}</span>
+                <span className="task-sessions">x{t.sessions} session</span>
+              </div>
+            ))}
+          </div>
+          <p className="hint">💡 ตั้งชื่องานก่อนเริ่มโฟกัส (หน้าแรก) — ดูได้ว่าเวลาไปกับอะไรบ้าง</p>
+        </Panel>
+      )}
+
       <Panel title="🔥 Heatmap โฟกัส (12 สัปดาห์)">
         <div className="heat-wrap">
           <div className="heat-labels">

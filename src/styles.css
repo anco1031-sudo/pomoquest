@@ -1381,6 +1381,105 @@ body {
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 .splash p { color: var(--muted); }
 
+/* ---------- ยศ / ขวัญกำลังใจ / โล่โฟกัส (hero card) ---------- */
+.hero-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rank-badge, .morale-badge, .shield-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.rank-badge { color: var(--gold); border: 1px solid rgba(245, 185, 66, 0.4); background: rgba(245, 185, 66, 0.1); }
+.morale-badge { color: var(--text); border: 1px solid var(--border); background: var(--bg); }
+.morale-badge.ml3 { color: #fca5a5; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
+.morale-badge.ml2 { color: #fcd34d; border-color: rgba(245, 185, 66, 0.4); background: rgba(245, 185, 66, 0.1); }
+.shield-badge { color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); }
+
+/* companion — ฟองเล็กข้างตัวละคร */
+.hero-avatar { position: relative; }
+.companion-bubble {
+  position: absolute;
+  bottom: -8px;
+  right: -10px;
+  font-size: 20px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+
+/* ช่องตั้งชื่องาน */
+.focus-task-input { margin-bottom: 10px; }
+.focus-task-chip {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: var(--purple);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+/* ---------- เนื้อเรื่อง (story quests) ---------- */
+.story-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.story-card.done { opacity: 0.65; }
+.story-card.claimable { border-color: rgba(245, 185, 66, 0.5); background: rgba(245, 185, 66, 0.05); }
+.story-top { display: flex; gap: 10px; }
+.story-icon { font-size: 26px; }
+.story-info { flex: 1; }
+.story-title { font-weight: 800; font-size: 14.5px; }
+.story-city { font-size: 11px; color: var(--muted); font-weight: 600; }
+.story-desc { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.story-req { font-size: 12px; color: var(--gold); margin-top: 4px; }
+.story-rewards { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.story-done-tag, .story-lock-tag { font-size: 12px; color: var(--muted); font-weight: 700; }
+
+/* ---------- เทศกาล ---------- */
+.festival-panel { border-color: rgba(245, 185, 66, 0.4); background: linear-gradient(180deg, rgba(245, 185, 66, 0.08), transparent); }
+.festival-title { color: var(--gold); }
+.festival-desc { font-size: 13px; color: var(--muted); margin: 0; }
+.festival-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fcd34d;
+  border: 1px solid rgba(245, 185, 66, 0.4);
+  background: rgba(245, 185, 66, 0.1);
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: 2px;
+}
+
+/* ---------- สถิติแยกตามงาน ---------- */
+.task-list { display: flex; flex-direction: column; gap: 6px; }
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.task-name { flex: 1; font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-val { font-size: 13px; color: var(--green); font-weight: 700; }
+.task-sessions { font-size: 12px; color: var(--muted); }
+
 /* ---------- desktop ---------- */
 @media (min-width: 640px) {
   .app { max-width: 560px; }

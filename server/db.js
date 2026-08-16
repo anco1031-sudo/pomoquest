@@ -156,6 +156,13 @@ CREATE TABLE IF NOT EXISTS character_skill (
   source TEXT DEFAULT 'class',
   PRIMARY KEY (character_id, skill_id)
 );
+
+CREATE TABLE IF NOT EXISTS story_quest_done (
+  character_id INTEGER NOT NULL,
+  quest_id TEXT NOT NULL,
+  done_at TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (character_id, quest_id)
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)
@@ -195,6 +202,10 @@ ensureColumn('log', 'session_key', 'TEXT');
 ensureColumn('log', 'city', 'TEXT');
 // โหมดท้าทายที่เล่นตอนนั้น (หน้า session summary — โชว์ badge ย้อนหลัง แม้เปลี่ยนโหมดไปแล้ว)
 ensureColumn('log', 'challenge_mode', "TEXT DEFAULT ''");
+// ชื่องานที่โฟกัสใน session นั้น (ตั้งก่อนเริ่มโฟกัส — ดูสถิติแยกตามงานได้)
+ensureColumn('log', 'focus_task', 'TEXT');
+// โล่โฟกัส: 1 = กันคอมโบหาย 1 ครั้ง (ใช้ไอเทม 🛡️ โล่โฟกัสแล้ว) — แตกเมื่อพัก/ทิ้ง session
+ensureColumn('progress', 'combo_shield', 'INTEGER DEFAULT 0');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
 // ตลาดมืด (black market) — สินค้าที่ขายในค่ายพักนี้ ระบุแหล่งที่มา ('camp' = ร้านปกติ, 'black' = ตลาดมืด)
 ensureColumn('camp_shop', 'market', "TEXT DEFAULT 'camp'");
@@ -309,10 +320,10 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '' }) {
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null }) {
   // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
-  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, hp_change, mp_change, session_key, city, challenge_mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, hpChange, mpChange, sessionKey, city, challengeMode).lastInsertRowid;
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, hp_change, mp_change, session_key, city, challenge_mode, focus_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, hpChange, mpChange, sessionKey, city, challengeMode, focusTask).lastInsertRowid;
 }
 
 // ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----

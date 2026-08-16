@@ -21,6 +21,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const [doneQuests, setDoneQuests] = useState({});
   const [questResults, setQuestResults] = useState({});
   const [blackMarket, setBlackMarket] = useState(null); // null = ไม่เจอตลาดมืดในค่ายนี้
+  const [festival, setFestival] = useState(null); // เทศกาลประจำสัปดาห์ของเมืองนี้ (null = ไม่มี)
 
   useEffect(() => {
     (async () => {
@@ -30,6 +31,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         setQuests(d.quests || []);
         setSellPrices(d.sellPrices || {});
         setBlackMarket(d.blackMarket || null);
+        setFestival(d.festival || null);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,6 +118,12 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
 
       {tab === 'shop' && (
         <>
+          {festival && (
+            <div className="panel festival-panel">
+              <div className="panel-title festival-title">{festival.icon} {festival.name} กำลังจัด!</div>
+              <p className="festival-desc">{festival.desc} — สินค้าพิเศษในร้านลด 20% (สัปดาห์นี้ของเมืองนี้เท่านั้น)</p>
+            </div>
+          )}
           {blackMarket && (
             <div className="panel bm-panel">
               <div className="panel-title bm-title">🖤 ตลาดมืด (พ่อค้าเงาลึกลับ)</div>
@@ -162,7 +170,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                   <div className="inv-info">
                     <div className="inv-name">
                       {i.name} {twoHandTag(i)}
-                      {i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
+                      {i.festival ? <span className="festival-tag">{festival?.icon} ของเทศกาล -20%</span> : i.hot ? <span className="market-hot">🔥 ราคาขึ้น x{i.priceMult?.toFixed(1)}</span> : i.sale ? <span className="market-sale">🏷️ ลดราคา x{i.priceMult?.toFixed(1)}</span> : null}
                     </div>
                     <ItemStatChips item={i} character={character} />
                     <div className="inv-desc">{i.desc}</div>

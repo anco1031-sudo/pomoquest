@@ -9,10 +9,13 @@ import AchievementList from './AchievementList.jsx';
 import StatsScreen from './StatsScreen.jsx';
 import SessionHistory from './SessionHistory.jsx';
 import DailyQuests from './DailyQuests.jsx';
+import StoryQuests from './StoryQuests.jsx';
 import DevPanel from './DevPanel.jsx';
+import { rankOf, companionOf, moraleOf } from '../meta.js';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
+  { key: 'story', label: 'เนื้อเรื่อง', icon: '📖' },
   { key: 'sheet', label: 'ตัวละคร', icon: '🛡️' },
   { key: 'log', label: 'บันทึก', icon: '📜' },
   { key: 'sessions', label: 'Session', icon: '📅' },
@@ -43,10 +46,14 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
     }
   });
   const fileRef = useRef(null);
+  const [focusTask, setFocusTask] = useState(''); // ชื่องานที่จะโฟกัส session ถัดไป
 
   if (!character) return null;
   const city = character.city;
   const xpPct = Math.min(100, (character.xp / character.xpToNext) * 100);
+  const rank = rankOf(progress?.total_focus_sec || 0);
+  const companion = companionOf(progress?.total_focus_sec || 0);
+  const morale = moraleOf(progress?.last_focus_date);
 
   const toggleMute = () => {
     const m = !muted;
@@ -156,7 +163,12 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
         {/* ---- hero card ---- */}
         <div className="hero-card">
           <div className="hero-top">
-            <div className="hero-avatar">{character.classIcon}</div>
+            <div className="hero-avatar">
+              {character.classIcon}
+              <div className="companion-bubble" title={`🐾 Companion: ${companion.name} — ${companion.desc}${companion.nextIn > 0 ? ` · วิวัฒน์ในอีก ${companion.nextIn} นาที (${companion.nextIcon} ${companion.nextName})` : ' · วิวัฒน์เต็มที่แล้ว!'}`}>
+                {companion.icon}
+              </div>
+            </div>
             <div className="hero-info">
               <div className="hero-name">{character.name}</div>
               <div className="hero-class">
@@ -167,6 +179,17 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                 <button className="btn btn-sm challenge-switch" onClick={() => { setShowChallenge(true); sfx.click(); }} title="เปลี่ยนโหมดท้าทาย (เสียค่าปรับ)">
                   🔄 เปลี่ยนโหมด
                 </button>
+              </div>
+              <div className="hero-meta">
+                <span className="rank-badge" title={`ยศตามเวลาโฟกัสสะสม (${rank.min} นาที)${rank.nextIn > 0 ? ` — อีก ${rank.nextIn} นาทีถึง ${rank.nextIcon} ${rank.nextName}` : ' — ยศสูงสุดแล้ว!'}`}>
+                  {rank.icon} {rank.name}
+                </span>
+                <span className={`morale-badge ml${morale.level}`} title={morale.msg}>
+                  {morale.icon} {morale.label}
+                </span>
+                {progress?.combo_shield > 0 && (
+                  <span className="shield-badge" title="🛡️ โล่โฟกัสติดตั้งอยู่ — พัก/ทิ้ง session ครั้งถัดไป คอมโบจะไม่หาย (โล่จะแตก)">🛡️ โล่โฟกัส</span>
+                )}
               </div>
             </div>
             <div className="hero-city">
@@ -200,6 +223,15 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               <p className="panel-text">
                 เมืองนี้ยังมีเรื่องราวรอคุณอยู่… กดเริ่มผจญภัยเพื่อโฟกัสงาน แล้วตัวละครของคุณจะออกเดินทาง!
               </p>
+              <div className="focus-task-input">
+                <input
+                  className="input"
+                  placeholder="📋 งานนี้จะโฟกัสอะไร? (optional — เช่น เขียนรายงาน / เรียน / ออกกำลังกาย)"
+                  value={focusTask}
+                  maxLength={40}
+                  onChange={(e) => setFocusTask(e.target.value)}
+                />
+              </div>
               {hasPausedSession && onContinue && (
                 <>
                   <p className="paused-note">⏸️ มี session ที่พักไว้อยู่ — กดต่อเพื่อกลับไปโฟกัสต่อ</p>
@@ -208,7 +240,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                   </button>
                 </>
               )}
-              <button className="btn btn-primary btn-big" onClick={onStart} style={hasPausedSession ? { marginTop: 10 } : undefined}>
+              <button className="btn btn-primary btn-big" onClick={() => onStart(focusTask)} style={hasPausedSession ? { marginTop: 10 } : undefined}>
                 {hasPausedSession ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)' : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
               </button>
             </Panel>
@@ -271,6 +303,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
           </>
         )}
 
+        {tab === 'story' && <StoryQuests />}
         {tab === 'sheet' && <CharacterSheet />}
         {tab === 'log' && <AdventureLog limit={50} />}
         {tab === 'sessions' && <SessionHistory />}

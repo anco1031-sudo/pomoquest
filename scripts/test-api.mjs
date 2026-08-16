@@ -255,17 +255,21 @@ try {
     expect('challenge: สร้างตัวละครโหมดโหดได้', r.status === 200 && r.json.character.challengeMode === 'hard', r.json.error || '');
     const hardId = r.json.character.id;
     r = await api('/character/select', { method: 'POST', body: { id: hardId } });
-    const shopBefore = await api('/camp?visit=hard-shop');
-    // เทียบราคากับตัวละครปกติ: เปิดร้านด้วย visit เดียวกัน (deterministic stock เหมือนกัน) → ราคา hard ควรแพงกว่า
+    // เทียบราคากับตัวละครปกติ: เปิดร้านด้วย visit เดียวกัน → ราคา hard ควรแพงกว่า (x1.3)
+    // stock ร้านสุ่มต่อตัวละคร — ลองหลาย visit จนเจอชิ้นที่ขายทั้ง 2 ร้าน (กัน flaky จาก Math.random)
     r = await api('/character/create', { method: 'POST', body: { name: 'โหมดปกติ', class: 'rogue' } });
     const normId = r.json.character.id;
-    r = await api('/character/select', { method: 'POST', body: { id: normId } });
-    const sameVisit = 'same-visit-price';
-    const shopNormRes = await api(`/camp?visit=${sameVisit}`); // ตอนนี้ select ตัวปกติอยู่
-    r = await api('/character/select', { method: 'POST', body: { id: hardId } });
-    const shopHardRes = await api(`/camp?visit=${sameVisit}`);
-    const shopHard = shopHardRes.json.shop, shopNorm = shopNormRes.json.shop;
-    const shared = shopHard.filter((i) => shopNorm.some((n) => n.id === i.id));
+    let shopHard = [], shopNorm = [], shared = [];
+    for (let i = 0; i < 40 && shared.length === 0; i++) {
+      const sameVisit = `same-visit-price-${i}`;
+      await api('/character/select', { method: 'POST', body: { id: normId } });
+      const shopNormRes = await api(`/camp?visit=${sameVisit}`); // ตัวปกติ
+      await api('/character/select', { method: 'POST', body: { id: hardId } });
+      const shopHardRes = await api(`/camp?visit=${sameVisit}`); // ตัวโหมดโหด
+      shopHard = shopHardRes.json.shop || [];
+      shopNorm = shopNormRes.json.shop || [];
+      shared = shopHard.filter((i) => shopNorm.some((n) => n.id === i.id));
+    }
     expect('challenge: hard ราคาแพงกว่าปกติ (x1.3) — เทียบ item เดียวกัน', shared.length > 0 && shared.every((i) => { const n = shopNorm.find((x) => x.id === i.id); return i.price > n.price; }), `shared=${shared.length} hard=${shared[0]?.price} norm=${shopNorm.find((x) => x.id === shared[0]?.id)?.price}`);
     // กลับไป hard → complete session → XP/ทอง x1.5
     r = await api('/character/select', { method: 'POST', body: { id: hardId } });
@@ -333,6 +337,52 @@ try {
     expect('challenge-switch: เปลี่ยนโหมดซ้ำได้ (เสียค่าปรับอีก)', r.status === 200 && r.json.character.challengeMode === 'survival', r.json.error || '');
     // กลับเป็นปกติ — reset ตอนท้ายเทสต์
     await api('/character/challenge', { method: 'POST', body: { mode: '' } });
+  }
+
+  // --- ตั้งชื่องาน (focus task) + สถิติแยกตามงาน ---
+  {
+    const aid = (await api('/state')).json.character.id;
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, focusTask: 'งานทดสอบ' } });
+    expect('focusTask: จบ session พร้อมชื่องานได้', r.status === 200, r.json.error || '');
+    const ft = db.prepare("SELECT focus_task FROM log WHERE character_id = ? AND type = 'session_done' ORDER BY id DESC LIMIT 1").get(aid);
+    expect('focusTask: บันทึกชื่องานใน log session_done', ft?.focus_task === 'งานทดสอบ', JSON.stringify(ft));
+    r = await api('/stats');
+    const myTask = (r.json.tasks || []).find((t) => t.task === 'งานทดสอบ');
+    expect('focusTask: สถิติแยกตามงานมีรายการ', !!myTask && myTask.sessions >= 1, JSON.stringify(r.json.tasks));
+  }
+
+  // --- 🛡️ โล่โฟกัส — ใช้แล้วกันคอมโบหาย 1 ครั้ง ---
+  {
+    const aid = (await api('/state')).json.character.id;
+    await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500 } }); // ให้มีคอมโบ
+    const streakBefore = (await api('/state')).json.progress.streak;
+    db.prepare('INSERT INTO inventory (character_id, item_id, qty) VALUES (?, 150, 1) ON CONFLICT(character_id, item_id) DO UPDATE SET qty = qty + 1').run(aid);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 150 } });
+    expect('shield: ใช้โล่โฟกัสได้', r.status === 200, r.json.error || '');
+    expect('shield: progress.combo_shield = 1', (await api('/state')).json.progress.combo_shield === 1, JSON.stringify((await api('/state')).json.progress.combo_shield));
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 150 } });
+    expect('shield: ใช้ซ้ำตอนติดตั้งแล้ว → reject', r.status === 400, r.json.error || '');
+    r = await api('/adventure/abort', { method: 'POST' });
+    expect('shield: ทิ้ง session → โล่กันคอมโบ (shieldUsed)', r.status === 200 && r.json.shieldUsed === true, JSON.stringify(r.json));
+    const st = await api('/state');
+    expect('shield: คอมโบไม่หาย (streak เท่าเดิม) + โล่แตก', st.json.progress.streak === streakBefore && st.json.progress.combo_shield === 0, `streak=${st.json.progress.streak} shield=${st.json.progress.combo_shield}`);
+  }
+
+  // --- 📖 เควสต์เนื้อเรื่อง (story quest) ---
+  {
+    const aid = (await api('/state')).json.character.id;
+    r = await api('/story');
+    expect('story: คืนเควสต์ครบ 12 (พร้อม status/reqLabel)', r.status === 200 && r.json.quests?.length === 12 && r.json.quests.every((q) => q.status && q.reqLabel), JSON.stringify(r.json.quests?.length));
+    db.prepare('UPDATE progress SET bosses_defeated = 1 WHERE character_id = ?').run(aid); // ปลดล็อกเควสต์แรก
+    r = await api('/story');
+    expect('story: ชนะบอส 1 → เควสต์แรกปลดล็อก (claimable)', r.json.quests[0].status === 'claimable', r.json.quests[0].status);
+    const goldBefore = (await api('/state')).json.character.gold;
+    r = await api('/story/claim', { method: 'POST', body: { questId: 'sq_0' } });
+    expect('story: รับรางวัลได้ (+ทอง)', r.status === 200 && r.json.character.gold > goldBefore, `${r.json.error || ''} gold=${r.json.character?.gold}`);
+    r = await api('/story/claim', { method: 'POST', body: { questId: 'sq_0' } });
+    expect('story: รับรางวัลซ้ำไม่ได้', r.status === 400, r.json.error || '');
+    r = await api('/story/claim', { method: 'POST', body: { questId: 'sq_1' } });
+    expect('story: เควสต์ที่ยังไม่ปลดล็อก → reject', r.status === 400, r.json.error || '');
   }
 
   // --- export/backup ---

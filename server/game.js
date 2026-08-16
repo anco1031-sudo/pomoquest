@@ -1,4 +1,4 @@
-import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS } from './data.js';
+import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, BOSS_SKILLS, BOSS_LOADOUTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -757,4 +757,77 @@ export function resolveQuest(c, quest) {
     detail = `⚠️ ${quest.fail} (ได้ ${xp} XP แต่เสียพลัง ${-hpChange})`;
   }
   return { success, xp, gold, hpChange, item, detail, ups };
+}
+
+// ----- ยศ (Rank) — ตามเวลาโฟกัสสะสม -----
+export function rankOf(totalFocusSec) {
+  const min = Math.round((totalFocusSec || 0) / 60);
+  let cur = RANKS[0];
+  let next = null;
+  for (const r of RANKS) {
+    if (min >= r.minMin) cur = r;
+    else { next = r; break; }
+  }
+  return {
+    name: cur.name, icon: cur.icon, min,
+    nextName: next?.name || null, nextIcon: next?.icon || null,
+    pct: next ? Math.min(100, Math.round(((min - cur.minMin) / (next.minMin - cur.minMin)) * 100)) : 100,
+    nextIn: next ? next.minMin - min : 0,
+  };
+}
+
+// ----- Companion — โตตามเวลาโฟกัสสะสม -----
+export function companionOf(totalFocusSec) {
+  const min = Math.round((totalFocusSec || 0) / 60);
+  let cur = COMPANIONS[0];
+  let next = null;
+  for (const c of COMPANIONS) {
+    if (min >= c.minMin) cur = c;
+    else { next = c; break; }
+  }
+  return {
+    name: cur.name, icon: cur.icon, desc: cur.desc, min,
+    nextName: next?.name || null, nextIcon: next?.icon || null,
+    pct: next ? Math.min(100, Math.round(((min - cur.minMin) / (next.minMin - cur.minMin)) * 100)) : 100,
+    nextIn: next ? next.minMin - min : 0,
+  };
+}
+
+// ----- ขวัญกำลังใจ (Morale) — ดูจากวันสุดท้ายที่โฟกัส -----
+export function moraleOf(lastFocusDate) {
+  if (!lastFocusDate) {
+    return { level: 3, icon: '🥺', label: 'หม่นหมอง', msg: 'ยังไม่ได้โฟกัสเลย — ตัวละครเริ่มคิดถึงการผจญภัย' };
+  }
+  const days = Math.max(0, Math.floor((Date.now() - new Date(`${lastFocusDate}T00:00:00`).getTime()) / 86400000));
+  if (days <= 1) return { level: 0, icon: '😄', label: 'สดใส', msg: 'พึ่งโฟกัสเสร็จ — พร้อมลุยต่อ!' };
+  if (days <= 2) return { level: 1, icon: '🙂', label: 'สดชื่น', msg: 'เมื่อวานได้ผจญภัย — ยังไหว!' };
+  if (days <= 4) return { level: 2, icon: '😐', label: 'เฉย ๆ', msg: `${days} วันไม่ได้โฟกัส — ตัวละครเริ่มเบื่อ` };
+  return { level: 3, icon: '🥺', label: 'หม่นหมอง', msg: `${days} วันแล้วที่ไม่ได้ผจญภัย — กลับมาโฟกัสเถอะ!` };
+}
+
+// ----- เทศกาลประจำสัปดาห์ — เมืองหมุนเวียน (week % 12) -----
+export function festivalFor(cityIndex) {
+  const week = Math.floor(Date.now() / (7 * 86400000));
+  const idx = cityIndex % CITIES.length;
+  return week % CITIES.length === idx ? FESTIVALS[idx] : null;
+}
+
+// ----- เควสต์เนื้อเรื่อง -----
+export function storyReqMet(q, c, prog) {
+  const t = q.req.type;
+  const v = q.req.value;
+  if (t === 'boss') return (prog.bosses_defeated || 0) >= v;
+  if (t === 'sessions') return (prog.sessions_completed || 0) >= v;
+  if (t === 'level') return c.level >= v;
+  if (t === 'city') return c.city_index >= q.req.city;
+  return false;
+}
+
+export function storyReqLabel(q, c, prog = {}) {
+  const v = q.req.value;
+  if (q.req.type === 'boss') return `ชนะบอส ${v} ตัว (ตอนนี้ ${prog.bosses_defeated || 0})`;
+  if (q.req.type === 'sessions') return `โฟกัสครบ ${v} session (ตอนนี้ ${prog.sessions_completed || 0})`;
+  if (q.req.type === 'level') return `เลเวล ${v} (ตอนนี้ ${c.level})`;
+  if (q.req.type === 'city') return `ไปถึงเมือง ${q.req.city}`;
+  return '';
 }

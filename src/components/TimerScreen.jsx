@@ -12,7 +12,7 @@ function fmtAgo(ms) {
   return new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 }
 
-export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [] }) {
+export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '' }) {
   const { character } = useGame();
   const logRef = useRef(null);
 
@@ -50,6 +50,7 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
       </div>
 
       <div className="event-chip">🎲 เหตุการณ์ถัดไปใน {fmtTime(nextEventIn)}</div>
+      {focusTask && <div className="focus-task-chip">📋 โฟกัส: {focusTask}</div>}
 
       <div className="timer-hp">
         <div className="hp-row"><span>❤️ HP</span><span>{character.hp}/{character.maxHp}</span></div>

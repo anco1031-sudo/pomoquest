@@ -10,12 +10,12 @@ import {
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID,
-  ACHIEVEMENTS, SECRET_ACHIEVEMENTS,
+  ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT,
-  rewardMult, dropMult, priceMult, challengeOf, CHALLENGES,
+  rewardMult, dropMult, priceMult, challengeOf, CHALLENGES, festivalFor, storyReqMet, storyReqLabel,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -218,12 +218,23 @@ router.post('/adventure/event', (req, res) => {
 
 router.post('/adventure/complete', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { focusSec = 1500, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null } = req.body || {};
+  const { focusSec = 1500, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null, focusTask = null } = req.body || {};
   const prog = getProgress(c.id);
 
   // โหมดมาราธอน: ห้ามพักระหว่างโฟกัส — ถ้าโฟกัสไม่ถึง 90% ของเวลาที่ควร (กดพัก/กลับหน้าหลักกลาง session)
   // → session นี้ "เสีย": ไม่ได้รางวัล ไม่นับ session ไม่สะสม XP/ทอง/คอมโบ
+  // (ยกเว้นมี 🛡️ โล่โฟกัส — กันคอมโบไว้ 1 ครั้ง โล่แตก แต่ session ยังเสีย)
   if (c.challenge_mode === 'marathon' && focusSec < 0.9 * getSettings().work_min * 60) {
+    if (prog.combo_shield > 0) {
+      prog.combo_shield = 0;
+      db.prepare('UPDATE progress SET combo_shield = 0 WHERE id = ?').run(prog.id);
+      addLog(c.id, {
+        type: 'abort', title: '🛡️ โล่โฟกัสกันคอมโบ (มาราธอน)',
+        detail: `พักระหว่างโฟกัส (${Math.round(focusSec / 60)} นาที/${getSettings().work_min} นาที) — session นี้เสีย แต่โล่โฟกัสกันคอมโบไว้ได้! (โล่แตก)`,
+        focusSec,
+      });
+      return res.json({ ...serialize(c), failed: true, shieldUsed: true, message: '💔 เสีย session (มาราธอน) — แต่ 🛡️ โล่โฟกัสกันคอมโบไว้ได้! (โล่แตก)' });
+    }
     prog.streak = 0;
     db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
     addLog(c.id, {
@@ -279,7 +290,7 @@ router.post('/adventure/complete', (req, res) => {
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
   const taleAfter = addLog(c.id, {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${survivalFall ? ` · ${survivalFall}` : ''}`,
-    xp, gold, focusSec,
+    xp, gold, focusSec, focusTask,
   });
   if (survivalFall) {
     addLog(c.id, { type: 'survival_fall', title: '💀 อ่อนแรงล้ม', detail: survivalFall });
@@ -308,12 +319,13 @@ router.post('/adventure/complete', (req, res) => {
     const sessCity = CITIES[c.city_index % CITIES.length]; // เมืองที่ผจญภัยใน session นี้ — ใช้ค้นหาในหน้าประวัติ session
     addLog(c.id, {
       type: 'session_summary',
-      title: `📋 Session ${sessionIdx}/${sessionsPerCycle} @ ${hhmm} · ${sessCity.icon} ${sessCity.name}`,
+      title: `📋 Session ${sessionIdx}/${sessionsPerCycle} @ ${hhmm} · ${sessCity.icon} ${sessCity.name}${focusTask ? ` · 📋 ${focusTask}` : ''}`,
       detail: [parts.join(' · '), `รวม: +${sXp} XP · +${sGold} ทอง${sHp ? ` · เสีย ${sHp} HP` : ''}${sMp ? ` · +${sMp} MP` : ''}${sItems ? ` · ไอเทม ${sItems} ชิ้น` : ''}`].join('\n'),
       xp: sXp, gold: sGold,
       sessionKey,
       city: sessCity.name,
       challengeMode: c.challenge_mode || '',
+      focusTask,
     });
   }
 
@@ -411,6 +423,13 @@ router.get('/session-history', (req, res) => {
 router.post('/adventure/abort', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const prog = getProgress(c.id);
+  // 🛡️ โล่โฟกัส — ถ้ามี ให้กันคอมโบหาย 1 ครั้ง (โล่แตก แล้วคอมโบยังอยู่)
+  if (prog.combo_shield > 0) {
+    prog.combo_shield = 0;
+    db.prepare('UPDATE progress SET combo_shield = 0 WHERE id = ?').run(prog.id);
+    addLog(c.id, { type: 'abort', title: '🛡️ โล่โฟกัสกันคอมโบ!', detail: 'ทิ้งเซสชัน แต่โล่โฟกัสกันคอมโบไว้ได้ (โล่แตก) — คอมโบยังอยู่!' });
+    return res.json({ progress: getProgress(c.id), shieldUsed: true, message: '🛡️ โล่โฟกัสกันคอมโบไว้ได้! คอมโบไม่หาย (โล่แตก)' });
+  }
   prog.streak = 0;
   db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
   addLog(c.id, { type: 'abort', title: '💨 ละทิ้งเซสชัน', detail: 'คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)' });
@@ -475,6 +494,8 @@ const pickRandom = (arr, n) => {
 router.get('/camp', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const visit = req.query.visit || `v${Date.now()}`;
+  // เทศกาลประจำสัปดาห์ — เมืองนี้เป็นเมืองจัดงานไหม (สินค้าพิเศษลด 20% ที่ร้านค่าย)
+  const fest = festivalFor(c.city_index);
   let stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   if (!stock.length) {
     db.prepare('DELETE FROM camp_shop WHERE character_id = ?').run(c.id); // ล้าง stock ค่ายเก่า
@@ -497,6 +518,10 @@ router.get('/camp', (req, res) => {
         ON CONFLICT(character_id, visit, item_id) DO UPDATE SET market = 'black'`);
       for (const i of bm) bmIns.run(c.id, visit, i.id, 'black');
     }
+    // เทศกาลประจำสัปดาห์ — สินค้าพิเศษของเมืองนี้ (market='festival' — ลด 20%)
+    if (fest) {
+      for (const itemId of fest.items) ins.run(c.id, visit, itemId, 'festival');
+    }
     stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   }
   // ราคาในร้านตามวันนี้ (market) — ของที่พ่อค้าต้องการวันนี้แพงขึ้น, ของไม่ดังลดราคา
@@ -510,6 +535,10 @@ router.get('/camp', (req, res) => {
     if (s.market === 'black') {
       const b = bm?.find((x) => x.id === s.item_id);
       return { ...base, price: Math.round((b?.bmPrice ?? base.price) * pm), bmNormal: b?.bmNormal, bmTag: b?.bmTag, bm: 1, bought: s.qty >= 1 ? 1 : 0 };
+    }
+    if (s.market === 'festival') {
+      // สินค้าเทศกาล — ลด 20% (ราคาที่โชว์ = ราคาที่จ่ายจริง)
+      return { ...base, price: Math.round(base.price * 0.8 * pm), priceMult: 0.8, sale: 1, festival: 1, bought: s.qty >= 1 ? 1 : 0 };
     }
     const m = marketPrice(base, dayKey);
     return { ...base, price: Math.round(m.price * pm), priceMult: m.mult, hot: m.hot, sale: m.sale, bought: s.qty >= 1 ? 1 : 0 };
@@ -527,6 +556,7 @@ router.get('/camp', (req, res) => {
     inventory,
     sellPrices,
     shop,
+    festival: fest || null,
     blackMarket: bm ? { items: shop.filter((s) => s.bm), junkMult: BM_JUNK_MULT } : null,
     quests: rollQuests(c.level, 3),
   });
@@ -551,6 +581,8 @@ router.post('/shop/buy', (req, res) => {
     if (!bmItem) return res.status(400).json({ error: 'ของชิ้นนี้ไม่อยู่ในตลาดมืดค่ายนี้' });
     price = Math.round(bmItem.bmPrice * priceMult(c));
     fromBm = true;
+  } else if (row.market === 'festival') {
+    price = Math.round(item.price * 0.8 * priceMult(c)); // สินค้าเทศกาล — ลด 20%
   } else {
     price = Math.round(marketPrice(item, today()).price * priceMult(c));
   }
@@ -642,6 +674,15 @@ router.post('/inventory/use', (req, res) => {
     });
   }
 
+  // 🛡️ โล่โฟกัส — ใช้แล้วติดตั้งโล่กันคอมโบ 1 ครั้ง (มีอยู่แล้วใช้ซ้ำไม่ได้)
+  if (item.use_shield) {
+    const sh = getProgress(c.id);
+    if (sh.combo_shield > 0) return res.status(400).json({ error: '🛡️ โล่โฟกัสติดตั้งอยู่แล้ว — กันคอมโบหายได้อีก 1 ครั้ง' });
+    sh.combo_shield = 1;
+    db.prepare('UPDATE progress SET combo_shield = 1 WHERE id = ?').run(sh.id);
+    addLog(c.id, { type: 'shield', title: '🛡️ ติดตั้งโล่โฟกัส', detail: 'กันคอมโบโฟกัสหาย 1 ครั้ง — ครั้งหน้าที่พัก/ทิ้ง session คอมโบจะไม่หาย (โล่จะแตก)' });
+    used = true;
+  }
   if (item.heal_pct && c.hp < stats.maxHp) { c.hp = Math.min(stats.maxHp, c.hp + Math.round(stats.maxHp * item.heal_pct)); used = true; }
   if (item.mana_pct && c.mp < stats.maxMp) { c.mp = Math.min(stats.maxMp, c.mp + Math.round(stats.maxMp * item.mana_pct)); used = true; }
   if (item.use_gold) { c.gold += item.use_gold; used = true; }
@@ -814,6 +855,49 @@ router.post('/quest/do', (req, res) => {
     progress: getProgress(c.id),
     ...dailyPayload(c),
     levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
+  });
+});
+
+// ----- เควสต์เนื้อเรื่อง (Story Quest) — ปลดล็อกตามความคืบหน้า รับรางวัลครั้งเดียว -----
+router.get('/story', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const prog = getProgress(c.id);
+  const done = new Set(db.prepare('SELECT quest_id FROM story_quest_done WHERE character_id = ?').all(c.id).map((r) => r.quest_id));
+  const quests = STORY_QUESTS.map((q) => {
+    const met = storyReqMet(q, c, prog);
+    return {
+      ...q,
+      status: done.has(q.id) ? 'done' : met ? 'claimable' : 'locked',
+      reqLabel: storyReqLabel(q, c, prog),
+      city: CITIES[q.city % CITIES.length],
+    };
+  });
+  res.json({ quests, doneCount: done.size, total: STORY_QUESTS.length });
+});
+
+router.post('/story/claim', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { questId } = req.body || {};
+  const q = STORY_QUESTS.find((x) => x.id === questId);
+  if (!q) return res.status(400).json({ error: 'เควสต์เนื้อเรื่องไม่พบ' });
+  const prog = getProgress(c.id);
+  if (db.prepare('SELECT 1 FROM story_quest_done WHERE character_id = ? AND quest_id = ?').get(c.id, questId)) {
+    return res.status(400).json({ error: 'รับรางวัลเควสต์นี้ไปแล้ว' });
+  }
+  if (!storyReqMet(q, c, prog)) return res.status(400).json({ error: 'ยังไม่ผ่านเงื่อนไขของเควสต์นี้' });
+  db.prepare('INSERT INTO story_quest_done (character_id, quest_id) VALUES (?, ?)').run(c.id, questId);
+  let ups = 0;
+  if (q.reward.gold) c.gold += q.reward.gold;
+  if (q.reward.xp) ups = gainXp(c, q.reward.xp);
+  updateCharacter(c);
+  addLog(c.id, { type: 'story', title: `📖 ${q.title}`, detail: `ทำเควสต์เนื้อเรื่องสำเร็จ (+${q.reward.gold || 0} ทอง, +${q.reward.xp || 0} XP)`, xp: q.reward.xp || 0, gold: q.reward.gold || 0 });
+  const ach = checkAchievements(c, prog);
+  res.json({
+    ...serialize(c),
+    progress: getProgress(c.id),
+    achievements: ach.fresh,
+    levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
+    message: `📖 ${q.title} สำเร็จ! (+${q.reward.gold || 0} ทอง, +${q.reward.xp || 0} XP)`,
   });
 });
 
@@ -1000,6 +1084,14 @@ router.get('/stats', (req, res) => {
     breakDays.push({ date, breakSec: row?.break_sec || 0, overrunSec: row?.overrun_sec || 0 });
   }
 
+  // สถิติแยกตามงานที่โฟกัส (session_done — 30 วันล่าสุด) — ตั้งชื่องานก่อนเริ่มโฟกัสได้
+  const tasks = db.prepare(`
+    SELECT COALESCE(NULLIF(focus_task, ''), 'ไม่ระบุ') AS task, COUNT(*) AS sessions, COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'session_done'
+      AND created_at >= datetime('now', 'localtime', '-29 days')
+    GROUP BY task ORDER BY focus_sec DESC LIMIT 12
+  `).all(c.id);
+
   // heatmap โฟกัส 12 สัปดาห์ (วันละกี่นาที)
   const heatRaw = db.prepare(`
     SELECT date(created_at) AS d, COALESCE(SUM(focus_sec), 0) AS focus_sec
@@ -1020,6 +1112,7 @@ router.get('/stats', (req, res) => {
     monthDays,
     breakDays,
     heatmap,
+    tasks,
     cityLogs,
     bmStats,
     achievements: { unlocked: ach.unlocked, total: ach.total },
@@ -1101,7 +1194,7 @@ router.post('/restore', (req, res) => {
 
 // Reset — ล้างข้อมูลเกมทั้งหมด (มีผลทันที ไม่ต้องรีสตาร์ท)
 router.post('/reset', (req, res) => {
-  for (const t of ['achievement_unlock', 'camp_shop', 'character_skill', 'daily_counter', 'daily_quest_done', 'daily_streak', 'inventory', 'log', 'progress', 'character']) {
+  for (const t of ['achievement_unlock', 'camp_shop', 'character_skill', 'daily_counter', 'daily_quest_done', 'daily_streak', 'story_quest_done', 'inventory', 'log', 'progress', 'character']) {
     db.prepare(`DELETE FROM ${t}`).run();
   }
   db.prepare('DELETE FROM sqlite_sequence').run(); // รีเซ็ต autoincrement

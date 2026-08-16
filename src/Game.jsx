@@ -41,7 +41,7 @@ const randomEventDelay = (remainSec) => {
 const EXTEND_OPTIONS = [1, 5, 10];
 
 export default function Game() {
-  const { loading, hasCharacter, character, characters, settings, refresh, post, get, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp } = useGame();
+  const { loading, hasCharacter, character, characters, settings, refresh, post, get, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp } = useGame();
 
   const [phase, setPhase] = useState('idle'); // idle | work | short_break | long_break
   const [sessionIdx, setSessionIdx] = useState(1);
@@ -56,6 +56,7 @@ export default function Game() {
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [sessionEvents, setSessionEvents] = useState([]); // เหตุการณ์ที่เจอใน session นี้ (ดูย้อนหลังตอนพัก)
   const [sessionKey, setSessionKey] = useState(null); // id ของ session ปัจจุบัน — ใช้จับกลุ่มเหตุการณ์ในหน้าประวัติ session
+  const [focusTask, setFocusTask] = useState(''); // ชื่องานที่โฟกัส session นี้ (ตั้งก่อนเริ่ม — สถิติแยกตามงาน)
   const [breakVisit, setBreakVisit] = useState(null); // id ค่ายพักปัจจุบัน — ใช้ล็อก stock ร้านค้า (ซื้อครั้งเดียวต่อค่ายพัก)
   const [story, setStory] = useState(null); // เรื่องราว LLM หลังจบ session (modal)
   const [storyDone, setStoryDone] = useState(false); // เรื่องราวจบแล้ว (โชว์+ปิดแล้ว หรือไม่มีเรื่อง) — ถึงจะถามพัก/ข้าม
@@ -83,6 +84,9 @@ export default function Game() {
   const eventBusyRef = useRef(false);
   const sessionKeyRef = useRef(null);
   sessionKeyRef.current = sessionKey;
+  const focusTaskRef = useRef('');
+  focusTaskRef.current = focusTask;
+  const lastResRef = useRef(null); // response ของ session ล่าสุด (ใช้แชร์สรุป)
   const endedRef = useRef(false);
   const phaseRef = useRef(phase);
   const sessionIdxRef = useRef(sessionIdx);
@@ -125,6 +129,7 @@ export default function Game() {
     setSessionEvents([]);
     setSessionKey(null);
     setBreakVisit(null);
+    setFocusTask('');
     setStory(null);
     setStoryDone(false);
     setAwaitingBreak(false);
@@ -246,7 +251,9 @@ export default function Game() {
       sessionIdx: sessionIdxRef.current,
       sessionsPerCycle: settings.sessions_per_cycle,
       sessionKey: sessionKeyRef.current,
+      focusTask: focusTaskRef.current,
     });
+    lastResRef.current = res;
     if (!res) { setPhase('idle'); return; }
     if (res.reward) {
       notify('⏰ โฟกัสครบแล้ว!', `ได้ +${res.reward.xp} XP, +${res.reward.gold} ทอง — พักเบรกหรือลุยต่อ?`);
@@ -270,8 +277,9 @@ export default function Game() {
     sfx.start();
   };
 
-  const beginWork = (idx = 1) => {
+  const beginWork = (idx = 1, task) => {
     requestNotifyPermission(); // ขออนุญาตแจ้งเตือนครั้งแรก (browser โชว์ prompt เอง — ถ้า grant/deny แล้วจะข้าม)
+    if (task !== undefined) setFocusTask(task); // ตั้งชื่องานตอนเริ่มจากหน้าแรก (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
     setSessionIdx(idx);
     setRemain(settings.work_min * 60);
     setElapsed(0);
@@ -386,12 +394,37 @@ export default function Game() {
 
   const handleAbort = async () => {
     if (!window.confirm('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป')) return;
-    await post('/adventure/abort');
+    const d = await post('/adventure/abort');
+    if (d?.shieldUsed) showToast('🛡️ โล่โฟกัสกันคอมโบไว้ได้! คอมโบไม่หาย (โล่แตก)');
     setPhase('idle');
     setRunning(false);
     setSessionIdx(1);
     setElapsed(0);
     setAwaitingBreak(false);
+  };
+
+  // แชร์สรุป session — navigator.share (มือถือ) หรือคัดลอกข้อความ
+  const shareSummary = async () => {
+    const res = lastResRef.current || {};
+    const lines = [`🍅⚔️ PomoQuest — จบ session ${sessionIdxRef.current}/${settings.sessions_per_cycle}!`];
+    if (res?.reward) lines.push(`⏱️ โฟกัสครบ ${Math.round(elapsedRef.current / 60)} นาที → +${res.reward.xp} XP, +${res.reward.gold} ทอง`);
+    if (focusTaskRef.current) lines.push(`📋 งาน: ${focusTaskRef.current}`);
+    lines.push(`🧑‍🎤 ${character.name} (${character.className}) Lv.${character.level}`);
+    if (sessionEvents.length) lines.push(`📜 เจอเหตุการณ์ ${sessionEvents.length} อย่าง: ${sessionEvents.map((e) => e.title?.split(' ').pop() || '?' ).join(', ')}`);
+    lines.push('ยิ่งโฟกัส ยิ่งแข็งแกร่ง!');
+    const text = lines.join('\n');
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'PomoQuest', text });
+        return;
+      }
+    } catch { /* ผู้ใช้กดยกเลิก — ไม่เป็นไร */ }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('📤 คัดลอกสรุปแล้ว — วางแชร์ได้เลย');
+    } catch {
+      showToast('ไม่สามารถแชร์ได้ในเบราว์เซอร์นี้');
+    }
   };
 
   const bossAct = async (action, itemId) => {
@@ -435,7 +468,7 @@ export default function Game() {
     <div className="app">
       {(phase === 'idle' || pausedAtHome) && (
         <HomeScreen
-          onStart={() => beginWork(1)}
+          onStart={(task) => beginWork(1, task)}
           onContinue={pausedAtHome ? handleContinue : null}
           pausedRemain={remain}
           hasPausedSession={pausedAtHome}
@@ -456,6 +489,7 @@ export default function Game() {
           onAbort={handleAbort}
           onHome={handleHome}
           sessionEvents={sessionEvents}
+          focusTask={focusTask}
         />
       )}
 
@@ -536,6 +570,7 @@ export default function Game() {
                   : `☕ พักเบรก (${settings.short_break_min} นาที)`}
               </button>
               <button className="btn" onClick={skipBreak}>⏭️ ข้ามพัก — เริ่มโฟกัสต่อ</button>
+              <button className="btn btn-sm" onClick={shareSummary}>📤 แชร์สรุป session</button>
             </div>
           </div>
         </div>
