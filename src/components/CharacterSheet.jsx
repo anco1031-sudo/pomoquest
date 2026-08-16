@@ -338,6 +338,8 @@ export default function CharacterSheet() {
                     <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
                   ) : i.type === 'scroll' ? (
                     <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>
+                  ) : i.type === 'blueprint' ? (
+                    <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📋 เรียนรู้สูตร</button>
                   ) : i.type === 'junk' ? (
                     <span className="junk-note">ขายได้ที่แคมป์</span>
                   ) : (

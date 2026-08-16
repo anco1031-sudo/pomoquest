@@ -1,4 +1,4 @@
-import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS } from './data.js';
+import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -38,21 +38,49 @@ export function bmStockFor(visit) {
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   const scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
   const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
-  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll');
+  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery');
   const spec = pick(specPool);
   // ของพิเศษ exclusive หลุดมาจาก daily quest (ยกเว้น ถุงเงินนำโชค id 40 — กันวนซื้อแล้วใช้ +150 ทอง)
   const bmExclusive = pick(ITEMS.filter((i) => i.exclusive && i.id !== 40));
+  // กล่องลึกลับ — ซื้อแล้วเปิดเลย (สุ่มของคุ้ม/เจ๊ง deterministic จากค่ายพัก) — ไม่เข้าสู่กระเป๋า
+  const box = ITEM_BY_ID[MYSTERY_BOX_ID];
   return [
     { ...scroll, ...bmDisc(scroll, 0.85), bmTag: 'คัมภีร์หายาก' },
     { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
     { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
     { ...bmExclusive, ...bmDisc(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
+    { ...box, ...bmDisc(box, 1), bmTag: 'กล่องลึกลับ (เสี่ยงโชค)' },
   ];
 }
 
 export function blackMarketStock(visit, c = null) {
   if (!visit || !blackMarketOpen(visit, bmExtraChance(c))) return null;
   return bmStockFor(visit);
+}
+
+// ----- กล่องลึกลับตลาดมืด — ซื้อแล้วสุ่มของ (deterministic จาก visit — เปิดหน้าเดิมได้ของเดิม) -----
+// คัมภีร์สกิล 5% · ของหายาก 20% · เกียร์ที่ใช้ได้ 25% · ยา/ของใช้ 50%
+export function mysteryBoxRoll(visit, c) {
+  const rng = seededRng(`box-${visit}-${c?.id ?? 0}`);
+  const pick = (arr) => arr[Math.floor(rng() * arr.length)]; // ใช้ rng ที่ seed แล้ว — เปิดหน้าเดิมได้ของเดิม
+  const roll = rng();
+  const lvl = c?.level ?? 1;
+  if (roll < 0.05) return ITEM_BY_ID[pick(SCROLL_ITEMS)];
+  if (roll < 0.25) return ITEM_BY_ID[pick(RARE_JUNK)];
+  if (roll < 0.5) {
+    const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'mystery' && i.type !== 'blueprint' && (!i.classReq || i.classReq.includes(c?.class)) && (i.type === 'consumable' || (i.lvl || 1) <= lvl + 1));
+    if (pool.length) return pick(pool);
+  }
+  const items = [1, 2, 3, 4, 5, 6, 7, 150].map((id) => ITEM_BY_ID[id]).filter(Boolean);
+  return pick(items);
+}
+
+// ----- บอสเร่ร่อน (รายสัปดาห์) — deterministic จาก (สัปดาห์, ตัวละคร, เมือง) ~35% ของสัปดาห์ -----
+export function wanderingBossAt(weekKey, c, cityIndex = 0) {
+  if (!weekKey) return null;
+  const rng = seededRng(`wander-${weekKey}-${c?.id ?? 0}-${cityIndex}`);
+  if (rng() > 0.35) return null; // สัปดาห์นี้ไม่มีบอสเร่ร่อน
+  return WANDERING_BOSSES[Math.floor(rng() * WANDERING_BOSSES.length)];
 }
 
 // ----- ของแถม (พ่อค้า/ตลาดมืด "ไม่อยากได้" ของชิ้นนี้ — ราคา 0) -----
@@ -70,6 +98,7 @@ export function campFreebieId(visit, c, stockRows) {
   const eligible = pool.filter((s) => {
     const it = ITEM_BY_ID[s.item_id];
     if (!it || it.exclusive) return false;
+    if (it.type === 'mystery' || it.type === 'blueprint') return false; // กล่องลึกลับ/แบบแปลนไม่แจกฟรี
     // เกียร์ที่ยังสวมไม่ได้ (เลเวลเกิน c.level+1) ไม่สุ่มให้ฟรี — กันของแถมที่กดซื้อไม่ได้
     if (it.type !== 'consumable' && (it.lvl || 1) > (c?.level ?? 1) + 1) return false;
     return true;
@@ -96,14 +125,15 @@ export function seededRng(str) {
 // แต่พ่อค้าอาจ "ต้องการ" ของบางชิ้น → ยอมจ่ายแพงขึ้น (x1.1–1.6)
 // จังหวะราคา = รายวัน (dayKey YYYY-MM-DD) — ราคาคงที่ทั้งวัน แล้วเปลี่ยนทุกวัน
 // ทำให้ถือของรอวันทีพ่อค้าต้องการได้ คำนวณจาก seed ของ dayKey+itemId → หน้าจอแสดงและตอนขายได้ราคาเดียวกันเสมอ
-export function campSellPrice(item, dayKey) {
+export function campSellPrice(item, dayKey, cityIndex = 0) {
   const base = item?.price || 0;
   const id = item?.item_id ?? item?.id ?? 0; // รองรับทั้งแถว inventory (item_id) และออบเจกต์ไอเทม (id)
-  if (!dayKey) return { price: Math.round(base * 0.5), wanted: false, mult: 0.5 };
+  const cityMult = 1 + Math.max(0, cityIndex || 0) * 0.05; // เมืองยิ่งไกล พ่อค้ารับซื้อแพงขึ้น (x1.05/เมือง)
+  if (!dayKey) return { price: Math.max(1, Math.round(base * 0.5 * cityMult)), wanted: false, mult: 0.5 };
   const rng = mulberry32(hashSeed(`${dayKey}:sell:${id}`));
   const wanted = rng() < 0.25;
   const mult = wanted ? 1.1 + rng() * 0.5 : 0.4 + rng() * 0.2;
-  return { price: Math.max(1, Math.round(base * mult)), wanted, mult };
+  return { price: Math.max(1, Math.round(base * mult * cityMult)), wanted, mult };
 }
 
 // ราคาซื้อในร้านค้าค่ายพักตามวัน — เชื่อมกับระบบ demand เดียวกันกับราคาขาย (seed เดียวกัน)
@@ -161,7 +191,7 @@ const itemOf = (id) => (id ? ITEM_BY_ID[id] || null : null);
 const REQ_LABEL = { atk: '⚔️ ATK', def: '🛡️ DEF', spd: '👟 SPD', mp: '💧 MP', crit: '🎯 CRIT' };
 export function equipBlockReason(c, item) {
   if (!item) return 'ไอเทมไม่พบ';
-  if (item.type === 'consumable' || item.type === 'junk' || item.type === 'scroll') return null;
+  if (item.type === 'consumable' || item.type === 'junk' || item.type === 'scroll' || item.type === 'blueprint' || item.type === 'mystery') return null;
   // เรียง: เฉพาะคลาส (ข้ามไม่ได้) → เลเวล (อัปได้เร็วสุด) → ค่าสถานะ (ต้องสะสม)
   if (item.classReq && !item.classReq.includes(c.class)) {
     const names = item.classReq.map((k) => CLASSES[k]?.name || k).join('/');
@@ -479,6 +509,10 @@ export function rollEvent(c, forceKey = null) {
         // คัมภีร์สกิลหายาก — โอกาสน้อยมาก (~0.36% ต่อสมบัติ) เรียนสกิลใหม่ได้
         item = ITEM_BY_ID[pick(SCROLL_ITEMS)];
         base.learnedSkill = SCROLL_SKILL_BY_ID[item.learn_skill]?.name || null;
+      } else if (roll < 0.07) {
+        // แบบแปลนสูตรคราฟต์ — โอกาสสูงกว่าใบสกิลนิดหน่อย (~0.48% ต่อสมบัติ) เรียนสูตรแล้วคราฟต์ได้
+        item = ITEM_BY_ID[pick(BLUEPRINT_ITEMS)];
+        base.learnedRecipe = RECIPE_BY_ID[item.learn_recipe]?.name || null;
       } else if (roll < 0.21) {
         item = ITEM_BY_ID[pick(RARE_JUNK)]; // ของขวัญหายาก — ดรอปยาก (ออกทางนี้ทางเดียว)
       } else {
@@ -493,8 +527,8 @@ export function rollEvent(c, forceKey = null) {
         }
         item = pick(weighted);
       }
-      base.item = { id: item.id, name: item.name, icon: item.icon, lvl: item.lvl || 1, type: item.type, learn_skill: item.learn_skill || null };
-      base.detail += ` — และพบ ${item.icon} ${item.name}!${base.learnedSkill ? ` (เรียนรู้สกิล ${base.learnedSkill})` : ''}`;
+      base.item = { id: item.id, name: item.name, icon: item.icon, lvl: item.lvl || 1, type: item.type, learn_skill: item.learn_skill || null, learn_recipe: item.learn_recipe || null };
+      base.detail += ` — และพบ ${item.icon} ${item.name}!${base.learnedSkill ? ` (เรียนรู้สกิล ${base.learnedSkill})` : ''}${base.learnedRecipe ? ` (เรียนรู้สูตร ${base.learnedRecipe})` : ''}`;
     }
     base.logType = 'treasure';
     return base;
@@ -577,13 +611,13 @@ export const setBossAtk = (fight) => {
 // ดาเมจขั้นต่ำที่ต้องทำในเทิร์นที่บอสชาร์จ เพื่อสลายท่าไม้ตาย
 const chargeBreakAt = (fight) => Math.max(1, Math.round(fight.boss.maxHp * BOSS_CHARGE_BREAK));
 
-export function generateBoss(level, cityIndex, c = null) {
+export function generateBoss(level, cityIndex, c = null, overrideBoss = null) {
   const round = exploreRound(c);
-  const isAlt = round >= altBossAt(cityIndex);
-  const boss = isAlt ? ALT_BOSSES[cityIndex % ALT_BOSSES.length] : BOSSES[cityIndex % BOSSES.length];
+  const isAlt = !overrideBoss && round >= altBossAt(cityIndex);
+  const boss = overrideBoss || (isAlt ? ALT_BOSSES[cityIndex % ALT_BOSSES.length] : BOSSES[cityIndex % BOSSES.length]);
   const loadout = BOSS_LOADOUTS[cityIndex % BOSS_LOADOUTS.length] || [];
   const skills = loadout.map((k) => BOSS_SKILLS[k]).filter(Boolean);
-  const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.15 : 1); // บอสลับโหดกว่าเล็กน้อย (ของพิเศษเป็นรางวัล ไม่ใช่กำแพง)
+  const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.15 : overrideBoss ? 1.2 : 1); // บอสลับ/บอสเร่ร่อนโหดกว่าเล็กน้อย (รางวัลเป็นสิ่งตอบแทน)
   const cityPow = 1 + cityIndex * 0.05; // เมืองยิ่งลึก ยิ่งแข็ง (x1.05/เมือง)
   const maxHp = Math.round((90 + 32 * level) * em * cityPow);
   const atk = Math.round((9 + 2.5 * level) * em * cityPow);
@@ -591,6 +625,7 @@ export function generateBoss(level, cityIndex, c = null) {
     name: boss.name,
     icon: boss.icon,
     isAlt,
+    isWander: !!overrideBoss, // 🐉 บอสเร่ร่อน (รายสัปดาห์) — ของรางวัลการันตี + แบบแปลน
     loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
     ult: BOSS_ULTS[boss.ult] || BOSS_ULTS.smash, // ท่าไม้ตายเฉพาะตัว (ชาร์จพลัง) — สไตล์ต่างกันตามบอส
     maxHp,

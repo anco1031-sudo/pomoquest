@@ -6,17 +6,17 @@ import Database from 'better-sqlite3';
 import {
   db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
-  getSkillRow, learnSkill, getEpoch, rotateEpoch,
+  getSkillRow, learnSkill, getEpoch, rotateEpoch, learnRecipe, getLearnedRecipes, addTrophy, getTrophies,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ALT_BOSSES, altBossAt,
-  ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS,
+  ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT, campFreebieId,
   rewardMult, dropMult, priceMult, challengeOf, CHALLENGES, festivalFor, storyReqMet, storyReqLabel,
-  exploreMult, exploreRewardMult, bmExtraChance,
+  exploreMult, exploreRewardMult, bmExtraChance, mysteryBoxRoll, wanderingBossAt,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -559,13 +559,27 @@ router.get('/camp', (req, res) => {
     return { ...base, price: free ? 0 : Math.round(m.price * pm), originalPrice: Math.round(base.price * pm), priceMult: free ? 1 : m.mult, hot: free ? false : m.hot, sale: free ? false : m.sale, free: free ? 1 : 0, bought: s.qty >= 1 ? 1 : 0 };
   }).filter(Boolean);
   // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ — จังหวะรายวัน (พ่อค้าอยากได้ของบางชิ้น → แพงขึ้น, เปลี่ยนทุกวัน)
-  // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — ปรับราคาที่โชว์ให้ตรงกับที่จ่ายจริง
+  // เมืองยิ่งไกล รับซื้อแพงขึ้น (x1.05/เมือง) · ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — ปรับราคาที่โชว์ให้ตรงกับที่จ่ายจริง
   const inventory = getInventory(c.id);
   const sellPrices = Object.fromEntries(inventory.map((inv) => {
-    const sp = campSellPrice(inv, dayKey);
+    const sp = campSellPrice(inv, dayKey, c.city_index);
     if (bm && inv.type === 'junk') sp.price = Math.round(sp.price * BM_JUNK_MULT);
     return [inv.item_id, sp];
   }));
+  // สูตรคราฟต์ที่เรียนรู้แล้ว (จากแบบแปลน) — พร้อมสถานะวัสดุในกระเป๋า (โชว์ในแท็บ 🛠️ คราฟต์)
+  const recipes = getLearnedRecipes(c.id).map((rid) => {
+    const rc = RECIPE_BY_ID[rid];
+    if (!rc) return null;
+    const result = ITEM_BY_ID[rc.result.id];
+    return {
+      id: rc.id, name: rc.name, icon: rc.icon, desc: rc.desc,
+      result: { id: result?.id, name: result?.name, icon: result?.icon, qty: rc.result.qty },
+      materials: rc.materials.map((m) => {
+        const it = ITEM_BY_ID[m.id];
+        return { id: m.id, name: it?.name, icon: it?.icon, qty: m.qty, have: inventory.find((x) => x.item_id === m.id)?.qty || 0 };
+      }),
+    };
+  }).filter(Boolean);
   res.json({
     ...serialize(c),
     inventory,
@@ -574,6 +588,8 @@ router.get('/camp', (req, res) => {
     festival: fest || null,
     blackMarket: bm ? { items: shop.filter((s) => s.bm), junkMult: BM_JUNK_MULT } : null,
     quests: rollQuests(c.level, 3),
+    recipes,
+    trophies: getTrophies(c.id),
   });
 });
 
@@ -609,13 +625,20 @@ router.post('/shop/buy', (req, res) => {
   }
   if (c.gold < price) return res.status(400).json({ error: `ทองไม่พอ! (ต้องใช้ ${price} ทอง)` });
   c.gold -= price;
-  addItem(c.id, itemId, 1);
+  // กล่องลึกลับ — เปิดเลย ไม่เข้าสู่กระเป๋า (สุ่ม deterministic จากค่ายพัก — เปิดหน้าเดิมได้ของเดิม)
+  let boxItem = null;
+  if (itemId === MYSTERY_BOX_ID) {
+    boxItem = mysteryBoxRoll(visit, c);
+    if (boxItem) addItem(c.id, boxItem.id, 1);
+  } else {
+    addItem(c.id, itemId, 1);
+  }
   db.prepare('UPDATE camp_shop SET qty = qty + 1 WHERE character_id = ? AND visit = ? AND item_id = ?').run(c.id, visit, itemId);
   updateCharacter(c);
   addLog(c.id, {
     type: 'shop',
-    title: fromFree ? '🎁 ของแถมฟรี' : fromBm ? '🖤 ซื้อของตลาดมืด' : '🛒 ซื้อของ',
-    detail: fromFree ? `ได้ ${item.icon} ${item.name} ฟรี (พ่อค้าไม่อยากได้ — ของแถม)` : `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)${fromBm ? ' (ตลาดมืด)' : ''}`,
+    title: fromFree ? '🎁 ของแถมฟรี' : boxItem ? '🎁 เปิดกล่องลึกลับ' : fromBm ? '🖤 ซื้อของตลาดมืด' : '🛒 ซื้อของ',
+    detail: boxItem ? `เปิด ${item.icon} ${item.name} ได้ ${boxItem.icon} ${boxItem.name}` : fromFree ? `ได้ ${item.icon} ${item.name} ฟรี (พ่อค้าไม่อยากได้ — ของแถม)` : `ซื้อ ${item.icon} ${item.name} (-${price} ทอง)${fromBm ? ' (ตลาดมืด)' : ''}`,
     gold: -price,
   });
   bumpDaily(c.id, 'items_bought', 1);
@@ -631,7 +654,7 @@ router.post('/shop/buy', (req, res) => {
     db.prepare('UPDATE progress SET bm_buys = ?, freebies = ? WHERE id = ?').run(prog.bm_buys || 0, prog.freebies || 0, prog.id);
     ach = checkAchievements(c, prog);
   }
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: fromFree ? `🎁 ของแถม! ได้ ${item.name} ฟรี (พ่อค้าไม่อยากได้)` : `ซื้อ ${item.name} สำเร็จ (${price} ทอง)`, achievements: ach.fresh, ...dailyPayload(c) });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: fromFree ? `🎁 ของแถม! ได้ ${item.name} ฟรี (พ่อค้าไม่อยากได้)` : boxItem ? `🎁 เปิด ${item.name} แล้ว! ได้ ${boxItem.icon} ${boxItem.name}` : `ซื้อ ${item.name} สำเร็จ (-${price} ทอง)`, achievements: ach.fresh, ...dailyPayload(c) });
 });
 
 router.post('/shop/sell', (req, res) => {
@@ -639,8 +662,8 @@ router.post('/shop/sell', (req, res) => {
   const { itemId, qty = 1 } = req.body || {};
   const inv = getInventory(c.id).find((i) => i.item_id === itemId);
   if (!inv || inv.qty < qty) return res.status(400).json({ error: 'ไม่มีไอเทมพอจะขาย' });
-  // ราคาขายตามวันนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น) — ราคาเดียวกับที่โชว์ใน /camp
-  const sell = campSellPrice(inv, today());
+  // ราคาขายตามวันนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น) + เมืองยิ่งไกลขายแพงขึ้น — ราคาเดียวกับที่โชว์ใน /camp
+  const sell = campSellPrice(inv, today(), c.city_index);
   // ตลาดมืดรับซื้อของขวัญ (junk) แพงกว่าปกติ +25% — สำรวจเมืองเดิมต่อ → เจอบ่อยขึ้น
   const bmOpen = req.body.visit ? blackMarketOpen(req.body.visit, bmExtraChance(c)) : false;
   const toBm = bmOpen && inv.type === 'junk';
@@ -671,7 +694,7 @@ router.post('/shop/sell', (req, res) => {
     inventory: getInventory(c.id),
     achievements: ach.fresh,
     levelUps: { levels: ach.ups, statPoints: c.stat_points },
-    message: toBm ? `🖤 ตลาดมืดรับซื้อแพงกว่า! ได้ ${gain} ทอง` : sell.wanted ? `🔥 พ่อค้าต้องการของชิ้นนี้! ได้ ${gain} ทอง` : `ขายได้ ${gain} ทอง`,
+    message: toBm ? `🖤 ตลาดมืดรับซื้อแพงกว่า! ได้ +${gain} ทอง` : sell.wanted ? `🔥 พ่อค้าต้องการของชิ้นนี้! ได้ +${gain} ทอง` : `ขายได้ +${gain} ทอง`,
   });
 });
 
@@ -684,6 +707,24 @@ router.post('/inventory/use', (req, res) => {
   const stats = computeStats(c);
   let used = false;
   let ups = 0;
+
+  // แบบแปลนสูตรคราฟต์ — ใช้แล้วเรียนรู้สูตร (เรียนซ้ำไม่ได้ เหมือนคัมภีร์สกิล)
+  if (item.type === 'blueprint') {
+    const rc = RECIPE_BY_ID[item.learn_recipe];
+    if (!rc) return res.status(400).json({ error: 'แบบแปลนนี้ใช้ไม่ได้' });
+    if (getLearnedRecipes(c.id).includes(rc.id)) return res.status(400).json({ error: `เรียนรู้สูตร ${rc.name} ไปแล้ว — แบบแปลนซ้ำใช้ไม่ได้` });
+    learnRecipe(c.id, rc.id);
+    db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+    addLog(c.id, { type: 'recipe_learn', title: `📋 เรียนรู้สูตรใหม่: ${rc.icon} ${rc.name}`, detail: `จาก ${item.name} — ไปคราฟต์ได้ที่แท็บ 🛠️ คราฟต์ในค่ายพัก` });
+    const ach = checkAchievements(c, getProgress(c.id));
+    return res.json({
+      ...serialize(c), inventory: getInventory(c.id),
+      message: `📋 เรียนรู้สูตร ${rc.name} แล้ว! ไปคราฟต์ที่ค่ายพัก`,
+      achievements: ach.fresh,
+      ...dailyPayload(c),
+      levelUps: { levels: ach.ups, statPoints: c.stat_points },
+    });
+  }
 
   // คัมภีร์สกิลหายาก — ใช้แล้วเรียนรู้สกิลใหม่ (เรียนซ้ำไม่ได้)
   if (item.type === 'scroll') {
@@ -728,6 +769,31 @@ router.post('/inventory/use', (req, res) => {
     ...dailyPayload(c),
     levelUps: { levels: ups + ach.ups, statPoints: c.stat_points },
   });
+});
+
+// ----- คราฟต์ (ต้องเรียนรู้สูตรจากแบบแปลนก่อน — วัสดุคือของขวัญ junk ในกระเป๋า) -----
+router.post('/craft', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { recipeId } = req.body || {};
+  const rc = RECIPE_BY_ID[recipeId];
+  if (!rc) return res.status(400).json({ error: 'สูตรคราฟต์ไม่พบ' });
+  if (!getLearnedRecipes(c.id).includes(rc.id)) return res.status(400).json({ error: 'ยังไม่รู้สูตรนี้ — ต้องเรียนรู้จากแบบแปลนก่อน' });
+  const inv = getInventory(c.id);
+  for (const m of rc.materials) {
+    const have = inv.find((i) => i.item_id === m.id)?.qty || 0;
+    if (have < m.qty) {
+      const it = ITEM_BY_ID[m.id];
+      return res.status(400).json({ error: `วัสดุไม่พอ: ${it?.icon || ''} ${it?.name || m.id} ต้องใช้ ${m.qty} ชิ้น (มี ${have})` });
+    }
+  }
+  for (const m of rc.materials) {
+    db.prepare('UPDATE inventory SET qty = qty - ? WHERE character_id = ? AND item_id = ?').run(m.qty, c.id, m.id);
+  }
+  const result = ITEM_BY_ID[rc.result.id];
+  addItem(c.id, result.id, rc.result.qty || 1);
+  const matLabel = rc.materials.map((m) => `${ITEM_BY_ID[m.id]?.icon} ${ITEM_BY_ID[m.id]?.name} x${m.qty}`).join(' + ');
+  addLog(c.id, { type: 'craft', title: `🛠️ คราฟต์: ${rc.icon} ${rc.name}`, detail: `${matLabel} → ได้ ${result.icon} ${result.name} x${rc.result.qty || 1}` });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `🛠️ คราฟต์ ${result.icon} ${result.name} สำเร็จ!` });
 });
 
 const SLOT_NAMES = {
@@ -947,7 +1013,11 @@ router.get('/boss', (req, res) => {
   const c = requireChar(res); if (!c) return;
   let fight = fights.get(c.id);
   if (!fight) {
-    fight = { boss: generateBoss(c.level, c.city_index, c) };
+    // บอสเร่ร่อนรายสัปดาห์ — สุ่มมาแทนบอสปกติของเมืองในบางสัปดาห์ (deterministic จากสัปดาห์+ตัวละคร+เมือง)
+    // POMOQUEST_NO_WANDER=1 ปิดบอสเร่ร่อน (ใช้ในเทสต์ — กันผลขึ้นกับสัปดาห์จริง) · POMOQUEST_WEEK=... บังคับสัปดาห์ (dev)
+    const weekKey = process.env.POMOQUEST_WEEK || db.prepare("SELECT strftime('%Y-W%W','now','localtime') AS w").get().w;
+    const wander = process.env.POMOQUEST_NO_WANDER ? null : wanderingBossAt(weekKey, c, c.city_index);
+    fight = { boss: generateBoss(c.level, c.city_index, c, wander) };
     fights.set(c.id, fight);
   }
   res.json({ ...serialize(c), boss: { ...fight.boss, hp: fight.boss.hp }, fight: fightFlags(fight) });
@@ -996,7 +1066,19 @@ router.post('/boss/act', (req, res) => {
     // ชนะด้วยฝีมือ (สลายท่าไม้ตาย ≥1 ครั้ง หรืออดทนสู้จนบอสสุดทน) → การันตีของรางวัลบอส (แทนสุ่ม 50%)
     const masterWin = (result.breaks || 0) > 0 || result.furyWin;
     let lootNote = '';
-    if (fight.boss.isAlt && fight.boss.loot) {
+    if (fight.boss.isWander && fight.boss.loot) {
+      // บอสเร่ร่อน — ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ (แหล่งหาแบบแปลนที่แน่นอน)
+      const loot = ITEM_BY_ID[fight.boss.loot];
+      if (loot) {
+        addItem(c.id, loot.id);
+        lootNote = ` และได้ ${loot.icon} ${loot.name}! (ของรางวัลบอสเร่ร่อน)`;
+      }
+      const bp = ITEM_BY_ID[BLUEPRINT_ITEMS[Math.floor(Math.random() * BLUEPRINT_ITEMS.length)]];
+      if (bp) {
+        addItem(c.id, bp.id);
+        lootNote += ` + แบบแปลน ${bp.icon} ${bp.name}`;
+      }
+    } else if (fight.boss.isAlt && fight.boss.loot) {
       const owned = getInventory(c.id).some((i) => i.item_id === fight.boss.loot);
       if (owned) {
         c.gold += 150;
@@ -1016,6 +1098,7 @@ router.post('/boss/act', (req, res) => {
       }
     }
     updateCharacter(c);
+    addTrophy(c.id, fight.boss.name, fight.boss.icon); // ห้องเก็บถ้วยรางวัล — ชนะบอสครั้งแรกของบอสนั้น (INSERT OR IGNORE)
     addLog(c.id, { type: 'boss_win', title: '🏆 ชนะบอส!', detail: `กำราบ ${fight.boss.name} ได้!${lootNote}`, xp: result.xp, gold: result.gold });
     ach = checkAchievements(c, prog, {
       bossWin: {

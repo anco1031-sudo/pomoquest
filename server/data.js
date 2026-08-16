@@ -62,8 +62,9 @@ export const SCROLL_SKILLS = [
 ];
 export const SCROLL_SKILL_BY_ID = Object.fromEntries(SCROLL_SKILLS.map((s) => [s.id, s]));
 
-// item.type: 'consumable' | 'junk' | 'scroll' | 'weapon' | 'shield' | 'armor' | 'head' | 'arms' | 'legs' | 'feet' | 'accessory'
+// item.type: 'consumable' | 'junk' | 'scroll' | 'blueprint' | 'mystery' | 'weapon' | 'shield' | 'armor' | 'head' | 'arms' | 'legs' | 'feet' | 'accessory'
 // item.handed: (เฉพาะ weapon) 1 = มือเดียว, 2 = สองมือ (ปิดช่องมือรอง)
+// item.learn_recipe: (เฉพาะ blueprint) id สูตรคราฟต์ — ใช้แล้วเรียนรู้สูตร (ต้องเรียนรู้ก่อนถึงจะคราฟต์ได้)
 export const ITEMS = [
   { id: 1,  name: 'ยาบำบัดน้อย', icon: '🧪', type: 'consumable', heal_pct: 0.3,  mana_pct: 0,   price: 25,  desc: 'ฟื้น HP 30% ของพลังสูงสุด' },
   { id: 2,  name: 'ยาบำบัดใหญ่', icon: '⚗️', type: 'consumable', heal_pct: 0.6,  mana_pct: 0,   price: 60,  desc: 'ฟื้น HP 60% ของพลังสูงสุด' },
@@ -195,6 +196,16 @@ export const ITEMS = [
   { id: 113, name: 'คัมภีร์: พิษร้าย',   icon: '📜', type: 'scroll', learn_skill: 'sc_venom',    price: 280, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🐍 พิษร้าย (ทุกคลาสเรียนได้)' },
   { id: 114, name: 'คัมภีร์: โล่เวท',    icon: '📜', type: 'scroll', learn_skill: 'sc_guard',    price: 260, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🛡️ โล่เวท (ทุกคลาสเรียนได้)' },
   { id: 115, name: 'คัมภีร์: สายฟ้าแลบ', icon: '📜', type: 'scroll', learn_skill: 'sc_haste',    price: 250, desc: '✦ หายาก — ใช้แล้วเรียนรู้สกิล 🌀 สายฟ้าแลบ (ทุกคลาสเรียนได้)' },
+
+  // ---- แบบแปลนสูตรคราฟต์ (type: blueprint) — เจอจากกล่องสมบัติ/บอสเร่ร่อน (โอกาสสูงกว่าใบสกิลนิดหน่อย) ----
+  // ใช้แล้วเรียนรู้สูตร (learn_recipe) — เรียนไปแล้วใช้ไม่ได้ · ต้องมีวัสดุถึงจะคราฟต์ได้ (แท็บ 🛠️ คราฟต์ที่ค่ายพัก)
+  { id: 210, name: 'แบบแปลน: ยาบำบัดใหญ่', icon: '📋', type: 'blueprint', learn_recipe: 'rc_potion_big',  price: 60,  desc: '✦ สูตรคราฟต์ — ใช้แล้วเรียนรู้การผสม ⚗️ ยาบำบัดใหญ่' },
+  { id: 211, name: 'แบบแปลน: ยาฟื้นฟูเต็ม', icon: '📋', type: 'blueprint', learn_recipe: 'rc_elixir',      price: 90,  desc: '✦ สูตรคราฟต์ — ใช้แล้วเรียนรู้การผสม ✨ ยาฟื้นฟูเต็ม' },
+  { id: 212, name: 'แบบแปลน: เกราะมังกร',  icon: '📋', type: 'blueprint', learn_recipe: 'rc_dragon_armor', price: 180, desc: '✦ สูตรคราฟต์ — ใช้แล้วเรียนรู้การหลอม 🐲 เกราะมังกร' },
+  { id: 213, name: 'แบบแปลน: หมวกมังกร',   icon: '📋', type: 'blueprint', learn_recipe: 'rc_dragon_head',  price: 150, desc: '✦ สูตรคราฟต์ — ใช้แล้วเรียนรู้การหลอม ⛑️ หมวกมังกร' },
+
+  // ---- กล่องลึกลับตลาดมืด (type: mystery) — ซื้อแล้วเปิดเลย (สุ่มของคุ้ม/เจ๊ง deterministic จากค่ายพัก) ไม่เข้าสู่กระเป๋า ----
+  { id: 220, name: 'กล่องลึกลับ', icon: '📦', type: 'mystery', price: 180, desc: '✦ กล่องปริศนาจากตลาดมืด — ซื้อแล้วเปิดดูเลย! (สุ่มของคุ้มหรือเจ๊ง)' },
 ];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
@@ -239,6 +250,13 @@ export const ALT_BOSSES = [
   { name: 'ราชันเงา',   icon: '👁️', loot: 160, ult: 'dodge' },
   { name: 'ปีศาจทมิฬ',  icon: '😈', loot: 161, ult: 'regen' },
   { name: 'อสูรโบราณ',  icon: '🗿', loot: 162, ult: 'shield' },
+];
+
+// ----- บอสเร่ร่อน (รายสัปดาห์) — สุ่มมาแทนบอสปกติของเมืองในบางสัปดาห์ ให้ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ -----
+export const WANDERING_BOSSES = [
+  { name: 'อสูรขยะ',     icon: '🗑️', ult: 'smash', loot: 100, hint: 'ของที่ถูกทิ้งรวมร่างเป็นปีศาจ — แบบแปลนสูตรคราฟต์ติดตัวไปด้วย' },
+  { name: 'ยักษ์กลางคืน', icon: '🌙', ult: 'dodge', loot: 101, hint: 'ยักษ์ที่ออกหากินกลางคืน — แบบแปลนสูตรคราฟต์ติดตัวไปด้วย' },
+  { name: 'มังกรเร่ร่อน', icon: '🐉', ult: 'regen', loot: 102, hint: 'มังกรที่บินข้ามเมืองมา — แบบแปลนสูตรคราฟต์ติดตัวไปด้วย' },
 ];
 
 // ----- ท่าไม้ตายของบอส (ชาร์จพลัง) — แต่ละบอสมีสไตล์ต่างกัน -----
@@ -348,9 +366,20 @@ export const RARE_JUNK = [100, 101, 102];
 // คัมภีร์สกิลหายาก — เจอจากกล่องสมบัติเท่านั้น (โอกาสน้อยมาก ~3% ของการดรอปไอเทม)
 export const SCROLL_ITEMS = [110, 111, 112, 113, 114, 115];
 
+// ----- สูตรคราฟต์ (เรียนรู้จากแบบแปลน blueprint — เหมือนสกิลจากคัมภีร์) -----
+export const RECIPES = [
+  { id: 'rc_potion_big',   name: 'ยาบำบัดใหญ่', icon: '⚗️', materials: [{ id: 122, qty: 2 }, { id: 123, qty: 2 }], result: { id: 2, qty: 1 }, desc: 'ผสม ขนหมาป่า x2 + เจลสไลม์ x2 → ⚗️ ยาบำบัดใหญ่ (ฟื้น HP 60%)' },
+  { id: 'rc_elixir',       name: 'ยาฟื้นฟูเต็ม', icon: '✨', materials: [{ id: 120, qty: 3 }, { id: 121, qty: 2 }], result: { id: 4, qty: 1 }, desc: 'ผสม ฟันหนูยักษ์ x3 + ปีกค้างคาว x2 → ✨ ยาฟื้นฟูเต็ม (HP+MP 100%)' },
+  { id: 'rc_dragon_armor', name: 'เกราะมังกร',  icon: '🐲', materials: [{ id: 127, qty: 3 }, { id: 125, qty: 2 }], result: { id: 23, qty: 1 }, desc: 'หลอม เกล็ดมังกรน้อย x3 + ไม้กวาดแม่มด x2 → 🐲 เกราะมังกร (DEF+16)' },
+  { id: 'rc_dragon_head',  name: 'หมวกมังกร',   icon: '⛑️', materials: [{ id: 127, qty: 2 }, { id: 124, qty: 2 }], result: { id: 62, qty: 1 }, desc: 'หลอม เกล็ดมังกรน้อย x2 + เศษหินโกเลม x2 → ⛑️ หมวกมังกร (DEF+7)' },
+];
+export const RECIPE_BY_ID = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
+export const BLUEPRINT_ITEMS = [210, 211, 212, 213]; // แบบแปลน — เจอจากสมบัติ (โอกาสสูงกว่าใบสกิลนิดหน่อย) + บอสเร่ร่อนการันตี
+export const MYSTERY_BOX_ID = 220;
+
 // ร้านค้าขายเฉพาะไอเทมธรรมดา — ไอเทม exclusive (พิเศษ) หาซื้อไม่ได้, ของขวัญ (junk) และคัมภีร์ (scroll) ไม่ขายในร้าน
 // (item.type: consumable/weapon/armor/accessory, exclusive = ได้จาก Daily Quest เท่านั้น)
-export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && (i.type !== 'consumable' || [1, 2, 3, 4, 150].includes(i.id)));
+export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery' && (i.type !== 'consumable' || [1, 2, 3, 4, 150].includes(i.id)));
 
 // ----- ยศ (Rank) — อัปตามเวลาโฟกัสสะสม (นาที) -----
 export const RANKS = [

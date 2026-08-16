@@ -176,8 +176,8 @@ try {
     db.prepare('UPDATE character SET gold = 5000 WHERE id = ?').run(cid);
     r = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
     const bm = r.json.blackMarket;
-    // response ใช้ field `price` (ราคาลดแล้ว) + `bmNormal` (ราคาปกติ) — 4 ช่อง: คัมภีร์/ของหายาก/ของเถื่อน/ของพิเศษ exclusive
-    expect('camp: ตลาดมืด 4 ชิ้น ราคาลดกว่าปกติ', !!bm && bm.items.length === 4 && bm.items.every((i) => i.price < i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.price, i.bmNormal])));
+    // response ใช้ field `price` (ราคาลดแล้ว) + `bmNormal` (ราคาปกติ) — 5 ช่อง: คัมภีร์/ของหายาก/ของเถื่อน/ของพิเศษ exclusive + กล่องลึกลับ (ราคาเต็ม)
+    expect('camp: ตลาดมืด 5 ชิ้น (4 ราคาลด + กล่องลึกลับราคาเต็ม)', !!bm && bm.items.length === 5 && bm.items.filter((i) => i.id !== 220).every((i) => i.price < i.bmNormal) && bm.items.some((i) => i.id === 220 && i.price === i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.price, i.bmNormal])));
     expect('black market: มีของพิเศษ exclusive หลุดมา (ไม่ใช่ถุงเงินนำโชค 40)', !!bm?.items.some((i) => i.exclusive && i.id !== 40), JSON.stringify(bm?.items?.map((i) => i.name)));
     const r2 = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
     expect('black market: เปิดหน้าเดิมซ้ำ ของ/ราคาเหมือนเดิม (deterministic)', JSON.stringify(r.json.shop) === JSON.stringify(r2.json.shop));
@@ -250,6 +250,77 @@ try {
     }
   }
 
+  // --- ของใหม่: กล่องลึกลับตลาดมืด / คราฟต์จากแบบแปลน / ราคาขายตามเมือง / ถ้วยรางวัล / บอสเร่ร่อน ---
+  {
+    const { mysteryBoxRoll, wanderingBossAt, campSellPrice, generateBoss } = await import('../server/game.js');
+    const { WANDERING_BOSSES, ITEM_BY_ID } = await import('../server/data.js');
+
+    // ราคาขายตามเมือง: เมืองไกลขายแพงกว่า (x1.05/เมือง — เมือง index 11 ≈ x1.55)
+    const p0 = campSellPrice(ITEM_BY_ID[102], '2026-08-16', 0).price;
+    const p11 = campSellPrice(ITEM_BY_ID[102], '2026-08-16', 11).price;
+    expect('city sell: เมืองไกลขายแพงกว่า (~x1.05/เมือง)', p11 > p0 && p11 >= Math.round(p0 * 1.5) && p11 <= Math.round(p0 * 1.6), `p0=${p0} p11=${p11}`);
+    expect('city sell: deterministic (วัน+เมืองเดียวกัน ราคาเท่ากัน)', campSellPrice(ITEM_BY_ID[102], '2026-08-16', 5).price === campSellPrice(ITEM_BY_ID[102], '2026-08-16', 5).price);
+
+    // กล่องลึกลับ: deterministic จาก visit + สุ่มได้ไอเทมจริง (ไม่ใช่กล่องเอง)
+    const b1 = mysteryBoxRoll('box-test-1', { id: cid, level: 3, class: 'warrior' });
+    const b2 = mysteryBoxRoll('box-test-1', { id: cid, level: 3, class: 'warrior' });
+    expect('box: deterministic จาก visit (เปิดซ้ำได้ของเดิม)', b1?.id === b2?.id);
+    expect('box: ผลสุ่มเป็นไอเทมจริง (ไม่ใช่กล่อง 220)', !!b1 && b1.id !== 220 && !!ITEM_BY_ID[b1.id]);
+    // API: ซื้อกล่องลึกลับจากตลาดมืด → ได้ของ 1 ชิ้น ไม่ได้กล่องเข้าสู่กระเป๋า
+    let boxVisit = null;
+    for (let i = 0; i < 60 && !boxVisit; i++) {
+      const v = `box-api-${i}`;
+      const d = await api(`/camp?visit=${encodeURIComponent(v)}`);
+      if (d.json.shop?.some((x) => x.id === 220)) boxVisit = v;
+    }
+    expect('box api: เจอค่ายพักที่มีกล่องลึกลับ', !!boxVisit);
+    if (boxVisit) {
+      const boxPrice = (await api(`/camp?visit=${encodeURIComponent(boxVisit)}`)).json.shop.find((x) => x.id === 220).price;
+      const goldBefore = (await api('/state')).json.character.gold;
+      const sumQty = (inv) => (inv || []).reduce((a, i) => a + i.qty, 0);
+      const qtyBefore = sumQty((await api('/state')).json.inventory);
+      r = await api('/shop/buy', { method: 'POST', body: { itemId: 220, visit: boxVisit } });
+      const hasBox = r.json.inventory?.some((i) => i.item_id === 220);
+      expect('box api: ซื้อกล่อง (ทองลด) + เปิดได้ของ (ไม่ใช่กล่องเข้าช่อง)', r.status === 200 && r.json.character.gold === goldBefore - boxPrice && !hasBox && (r.json.message || '').includes('กล่อง'), r.json.error || r.json.message);
+      expect('box api: ได้ของ 1 ชิ้นเข้าสู่กระเป๋า', sumQty(r.json.inventory) === qtyBefore + 1, `before=${qtyBefore} after=${sumQty(r.json.inventory)}`);
+    }
+
+    // คราฟต์: เรียนรู้จากแบบแปลน (เหมือนสกิลจากคัมภีร์) → คราฟต์ต้องมีวัสดุ
+    addItem(cid, 210, 1); // แบบแปลน: ยาบำบัดใหญ่
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 210 } });
+    expect('craft: ใช้แบบแปลนเรียนรู้สูตรได้', r.status === 200 && (r.json.message || '').includes('เรียนรู้สูตร'), r.json.error || r.json.message);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 210 } });
+    expect('craft: แบบแปลนใช้ซ้ำไม่ได้ (เรียนรู้แล้ว)', r.status === 400);
+    r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_potion_big' } });
+    expect('craft: ไม่มีวัสดุ → คราฟต์ไม่ได้', r.status === 400 && (r.json.error || '').includes('วัสดุไม่พอ'), r.json.error || '');
+    addItem(cid, 122, 2); addItem(cid, 123, 2); // ขนหมาป่า x2 + เจลสไลม์ x2
+    r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_potion_big' } });
+    expect('craft: มีวัสดุ → คราฟต์ ยาบำบัดใหญ่ ได้', r.status === 200 && r.json.inventory?.some((i) => i.item_id === 2) && (r.json.message || '').includes('ยาบำบัดใหญ่'), r.json.error || r.json.message);
+    const q122 = db.prepare('SELECT qty FROM inventory WHERE character_id = ? AND item_id = 122').get(cid)?.qty || 0;
+    const q123 = db.prepare('SELECT qty FROM inventory WHERE character_id = ? AND item_id = 123').get(cid)?.qty || 0;
+    expect('craft: วัสดุถูกใช้ไป (ขนหมาป่า/เจลสไลม์ หมด)', q122 === 0 && q123 === 0, `122=${q122} 123=${q123}`);
+    r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_dragon_armor' } });
+    expect('craft: สูตรที่ยังไม่เรียน → คราฟต์ไม่ได้', r.status === 400 && (r.json.error || '').includes('แบบแปลน'), r.json.error || '');
+
+    // ถ้วยรางวัล: ชนะบอสครั้งแรกของบอสนั้น → เก็บถ้วย (ซ้ำไม่เพิ่ม)
+    db.prepare("INSERT OR IGNORE INTO trophy (character_id, boss_key, icon) VALUES (?, 'หัวหน้าโจรป่า', '🏴')").run(cid);
+    db.prepare("INSERT OR IGNORE INTO trophy (character_id, boss_key, icon) VALUES (?, 'หัวหน้าโจรป่า', '🏴')").run(cid);
+    r = await api('/camp?visit=trophy-test');
+    expect('trophy: /camp คืนรายการถ้วยรางวัล (ซ้ำไม่เพิ่ม)', r.json.trophies?.length === 1 && r.json.trophies[0].boss_key === 'หัวหน้าโจรป่า', JSON.stringify(r.json.trophies));
+
+    // บอสเร่ร่อน: deterministic จากสัปดาห์+ตัวละคร+เมือง + generateBoss รับบอส override
+    expect('wander: deterministic จากสัปดาห์+ตัวละคร+เมือง', JSON.stringify(wanderingBossAt('2026-W33', { id: cid }, 0)) === JSON.stringify(wanderingBossAt('2026-W33', { id: cid }, 0)));
+    let wBoss = null;
+    outer: for (let wk = 30; wk < 45; wk++) for (let ci = 0; ci < 12; ci++) { const b = wanderingBossAt(`2026-W${wk}`, { id: cid }, ci); if (b) { wBoss = b; break outer; } }
+    expect('wander: เจอบอสเร่ร่อนในสัปดาห์/เมืองที่สแกน', !!wBoss && WANDERING_BOSSES.includes(wBoss));
+    if (wBoss) {
+      const g = generateBoss(5, 3, null, wBoss);
+      expect('wander: generateBoss รับบอสเร่ร่อน (isWander + loot + ult)', g.isWander === true && g.name === wBoss.name && g.loot === wBoss.loot && !!g.ult, JSON.stringify({ name: g.name, isWander: g.isWander, loot: g.loot }));
+      const g2 = generateBoss(5, 3, null, null);
+      expect('wander: ไม่ override → บอสปกติ (isWander=false)', g2.isWander === false);
+    }
+  }
+
   // --- loot มอนสเตอร์ → นับ daily quest "คนเก็บขยะ" (ขาย junk เพิ่ม counter) ---
   {
     addItem(cid, 122, 1); // ขนหมาป่า (loot ของหมาป่าเถื่อน)
@@ -301,9 +372,9 @@ try {
     // --- dev: ตัวอย่างตลาดมืด (preview ล้วน — ไม่มีผลกับเกมจริง) ---
     const bmVisit = `bm-preview-${Date.now()}`;
     r = await devPost('/dev/black-market', { visit: bmVisit });
-    expect('dev bm: คืนรายการสินค้า 4 ชิ้น (preview)', r.status === 200 && Array.isArray(r.json.items) && r.json.items.length === 4, JSON.stringify(r.json.items || []).slice(0, 80));
+    expect('dev bm: คืนรายการสินค้า 5 ชิ้น (preview — +กล่องลึกลับ)', r.status === 200 && Array.isArray(r.json.items) && r.json.items.length === 5 && r.json.items.some((i) => i.id === 220), JSON.stringify(r.json.items || []).slice(0, 80));
     const bmItems = r.json.items;
-    expect('dev bm: ทุกชิ้นมีราคาลด (bmPrice) + tag', bmItems.every((i) => i.bmPrice > 0 && i.bmNormal > i.bmPrice && i.bmTag), '');
+    expect('dev bm: 4 ชิ้นแรกมีราคาลด (bmPrice) + tag · กล่องลึกลับราคาเต็ม', bmItems.filter((i) => i.id !== 220).every((i) => i.bmPrice > 0 && i.bmNormal > i.bmPrice && i.bmTag) && bmItems.find((i) => i.id === 220)?.bmNormal === bmItems.find((i) => i.id === 220)?.bmPrice, '');
     expect('dev bm: junkMult = 1.25', r.json.junkMult === 1.25, String(r.json.junkMult));
     // deterministic: เรียกซ้ำ visit เดียวกัน → ของเหมือนเดิม
     const r2 = await devPost('/dev/black-market', { visit: bmVisit });

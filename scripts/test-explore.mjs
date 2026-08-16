@@ -1,5 +1,6 @@
 // ทดสอบระบบสำรวจเมืองเดิมต่อ — ชนะบอสแล้วเลือกเดินทางต่อ/อยู่ต่อ + บอสลับ + ความยาก/รางวัล/ตลาดมืด + ราคาร้าน
 process.env.POMOQUEST_DB = `/tmp/pq-test-explore-${Date.now()}.db`;
+process.env.POMOQUEST_NO_WANDER = '1'; // ปิดบอสเร่ร่อนรายสัปดาห์ — กันผลขึ้นกับสัปดาห์จริง (ทดสอบบอสเมือง/บอสลับตรง ๆ)
 
 const express = (await import('express')).default;
 const routes = (await import('../server/routes.js')).default;
@@ -81,7 +82,10 @@ try {
     expect('boss/act: ชนะแล้วเมืองยังไม่ย้าย (รอเลือก)', win.character.cityIndex === 0, `cityIndex=${win.character.cityIndex}`);
     expect('boss/act: cityRound ยังเท่าเดิม (ไม่เพิ่มตอนชนะ)', win.character.cityRound === 1);
     // รางวัลบอส x exploreRewardMult (รอบ 1 = x1.2): base Lv.5 = 250+300=550 → 660
-    expect('boss/act: รางวัล XP คูณ exploreRewardMult (x1.2)', win.log.some((l) => l.includes('+660 XP')), win.log.join(' | '));
+    // (บังเอิญสลายท่าไม้ตายระหว่างรุมได้ → โบนัสฝีมือ +8%/ครั้ง สูงสุด +24% — ยอมรับช่วง 660..660x1.24 กันผล RNG)
+    const xpMatch = win.log.find((l) => /\+\d+ XP/.test(l))?.match(/\+(\d+) XP/);
+    const xpGot = xpMatch ? parseInt(xpMatch[1], 10) : 0;
+    expect('boss/act: รางวัล XP คูณ exploreRewardMult (x1.2 ±โบนัสสลาย)', xpGot >= 660 && xpGot <= Math.round(660 * 1.24), `XP=${xpGot} (คาด 660–${Math.round(660 * 1.24)})`);
 
     // --- เลือก "สำรวจเมืองเดิมต่อ" ---
     r = await api('/boss/after', { method: 'POST', body: { choice: 'stay' } });

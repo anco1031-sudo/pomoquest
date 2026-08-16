@@ -164,6 +164,21 @@ CREATE TABLE IF NOT EXISTS story_quest_done (
   done_at TEXT DEFAULT (datetime('now','localtime')),
   PRIMARY KEY (character_id, quest_id)
 );
+
+CREATE TABLE IF NOT EXISTS character_recipe (
+  character_id INTEGER NOT NULL,
+  recipe_id TEXT NOT NULL,
+  learned_at TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (character_id, recipe_id)
+);
+
+CREATE TABLE IF NOT EXISTS trophy (
+  character_id INTEGER NOT NULL,
+  boss_key TEXT NOT NULL,
+  icon TEXT,
+  won_at TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (character_id, boss_key)
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)
@@ -243,9 +258,10 @@ ensureColumn('item', 'use_xp', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'use_gold', 'INTEGER DEFAULT 0');
 ensureColumn('item', 'handed', 'INTEGER DEFAULT 1');
 ensureColumn('item', 'learn_skill', 'TEXT');
+ensureColumn('item', 'learn_recipe', 'TEXT');
 
-const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, handed, exclusive, learn_skill)
-  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @handed, @exclusive, @learn_skill)`);
+const insertItem = db.prepare(`INSERT OR IGNORE INTO item (id, name, icon, type, desc, hp_bonus, mp_bonus, atk_bonus, def_bonus, spd_bonus, crit_bonus, heal_pct, mana_pct, use_xp, use_gold, price, lvl, handed, exclusive, learn_skill, learn_recipe)
+  VALUES (@id, @name, @icon, @type, @desc, @hp_bonus, @mp_bonus, @atk_bonus, @def_bonus, @spd_bonus, @crit_bonus, @heal_pct, @mana_pct, @use_xp, @use_gold, @price, @lvl, @handed, @exclusive, @learn_skill, @learn_recipe)`);
 const seedItems = db.transaction(() => {
   for (const i of ITEMS) {
     insertItem.run({
@@ -257,6 +273,7 @@ const seedItems = db.transaction(() => {
       use_xp: i.use_xp || 0, use_gold: i.use_gold || 0,
       price: i.price || 0, lvl: i.lvl || 1, handed: i.handed || 1, exclusive: i.exclusive ? 1 : 0,
       learn_skill: i.learn_skill || null,
+      learn_recipe: i.learn_recipe || null,
     });
   }
 });
@@ -376,6 +393,20 @@ export const upsertSkillRow = (charId, skillId, level, xp, source = 'class') => 
 export const learnSkill = (charId, skillId, source = 'scroll') =>
   db.prepare('INSERT OR IGNORE INTO character_skill (character_id, skill_id, level, xp, source) VALUES (?, ?, 1, 0, ?)')
     .run(charId, skillId, source).changes;
+
+// ----- สูตรคราฟต์ที่เรียนรู้แล้ว (จากแบบแปลน blueprint) -----
+export const getLearnedRecipes = (charId) =>
+  db.prepare('SELECT recipe_id FROM character_recipe WHERE character_id = ?').all(charId).map((r) => r.recipe_id);
+
+// เรียนรู้สูตรจากแบบแปลน — ถ้าอยู่แล้วไม่ทำอะไร (คืน 0) / ใหม่คืน 1
+export const learnRecipe = (charId, recipeId) =>
+  db.prepare('INSERT OR IGNORE INTO character_recipe (character_id, recipe_id) VALUES (?, ?)').run(charId, recipeId).changes;
+
+// ----- ถ้วยรางวัล (ห้องเก็บถ้วย — ชนะบอสครั้งแรกของบอสนั้น) -----
+export const addTrophy = (charId, bossKey, icon) =>
+  db.prepare('INSERT OR IGNORE INTO trophy (character_id, boss_key, icon) VALUES (?, ?, ?)').run(charId, bossKey, icon).changes;
+export const getTrophies = (charId) =>
+  db.prepare('SELECT boss_key, icon, won_at FROM trophy WHERE character_id = ? ORDER BY won_at').all(charId);
 
 export const addItem = (charId, itemId, qty = 1) => {
   db.prepare(`INSERT INTO inventory (character_id, item_id, qty) VALUES (?, ?, ?)

@@ -1,6 +1,7 @@
 // ทดสอบระบบต่อสู้บอสใหม่ — ตั้งรับ (guard) / โกรธจัด (rage) / ชาร์จท่าไม้ตาย (charge) / สุดทน (fury) / สเกลตามเมือง
 // + smoke test API ว่า /boss และ /boss/act ส่ง fight state (rage/fury/charging) กลับมา
 process.env.POMOQUEST_DB = `/tmp/pq-test-boss-${Date.now()}.db`;
+process.env.POMOQUEST_NO_WANDER = '1'; // ปิดบอสเร่ร่อนรายสัปดาห์ — กันผลขึ้นกับสัปดาห์จริง (เทสต์บอสเมืองตรง ๆ)
 
 const express = (await import('express')).default;
 const routes = (await import('../server/routes.js')).default;
@@ -233,6 +234,8 @@ try {
   expect('api: progress มี charge_breaks (ยัง 0 — ไม่ได้สลาย)', win2 && win2.progress?.charge_breaks === 0,
     `charge_breaks=${win2?.progress?.charge_breaks}`);
   expect('api: log ไม่มีรางวัลฝีมือ (ชนะปกติ)', win2 && !win2.log.some((l) => l.includes('รางวัลฝีมือ')));
+  const trophies = db.prepare('SELECT boss_key FROM trophy WHERE character_id = ?').all(cid2);
+  expect('api: ชนะบอส → เก็บถ้วยรางวัลบอสนั้น (ครั้งแรก)', trophies.length === 1 && !!trophies[0].boss_key, JSON.stringify(trophies));
 
   // --- reset: หมุน "world epoch" — session ที่พักค้างใน localStorage (โลกเก่า) ถูกทิ้งอัตโนมัติ ---
   r = await api('/state');

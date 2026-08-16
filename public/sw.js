@@ -1,5 +1,5 @@
 // PomoQuest service worker — network-first พร้อม cache สำรอง (ไม่แตะ API)
-const CACHE = 'pomoquest-v1';
+const CACHE = 'pomoquest-v2';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

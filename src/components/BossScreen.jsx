@@ -65,6 +65,7 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
         <div className="boss-name">
           {boss.name}
           {boss.isAlt && <span className="alt-boss-tag" title="บอสลับ — เจอเมื่อสำรวจเมืองเดิมครบรอบ ให้ของพิเศษ">👁️ บอสลับ</span>}
+          {boss.isWander && <span className="alt-boss-tag wander-boss-tag" title="บอสเร่ร่อนประจำสัปดาห์ — ชนะได้ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ 📋">🐉 บอสเร่ร่อน</span>}
           {fight.rage && <span className="boss-rage-tag" title="HP เหลือไม่ถึงครึ่ง — บอสโกรธจัด! ATK พุ่ง x1.4 และใช้ท่าเด็ดถี่ขึ้น">😡 โกรธจัด</span>}
           {fight.fury && <span className="boss-rage-tag boss-fury-tag" title="สู้ยืดเยื้อเกิน 30 เทิร์น — ATK บอสพุ่งถาวร x1.6">🔥 สุดทน</span>}
           {fight.armor && <span className="boss-status-chip boss-armor-chip" title="เกราะติดอยู่ — ดาเมจที่บอสได้รับลดลง">🛡️ กันดาเมจ ({fight.armorTurns} เทิร์น)</span>}

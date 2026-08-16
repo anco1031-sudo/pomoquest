@@ -4,12 +4,15 @@ import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
+import ItemCompare from './ItemCompare.jsx';
 
 const TABS = [
   { key: 'shop', label: 'ร้านค้า', icon: '🛒' },
   { key: 'quest', label: 'ภารกิจ', icon: '📜' },
+  { key: 'craft', label: 'คราฟต์', icon: '🛠️' },
   { key: 'inv', label: 'กระเป๋า', icon: '🎒' },
   { key: 'char', label: 'ตัวละคร', icon: '🛡️' },
+  { key: 'trophy', label: 'ถ้วยรางวัล', icon: '🏆' },
 ];
 
 export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, visit }) {
@@ -22,6 +25,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const [questResults, setQuestResults] = useState({});
   const [blackMarket, setBlackMarket] = useState(null); // null = ไม่เจอตลาดมืดในค่ายนี้
   const [festival, setFestival] = useState(null); // เทศกาลประจำสัปดาห์ของเมืองนี้ (null = ไม่มี)
+  const [recipes, setRecipes] = useState([]); // สูตรคราฟต์ที่เรียนรู้แล้ว (จากแบบแปลน) + สถานะวัสดุ
+  const [trophies, setTrophies] = useState([]); // ถ้วยรางวัล (ชนะบอสครั้งแรกของบอสนั้น)
   const [sellTarget, setSellTarget] = useState(null); // ของที่กำลังกดขาย (มีซ้ำ >1 — ถามจำนวน)
   const [sellQty, setSellQty] = useState(1);
 
@@ -34,6 +39,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         setSellPrices(d.sellPrices || {});
         setBlackMarket(d.blackMarket || null);
         setFestival(d.festival || null);
+        setRecipes(d.recipes || []);
+        setTrophies(d.trophies || []);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,6 +69,15 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const useItem = async (i) => {
     // server โชว์ toast ยืนยันเองผ่าน d.message (context apply)
     await post('/inventory/use', { itemId: i.item_id });
+  };
+
+  // คราฟต์ตามสูตรที่เรียนรู้แล้ว — วัสดุ (junk) ตัดจากกระเป๋า อัปเดตจำนวนที่เหลือทันที
+  const craft = async (rc) => {
+    sfx.click();
+    const d = await post('/craft', { recipeId: rc.id });
+    if (d) {
+      setRecipes((rs) => rs.map((x) => (x.id !== rc.id ? x : { ...x, materials: x.materials.map((m) => ({ ...m, have: d.inventory?.find((i) => i.item_id === m.id)?.qty || 0 })) })));
+    }
   };
 
   const equipItem = async (i) => {
@@ -163,6 +179,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       {i.bmNormal > 0 && (
                         <div className="bm-normal">ปกติ {i.bmNormal} ทอง → {i.free ? <b className="free-price">ฟรี!</b> : <b>{i.price} ทอง</b>}</div>
                       )}
+                      <ItemCompare item={i} character={character} />
                       {itemReqMissing(i, character).length > 0 && (
                         <div className="inv-req-block shop-warn">⚠️ ซื้อแล้วสวมไม่ได้ตอนนี้: {itemReqMissing(i, character).join(' · ')}</div>
                       )}
@@ -202,6 +219,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                     {itemReqMissing(i, character).length > 0 && (
                       <div className="inv-req-block shop-warn">⚠️ ซื้อแล้วสวมไม่ได้ตอนนี้: {itemReqMissing(i, character).join(' · ')}</div>
                     )}
+                    <ItemCompare item={i} character={character} />
                   </div>
                   {i.bought ? (
                     <span className="sold-tag">ขายแล้ว</span>
@@ -227,6 +245,43 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
           </div>
           )}
         </>
+      )}
+
+      {tab === 'craft' && (
+        <div className="panel">
+          <div className="panel-title">🛠️ คราฟต์ — สูตรที่เรียนรู้แล้ว ({recipes.length})</div>
+          {recipes.length === 0 ? (
+            <p className="hint">ยังไม่มีสูตร — หาแบบแปลน 📋 ได้จากกล่องสมบัติ (โอกาสสูงกว่าใบสกิลนิดหน่อย) หรือชนะบอสเร่ร่อน 🐉 แล้วใช้เรียนรู้เหมือนคัมภีร์สกิล</p>
+          ) : (
+            <div className="craft-list">
+              {recipes.map((rc) => {
+                const ok = rc.materials.every((m) => m.have >= m.qty);
+                return (
+                  <div className={`craft-card ${ok ? 'can' : ''}`} key={rc.id}>
+                    <div className="craft-top">
+                      <span className="inv-icon">{rc.icon}</span>
+                      <div className="inv-info">
+                        <div className="inv-name">{rc.name}</div>
+                        <div className="inv-desc">{rc.desc}</div>
+                        <div className="craft-mats">
+                          {rc.materials.map((m) => (
+                            <span key={m.id} className={`craft-mat ${m.have >= m.qty ? 'ok' : 'no'}`}>
+                              {m.icon} {m.name} {m.have}/{m.qty}
+                            </span>
+                          ))}
+                          <span className="craft-arrow">→</span>
+                          <span className="craft-result">{rc.result.icon} {rc.result.name} x{rc.result.qty}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button className={`btn btn-sm ${ok ? 'btn-primary' : ''}`} disabled={!ok} onClick={() => craft(rc)}>🛠️ คราฟต์</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <p className="hint">วัสดุคือของขวัญ (junk) ที่ล่ามาได้ — คราฟต์ไม่เสียทอง · สูตรใหม่หาได้จากแบบแปลน 📋 (สมบัติ / บอสเร่ร่อน)</p>
+        </div>
       )}
 
       {tab === 'quest' && (
@@ -286,6 +341,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
                     ) : i.type === 'scroll' ? (
                       <span className="junk-note">📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)</span>
+                    ) : i.type === 'blueprint' ? (
+                      <span className="junk-note">📋 ใช้เรียนรู้สูตร (แท็บตัวละคร)</span>
                     ) : i.type === 'junk' ? null : (
                       <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
                     )}
@@ -299,7 +356,27 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
               );
             })
           )}
-          <p className="hint">ราคาขายเป็นราคาที่พ่อค้าแคมป์นี้รับซื้อ — ของที่พ่อค้า "ต้องการ" (🔥) ขายได้แพงขึ้น{blackMarket ? ' · 🖤 วันที่ตลาดมืดแวะมา รับซื้อของขวัญแพงกว่า +25%' : ''}</p>
+          <p className="hint">ราคาขายเป็นราคาที่พ่อค้าแคมป์นี้รับซื้อ — ของที่พ่อค้า "ต้องการ" (🔥) ขายได้แพงขึ้น · เมืองยิ่งไกล ราคายิ่งดี (x1.05/เมือง){blackMarket ? ' · 🖤 วันที่ตลาดมืดแวะมา รับซื้อของขวัญแพงกว่า +25%' : ''}</p>
+        </div>
+      )}
+
+      {tab === 'trophy' && (
+        <div className="panel">
+          <div className="panel-title">🏆 ห้องเก็บถ้วยรางวัล ({trophies.length})</div>
+          {trophies.length === 0 ? (
+            <p className="hint">ยังไม่มีถ้วยรางวัล — ชนะบอสตัวแรกเพื่อเก็บถ้วยแรก! (ชนะบอสแต่ละตัวเป็นครั้งแรกจะได้ถ้วยสะสม)</p>
+          ) : (
+            <div className="trophy-list">
+              {trophies.map((t) => (
+                <div className="trophy-row" key={t.boss_key}>
+                  <span className="trophy-icon">{t.icon}</span>
+                  <span className="trophy-name">{t.boss_key}</span>
+                  <span className="trophy-date">{(t.won_at || '').slice(0, 10)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="hint">ถ้วยจะถูกเก็บเมื่อชนะบอสตัวนั้นเป็นครั้งแรก — บอสเมือง 12 ตัว + บอสลับ + บอสเร่ร่อน 🐉 (พร้อมของรางวัลการันตี + แบบแปลน)</p>
         </div>
       )}
 

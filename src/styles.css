@@ -639,6 +639,39 @@ body {
 .inv-desc { font-size: 12px; color: var(--muted); }
 .inv-actions { display: flex; gap: 6px; }
 
+/* เทียบอุปกรณ์ในร้านกับที่สวมอยู่ — กดปุ่ม 🔍 แล้วเปิดแผงเทียบ stat */
+.item-compare { margin-top: 4px; }
+.btn-compare {
+  font-size: 11.5px;
+  padding: 2px 10px;
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+}
+.item-compare-panel {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  background: rgba(8, 47, 73, 0.25);
+  font-size: 12.5px;
+}
+.item-compare-title { font-weight: 700; font-size: 12px; color: #a5f3fc; margin-bottom: 6px; }
+.item-compare-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.item-compare-stat { flex: 1; font-weight: 600; }
+.item-compare-old { opacity: 0.55; text-decoration: line-through; }
+.item-compare-arrow { opacity: 0.5; }
+.item-compare-new { font-weight: 800; }
+.item-compare-row.up .item-compare-new, .item-compare-row.up .item-compare-diff { color: #4ade80; }
+.item-compare-row.down .item-compare-new, .item-compare-row.down .item-compare-diff { color: #f87171; }
+.item-compare-row.same .item-compare-new { color: var(--muted); }
+.item-compare-diff { font-weight: 800; margin-left: auto; }
+
 /* ของที่พ่อค้าต้องการ (ขายได้แพงขึ้นตอนค่ายพักนี้) */
 .wanted-tag {
   background: rgba(249, 115, 22, 0.15);
@@ -1889,6 +1922,40 @@ body {
 .session-summary-item-title { font-weight: 700; }
 .session-summary-item-reward { color: var(--gold); font-size: 11.5px; white-space: nowrap; }
 
+/* ---------- คราฟต์ (สูตรจากแบบแปลน) ---------- */
+.craft-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.craft-card.can { border-color: rgba(34, 197, 94, 0.4); }
+.craft-top { flex: 1; display: flex; gap: 10px; min-width: 0; }
+.craft-mats { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; }
+.craft-mat { font-size: 11px; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.craft-mat.ok { background: rgba(34, 197, 94, 0.12); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.35); }
+.craft-mat.no { background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+.craft-arrow { color: var(--muted); }
+.craft-result { font-size: 12px; font-weight: 700; color: var(--gold); white-space: nowrap; }
+
+/* ---------- ห้องเก็บถ้วยรางวัล ---------- */
+.trophy-list { display: flex; flex-direction: column; gap: 4px; }
+.trophy-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+}
+.trophy-icon { font-size: 20px; }
+.trophy-name { font-weight: 700; flex: 1; }
+.trophy-date { color: var(--muted); font-size: 11.5px; }
+
 /* ---------- บอส: บอสลับ + การสำรวจเมืองเดิมต่อ ---------- */
 .alt-boss-tag {
   display: inline-block;
@@ -1902,6 +1969,7 @@ body {
   padding: 2px 8px;
   vertical-align: 3px;
 }
+.wander-boss-tag { color: #fdba74; border-color: rgba(249, 115, 22, 0.5); background: rgba(249, 115, 22, 0.12); }
 .boss-explore-note {
   font-size: 11.5px;
   color: var(--muted);
