@@ -218,7 +218,7 @@ router.post('/adventure/event', (req, res) => {
 
 router.post('/adventure/complete', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { focusSec = 1500, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null, focusTask = null } = req.body || {};
+  const { focusSec = 1500, pauseSec = 0, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null, focusTask = null } = req.body || {};
   const prog = getProgress(c.id);
 
   // โหมดมาราธอน: ห้ามพักระหว่างโฟกัส — ถ้าโฟกัสไม่ถึง 90% ของเวลาที่ควร (กดพัก/กลับหน้าหลักกลาง session)
@@ -265,6 +265,8 @@ router.post('/adventure/complete', (req, res) => {
   prog.best_streak = Math.max(prog.best_streak, prog.streak);
   prog.sessions_completed += 1;
   prog.total_focus_sec += focusSec;
+  // พักกลาง session (กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส) — แยกจาก break_sec (พักระหว่าง session)
+  prog.pause_sec += Math.max(0, Math.round(pauseSec));
 
   const bonus = 1 + Math.min(prog.streak - 1, 4) * 0.1;
   const chMult = rewardMult(c); // โหมดท้าทาย: XP/ทอง x1.5 (เสี่ยงสูง รางวัลสูง)
@@ -285,11 +287,14 @@ router.post('/adventure/complete', (req, res) => {
 
   updateCharacter(c);
   db.prepare(`UPDATE progress SET streak=@streak, best_streak=@best_streak, sessions_completed=@sessions_completed,
-    total_focus_sec=@total_focus_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
+    total_focus_sec=@total_focus_sec, pause_sec=@pause_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
 
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
+  const pauseNote = pauseSec > 60
+    ? ` · ⏸️ พัก ${Math.round(pauseSec / 60)} นาที`
+    : pauseSec > 0 ? ` · ⏸️ พัก ${pauseSec} วิ` : '';
   const taleAfter = addLog(c.id, {
-    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${survivalFall ? ` · ${survivalFall}` : ''}`,
+    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
     xp, gold, focusSec, focusTask,
   });
   if (survivalFall) {

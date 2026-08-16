@@ -12,7 +12,7 @@ function fmtAgo(ms) {
   return new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 }
 
-export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '' }) {
+export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '', pausedSec = 0 }) {
   const { character } = useGame();
   const logRef = useRef(null);
 
@@ -37,7 +37,9 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
 
       <div className="timer-ring" style={{ '--pct': pct }}>
         <div className="timer-time">{fmtTime(remain)}</div>
-        <div className="timer-label">{running ? 'กำลังโฟกัส…' : '⏸️ พักชั่วคราว'}</div>
+        <div className="timer-label">
+          {running ? 'กำลังโฟกัส…' : `⏸️ พักชั่วคราว · พักไปแล้ว ${fmtTime(pausedSec)}`}
+        </div>
       </div>
 
       <div className="session-dots">
@@ -63,10 +65,17 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
         <button className="btn btn-primary btn-big" onClick={running ? onPause : onResume}>
           {running ? '⏸️ หยุดพัก' : '▶️ โฟกัสต่อ'}
         </button>
+        {/* ตอนพัก — ปุ่มทิ้ง session อยู่ข้างๆ โฟกัสต่อ เห็นชัด (เหมือนแถบโฟกัสต่อที่หน้าหลัก) */}
+        {!running && (
+          <button className="btn btn-danger" onClick={onAbort} title="ทิ้งเซสชันนี้ (คอมโบโฟกัสจะหายไป)">💨 ทิ้ง session</button>
+        )}
         <button className="btn" onClick={onHome}>🏠 กลับหน้าหลัก (พักไว้)</button>
-        <button className="btn btn-danger" onClick={onAbort}>💨 ทิ้งเซสชัน</button>
+        {running && (
+          <button className="btn btn-danger" onClick={onAbort}>💨 ทิ้งเซสชัน</button>
+        )}
       </div>
 
+      {!running && <p className="hint">⏸️ เวลาพักกลาง session ถูกนับแยกต่างหาก — กดโฟกัสต่อเมื่อพร้อม (ไม่สะสม XP ระหว่างพัก)</p>}
       <p className="hint">โฟกัสงานของคุณไปเรื่อย ๆ — ตัวละครจะจัดการมอนสเตอร์เอง!</p>
 
       {sessionEvents.length > 0 && (

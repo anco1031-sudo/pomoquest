@@ -183,6 +183,8 @@ ensureColumn('progress', 'merchant_gifts', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'break_sec', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'break_extended', 'INTEGER DEFAULT 0');
+// พักกลาง session (กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส จนกว่าจะกดโฟกัสต่อ) — แยกจาก break_sec (พักระหว่าง session)
+ensureColumn('progress', 'pause_sec', 'INTEGER DEFAULT 0');
 // ขายของให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
 ensureColumn('progress', 'wanted_sales', 'INTEGER DEFAULT 0');
 // รอบเมืองที่จบในแต่ละโหมดท้าทาย (ตราเฉพาะโหมด — นับตอนชนะบอส)

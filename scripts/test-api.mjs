@@ -101,13 +101,15 @@ try {
   // --- จบ session → session_done log + progress เพิ่ม ---
   r = await api('/adventure/complete', {
     method: 'POST',
-    body: { focusSec: 1500, sessionIdx: 1, sessionsPerCycle: 4, sessionKey: 'api-test-key', events: [{ logType: 'battle_win', title: 'ชนะ', detail: 'กำราบ หมาป่า ได้สำเร็จ!', xp: 24, gold: 14 }] },
+    body: { focusSec: 1500, pauseSec: 180, sessionIdx: 1, sessionsPerCycle: 4, sessionKey: 'api-test-key', events: [{ logType: 'battle_win', title: 'ชนะ', detail: 'กำราบ หมาป่า ได้สำเร็จ!', xp: 24, gold: 14 }] },
   });
   expect('complete: จบ session สำเร็จ (ได้ XP/ทอง)', r.status === 200 && r.json.character.xp > 0 && r.json.character.gold > 0, r.json.error || '');
   const done = db.prepare("SELECT COUNT(*) n FROM log WHERE character_id = ? AND type = 'session_done'").get(cid);
   expect('complete: มี log session_done 1 อัน', done.n === 1);
   const summ = db.prepare("SELECT * FROM log WHERE character_id = ? AND type = 'session_summary'").get(cid);
   expect('complete: มี session summary (พร้อม session_key)', !!summ && summ.session_key === 'api-test-key');
+  const pauseSec = db.prepare('SELECT pause_sec FROM progress WHERE character_id = ?').get(cid)?.pause_sec || 0;
+  expect('complete: พักกลาง session (pauseSec 180 วิ) นับแยกจาก break_sec', pauseSec === 180, `pause_sec=${pauseSec}`);
 
   // --- /session-history ---
   r = await api('/session-history');

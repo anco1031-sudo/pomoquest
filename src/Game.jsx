@@ -51,6 +51,9 @@ export default function Game() {
   const [nextEventIn, setNextEventIn] = useState(() => randomEventDelay());
   const [expiredWork, setExpiredWork] = useState(false);
   const [pausedAtHome, setPausedAtHome] = useState(false); // กดกลับหน้าหลักกลาง session — พัก timer ไว้ แล้วกลับมากดต่อได้
+  const [pauseStartedAt, setPauseStartedAt] = useState(null); // เริ่มพักกลาง session เมื่อไหร่ (ms) — null = ไม่ได้พักอยู่
+  const [pauseAccumSec, setPauseAccumSec] = useState(0); // รวมวินาทีที่พักกลาง session นี้ (ยังไม่รวมช่วงที่กำลังพัก)
+  const [pausedTick, setPausedTick] = useState(0); // นาฬิกาจำลองตอนพัก — ให้ UI นับเวลาพักสด ๆ
   const [bossState, setBossState] = useState(null);
   const [mounted, setMounted] = useState(false);
   const [showCharSelect, setShowCharSelect] = useState(false);
@@ -96,6 +99,10 @@ export default function Game() {
   const overrunRef = useRef(overrun);
   const breakExtendsRef = useRef(breakExtends);
   const breakStartedAtRef = useRef(breakStartedAt);
+  const pauseStartedAtRef = useRef(null);
+  const pauseAccumSecRef = useRef(0);
+  pauseStartedAtRef.current = pauseStartedAt;
+  pauseAccumSecRef.current = pauseAccumSec;
   phaseRef.current = phase;
   sessionIdxRef.current = sessionIdx;
   elapsedRef.current = elapsed;
@@ -122,6 +129,9 @@ export default function Game() {
     setNextEventIn(randomEventDelay());
     setExpiredWork(false);
     setPausedAtHome(false);
+    setPauseStartedAt(null);
+    setPauseAccumSec(0);
+    setPausedTick(0);
     setBossState(null);
     eventBusyRef.current = false;
     endedRef.current = false;
@@ -154,6 +164,8 @@ export default function Game() {
       setBreakExtends(t.breakExtends || 0);
       setBreakStartedAt(t.breakStartedAt || null);
       setPausedAtHome(t.pausedAtHome || false);
+      setPauseStartedAt(t.pauseStartedAt || null);
+      setPauseAccumSec(t.pauseAccumSec || 0);
       // story ไมไดเก็บไว้ใน localStorage — ถ้ากลับมาค้างที่รอเลือกพัก/ข้าม ให้ข้ามเรื่องไปถามพัก/ข้ามเลย
       if (t.awaitingBreak) setStoryDone(true);
 
@@ -162,6 +174,9 @@ export default function Game() {
           setRunning(false); // จบ session แล้ว — modal ถามพัก/ข้ามจะขึ้นเอง
         } else if (t.expiresAt && t.remain <= 0) {
           setExpiredWork(true); // กลับมาหลัง session หมดเวลา — ถามว่าจบหรือทิ้ง
+          setRunning(false);
+        } else if (t.running === false) {
+          // ผู้ใช้กดหยุดพักไว้ — คงสถานะพักไว้ ไม่รันต่อ (กัน XP/เลเวลอัพตอนที่ไม่ได้โฟกัส)
           setRunning(false);
         } else {
           setRunning(true);
@@ -201,11 +216,11 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome,
+      awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec,
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -220,6 +235,13 @@ export default function Game() {
     }, 1000);
     return () => clearInterval(id);
   }, [running, mounted]);
+
+  // ---- นาฬิกาจำลองตอนพักกลาง session — ให้ UI นับเวลาพักสด ๆ (ตอนพัก timer หลักหยุด) ----
+  useEffect(() => {
+    if (running || phase !== 'work' || !pauseStartedAtRef.current) return;
+    const id = setInterval(() => setPausedTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [running, phase, pauseStartedAt]);
 
   // ---- ตรวจจับจบเฟส ----
   useEffect(() => {
@@ -247,6 +269,7 @@ export default function Game() {
     // ส่งเหตุการณ์ใน session นี้ไปด้วย — LLM แต่งเรื่องจาก log จริง, ถ้า LLM ไม่ทำงาน server จะสรุป log นี้แทน
     const res = await post('/adventure/complete', {
       focusSec: elapsedRef.current,
+      pauseSec: pauseAccumSecRef.current, // พักกลาง session (กดหยุดพัก/กลับหน้าหลัก) — นับแยกจากพักเบรก
       events: sessionEvents,
       sessionIdx: sessionIdxRef.current,
       sessionsPerCycle: settings.sessions_per_cycle,
@@ -264,14 +287,35 @@ export default function Game() {
     if (res && res.taleAfter) pollStory(res.taleAfter);
   };
 
+  // ---- พักกลาง session (กดหยุดพัก / กลับหน้าหลัก) — นับเวลาพักแยกจากพักเบรกระหว่าง session ----
+  const startPause = () => {
+    if (pauseStartedAtRef.current) return; // พักอยู่แล้ว — ไม่เริ่มซ้ำ
+    setPauseStartedAt(Date.now());
+  };
+
+  const endPause = () => {
+    const started = pauseStartedAtRef.current;
+    if (!started) return; // ไม่ได้พักอยู่
+    const sec = Math.max(0, Math.round((Date.now() - started) / 1000));
+    setPauseAccumSec((a) => a + sec);
+    setPauseStartedAt(null);
+  };
+
+  const resetPause = () => {
+    setPauseStartedAt(null);
+    setPauseAccumSec(0);
+  };
+
   // ---- กลับหน้าหลักกลาง session: พัก timer ไว้ แล้วกลับมากด "ต่อ session" ได้ ----
   const handleHome = () => {
+    startPause();
     setRunning(false);
     setPausedAtHome(true);
     sfx.pause();
   };
 
   const handleContinue = () => {
+    endPause();
     setPausedAtHome(false);
     setRunning(true);
     sfx.start();
@@ -287,12 +331,14 @@ export default function Game() {
     setSessionEvents([]); // session ใหม่ → ล้าง log เหตุการณ์เดิม
     setSessionKey(String(Date.now())); // session ใหม่ → id ใหม่ (จับกลุ่มเหตุการณ์ในหน้าประวัติ)
     setPausedAtHome(false); // เริ่ม session ใหม่ = เลิกสถานะพักไว้ที่หน้าหลัก
+    resetPause(); // session ใหม่ → เริ่มนับเวลาพักกลาง session ใหม่
     setPhase('work');
     setRunning(true);
     sfx.start();
   };
 
   const startShortBreak = () => {
+    resetPause(); // ออกจากโหมด work — เลิกนับพักกลาง session
     setRemain(settings.short_break_min * 60);
     setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`); // ค่ายพักใหม่ = stock ร้านใหม่
     setPhase('short_break');
@@ -305,6 +351,7 @@ export default function Game() {
   };
 
   const startLongBreak = () => {
+    resetPause(); // ออกจากโหมด work — เลิกนับพักกลาง session
     setRemain(settings.long_break_min * 60);
     setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
     setPhase('long_break');
@@ -392,16 +439,22 @@ export default function Game() {
     setStoryDone(true); // รอครบแล้วก็ไม่เจอ — เลิกคอย
   }, [get]);
 
-  const handleAbort = async () => {
-    if (!window.confirm('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป')) return;
+  // ทิ้งเซสชัน (จากหน้าจอโฟกัส หรือจากแถบโฟกัสต่อที่หน้าหลัก) — ถามยืนยันก่อน คอมโบจะหายเว้นแต่มีโล่
+  const doAbort = async (confirmMsg) => {
+    if (!window.confirm(confirmMsg)) return;
     const d = await post('/adventure/abort');
     if (d?.shieldUsed) showToast('🛡️ โล่โฟกัสกันคอมโบไว้ได้! คอมโบไม่หาย (โล่แตก)');
     setPhase('idle');
     setRunning(false);
+    setPausedAtHome(false);
     setSessionIdx(1);
     setElapsed(0);
     setAwaitingBreak(false);
+    resetPause(); // ทิ้งเซสชัน = เลิกนับพักกลาง session
   };
+
+  const handleAbort = () => doAbort('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป');
+  const handleDiscardPaused = () => doAbort('ทิ้ง session ที่พักไว้? คอมโบโฟกัสจะหายไป');
 
   // แชร์สรุป session — navigator.share (มือถือ) หรือคัดลอกข้อความ
   const shareSummary = async () => {
@@ -447,8 +500,13 @@ export default function Game() {
 
   // กำลังโฟกัสงานอยู่ → ซ่อน notification (เลเวลอัพ/รางวัล) ไว้แจ้งหลังจบ session แทน
   const inActiveWork = phase === 'work' && running;
+  // กำลังพักกลาง session (กดหยุดพัก/กลับหน้าหลัก) → ซ่อน modal รางวัล/เลเวลอัพไว้ก่อน — พัก = หยุดทุกอย่างจริง ๆ
+  // (ไม่ซ่อนตอน awaitingBreak/expiredWork — หน้าจอนั้นต้องโชว์ modal ถามจบ session)
+  const inPausedWork = phase === 'work' && !running && !awaitingBreak && !expiredWork;
   // เวลาพักจริงตั้งแต่วินาทีที่เริ่มพัก (รวมเวลาที่ต่อ + เลยเวลา) — คำนวณจากนาฬิกาจริงกันเพี้ยน
   const breakSecSoFar = breakStartedAt ? Math.max(0, Math.round((Date.now() - breakStartedAt) / 1000)) : 0;
+  // เวลาพักกลาง session ทั้งหมด (รวมช่วงที่กำลังพักอยู่) — สำหรับโชว์บนหน้าจอ
+  const pausedSec = pauseAccumSec + (pauseStartedAt ? Math.max(0, Math.round((Date.now() - pauseStartedAt) / 1000)) : 0);
 
   if (loading) {
     return (
@@ -472,6 +530,9 @@ export default function Game() {
           onContinue={pausedAtHome ? handleContinue : null}
           pausedRemain={remain}
           hasPausedSession={pausedAtHome}
+          pausedSec={pausedSec}
+          pausedTask={focusTask}
+          onDiscard={handleDiscardPaused}
           onManageCharacters={() => setShowCharSelect(true)}
         />
       )}
@@ -484,12 +545,13 @@ export default function Game() {
           sessionIdx={sessionIdx}
           sessionsPerCycle={settings.sessions_per_cycle}
           nextEventIn={nextEventIn}
-          onPause={() => { setRunning(false); sfx.pause(); }}
-          onResume={() => setRunning(true)}
+          onPause={() => { startPause(); setRunning(false); sfx.pause(); }}
+          onResume={() => { endPause(); setRunning(true); }}
           onAbort={handleAbort}
           onHome={handleHome}
           sessionEvents={sessionEvents}
           focusTask={focusTask}
+          pausedSec={pausedSec}
         />
       )}
 
@@ -521,17 +583,18 @@ export default function Game() {
 
       {/* modal แบบคิว — โชว์ทีละอัน ไม่ทับกัน: เรื่องราว LLM ก่อนเสมอ → เลเวลอัพ → ตรา → เหตุการณ์ → แล้วค่อยถามพัก/ข้าม */}
       {/* ระหว่างรอเรื่องราว (awaitingBreak && !storyDone) ให้ modal อื่นรอด้วย — กัน modal มาทับเรื่อง LLM */}
-      {story && !inActiveWork && <StoryModal story={story} onClose={() => { setStory(null); setStoryDone(true); }} />}
+      {/* ระหว่างพักกลาง session (inPausedWork) ซ่อน modal ทั้งหมด — พัก = หยุดทุกอย่าง ไม่มีอะไรเด้งขึ้นมา */}
+      {story && !inActiveWork && !inPausedWork && <StoryModal story={story} onClose={() => { setStory(null); setStoryDone(true); }} />}
 
-      {!story && !inActiveWork && (!awaitingBreak || storyDone) && levelUpQueue.length > 0 && (
+      {!story && !inActiveWork && !inPausedWork && (!awaitingBreak || storyDone) && levelUpQueue.length > 0 && (
         <LevelUpModal levelUp={levelUpQueue[0]} onClose={dismissLevelUp} />
       )}
 
-      {!story && !inActiveWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length > 0 && (
+      {!story && !inActiveWork && !inPausedWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length > 0 && (
         <AchievementModal achievement={achieveQueue[0]} onClose={closeAchieve} />
       )}
 
-      {!story && !inActiveWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length > 0 && (
+      {!story && !inActiveWork && !inPausedWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length > 0 && (
         <EventModal event={eventQueue[0]} onClose={closeEvent} />
       )}
 

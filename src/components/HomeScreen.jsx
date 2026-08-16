@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, setMuted, isMuted } from '../sound.js';
 import { isNotifyEnabled, setNotifyEnabled, requestNotifyPermission } from '../notify.js';
@@ -27,7 +27,7 @@ const TABS = [
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
-export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, onManageCharacters }) {
+export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pausedTask = '', onDiscard = null, onManageCharacters }) {
   const { character, progress, settings, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
@@ -50,6 +50,20 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   });
   const fileRef = useRef(null);
   const [focusTask, setFocusTask] = useState(''); // ชื่องานที่จะโฟกัส session ถัดไป
+  const heroRef = useRef(null);
+  const [barCollapsed, setBarCollapsed] = useState(false); // เลื่อนผ่าน hero card → แถบโฟกัสต่อย่อเหลือแค่ปุ่ม (ประหยัดพื้นที่)
+
+  // เลื่อนหน้าผ่าน hero card → ย่อแถบโฟกัสต่อ
+  useEffect(() => {
+    const onScroll = () => {
+      const hero = heroRef.current;
+      if (!hero) return;
+      setBarCollapsed(hero.getBoundingClientRect().bottom < 0);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   if (!character) return null;
   const city = character.city;
@@ -150,21 +164,51 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
 
   return (
     <div className="screen">
-      <header className="topbar">
-        <div className="logo">🍅⚔️ PomoQuest</div>
-        <div className="topbar-right">
-          <span className="gold-chip">💰 {character.gold}</span>
-          <button className="icon-btn" onClick={() => setShowDev(true)} title="Dev Test Panel">🧪</button>
-          <button className="icon-btn" onClick={onManageCharacters} title="จัดการตัวละคร">👥</button>
-          <button className="icon-btn" onClick={toggleMute} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}>
-            {muted ? '🔇' : '🔊'}
-          </button>
-        </div>
-      </header>
+      {/* topbar + แถบโฟกัสต่อ — ติดคู่กันบนสุดตลอดเวลา (sticky) */}
+      <div className="sticky-top">
+        <header className="topbar">
+          <div className="logo">🍅⚔️ PomoQuest</div>
+          <div className="topbar-right">
+            <span className="gold-chip">💰 {character.gold}</span>
+            <button className="icon-btn" onClick={() => setShowDev(true)} title="Dev Test Panel">🧪</button>
+            <button className="icon-btn" onClick={onManageCharacters} title="จัดการตัวละคร">👥</button>
+            <button className="icon-btn" onClick={toggleMute} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}>
+              {muted ? '🔇' : '🔊'}
+            </button>
+          </div>
+        </header>
+
+        {/* ---- แถบกลับไปโฟกัสต่อ — โชว์บนสุดทุกแท็บเมื่อมี session พักไว้ (กดกลับหน้าหลักกลาง session) ---- */}
+        {hasPausedSession && onContinue && (
+          <div className={`resume-bar${barCollapsed ? ' collapsed' : ''}`}>
+            <div className="resume-info">
+              <span className="resume-icon">⏸️</span>
+              <span>
+                มี session พักไว้อยู่{pausedTask && <> · 📋 <b className="resume-task">{pausedTask}</b></>} — เหลือ <b>{fmtTime(pausedRemain)}</b>
+                {pausedSec > 0 && <> · พักไปแล้ว <b>{fmtTime(pausedSec)}</b></>}
+              </span>
+            </div>
+            <div className="resume-actions">
+              {onDiscard && (
+                <button
+                  className="btn btn-sm btn-danger-soft"
+                  onClick={onDiscard}
+                  title="ทิ้ง session ที่พักไว้ (คอมโบโฟกัสจะหายไป)"
+                >
+                  💨 ทิ้ง session
+                </button>
+              )}
+              <button className="btn btn-primary btn-resume" onClick={onContinue} title="กลับไปโฟกัส session ที่พักไว้">
+                ▶️ โฟกัสต่อ
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <main className="content">
         {/* ---- hero card ---- */}
-        <div className="hero-card">
+        <div className="hero-card" ref={heroRef}>
           <div className="hero-top">
             <div className="hero-avatar">
               {character.classIcon}
@@ -237,15 +281,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                       onChange={(e) => setFocusTask(e.target.value)}
                     />
                   </div>
-                  {hasPausedSession && onContinue && (
-                    <>
-                      <p className="paused-note">⏸️ มี session ที่พักไว้อยู่ — กดต่อเพื่อกลับไปโฟกัสต่อ</p>
-                      <button className="btn btn-continue btn-big" onClick={onContinue}>
-                        ▶️ ต่อ session ต่อ (เหลือ {fmtTime(pausedRemain)})
-                      </button>
-                    </>
-                  )}
-                  <button className="btn btn-primary btn-big" onClick={() => onStart(focusTask)} style={hasPausedSession ? { marginTop: 10 } : undefined}>
+                  <button className="btn btn-primary btn-big" onClick={() => onStart(focusTask)}>
                     {hasPausedSession ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)' : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
                   </button>
                 </Panel>

@@ -97,7 +97,10 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
               : `พักผ่อน เตรียมตัว เตรียมใจ ⏳ ${fmtTime(remain)}`}
           </div>
         </div>
-        <button className="btn btn-sm" onClick={onSkip}>จบพักเร็ว ⏩</button>
+        <div className="camp-header-right">
+          <span className="gold-chip" title="ทองของคุณ">💰 {character.gold}</span>
+          <button className="btn btn-sm" onClick={onSkip}>จบพักเร็ว ⏩</button>
+        </div>
       </header>
 
       {/* สถานะตัวละครระหว่างพัก */}

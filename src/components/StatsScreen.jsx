@@ -275,12 +275,14 @@ export default function StatsScreen() {
         </div>
       </Panel>
 
-      <Panel title="☕ สถิติการพักเบรก">
+      <Panel title="☕ สถิติการพัก">
         <div className="stat-grid">
-          <div className="stat-box"><b>{fmtDuration(p.break_sec)}</b><span>เวลาพักทั้งหมด</span></div>
+          <div className="stat-box"><b>{fmtDuration(p.break_sec)}</b><span>เวลาพักเบรกระหว่าง session</span></div>
           <div className="stat-box"><b>{p.break_extended}</b><span>ครั้งที่ต่อเวลาพัก</span></div>
           <div className="stat-box"><b>{fmtDuration(p.break_overrun_sec)}</b><span>เวลาที่เลยพักทั้งหมด</span></div>
+          <div className="stat-box"><b>{fmtDuration(p.pause_sec || 0)}</b><span>พักกลาง session (⏸️ หยุดพัก/กลับหน้าหลัก)</span></div>
         </div>
+        <p className="hint">⏸️ พักกลาง session = เวลาที่กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส จนกว่าจะกดโฟกัสต่อ — นับแยกจากพักเบรก (และไม่สะสม XP ระหว่างพัก)</p>
       </Panel>
 
       {(data.bmStats?.buys > 0 || data.bmStats?.sells > 0) && (
