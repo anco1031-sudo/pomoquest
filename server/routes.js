@@ -870,6 +870,7 @@ router.get('/story', (req, res) => {
       status: done.has(q.id) ? 'done' : met ? 'claimable' : 'locked',
       reqLabel: storyReqLabel(q, c, prog),
       city: CITIES[q.city % CITIES.length],
+      cityIndex: q.city % CITIES.length,
     };
   });
   res.json({ quests, doneCount: done.size, total: STORY_QUESTS.length });

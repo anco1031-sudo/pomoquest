@@ -127,7 +127,7 @@ export default function ChallengeTab() {
   // เปรียบเทียบ progress กับเป้า
   const done = goal?.t === 'min' ? Math.round((prog.focusSec || 0) / 60) : prog.sessions || 0;
   const doneLabel = goal?.t === 'min' ? `${done} นาที` : `${done} sessions`;
-  const targetLabel = goal?.t === 'min' ? `${goal.v} นาที` : `${goal.v} sessions`;
+  const targetLabel = goal?.t === 'min' ? `${goal?.v || 0} นาที` : `${goal?.v || 0} sessions`;
   const pct = goal ? Math.min(100, Math.round((done / goal.v) * 100)) : 0;
 
   const shareResult = async () => {

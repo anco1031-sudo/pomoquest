@@ -186,7 +186,7 @@ function SkillList({ skills }) {
 }
 
 export default function CharacterSheet() {
-  const { character, inventory, post, showToast } = useGame();
+  const { character, inventory, post, showToast, cities } = useGame();
   if (!character) return null;
 
   const eq = character.equipment || {};
@@ -235,6 +235,45 @@ export default function CharacterSheet() {
 
   return (
     <>
+      <Panel title="🗺️ ตำแหน่ง & เดินทาง">
+        <p className="panel-text">
+          ย้อนกลับไปเมืองที่เคยไปมาแล้ว — ค่าเดินทาง 20 ทอง/เมือง (บอสของเมืองนั้นจะ scale ตามเลเวลคุณ)
+        </p>
+        <div className="travel-list">
+          {(cities || [])
+            .filter((c) => c.index <= character.cityIndex)
+            .map((c) => {
+              const dist = character.cityIndex - c.index;
+              const cost = dist * 20;
+              const here = dist === 0;
+              return (
+                <div className={`travel-city ${here ? 'current' : ''}`} key={c.index}>
+                  <span className="city-ico">{c.icon}</span>
+                  <div className="city-info">
+                    <div className="city-name">
+                      {c.name}
+                      {here && <span className="chip">📍 อยู่ที่นี่</span>}
+                    </div>
+                    <div className="city-sub">
+                      {c.terrain}
+                      {!here && ` · ระยะ ${dist} เมือง`}
+                    </div>
+                  </div>
+                  {!here && (
+                    <button
+                      className="btn"
+                      disabled={character.gold < cost}
+                      onClick={() => post('/travel', { cityIndex: c.index })}
+                    >
+                      {character.gold < cost ? `💰 ไม่พอ (${cost})` : `🚶 ${cost} ทอง`}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      </Panel>
+
       <Panel title={`🛡️ ${character.name} · ${character.className} Lv.${character.level}`}>
         <StatRow label="HP สูงสุด" value={character.maxHp} bonus={eqBonus.maxHp} icon="❤️" />
         <StatRow label="MP สูงสุด" value={character.maxMp} bonus={eqBonus.maxMp} icon="💧" />

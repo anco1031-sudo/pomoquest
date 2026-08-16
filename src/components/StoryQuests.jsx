@@ -4,15 +4,19 @@ import { Panel } from './ui.jsx';
 import { sfx } from '../sound.js';
 
 export default function StoryQuests() {
-  const { get, post, showToast } = useGame();
+  const { get, post, showToast, character } = useGame();
   const [data, setData] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
     get('/story').then((d) => d && setData(d));
-  }, [get]);
+  }, [get, character?.id]);
 
   if (!data) return <p className="hint">กำลังโหลดเนื้อเรื่อง…</p>;
+
+  // แสดงเฉพาะเควสต์ของเมืองที่ปลดล็อกแล้ว (เดินทางไปถึง) + เมืองปัจจุบัน
+  const maxCity = character?.cityIndex ?? 99;
+  const visible = data.quests.filter((q) => q.cityIndex <= maxCity);
 
   const claim = async (q) => {
     sfx.click();
@@ -31,7 +35,8 @@ export default function StoryQuests() {
       <p className="panel-text">
         เควสต์เนื้อเรื่องปลดล็อกตามความคืบหน้าของคุณ (ชนะบอส / จำนวน session / เลเวล) — รับรางวัลได้ครั้งเดียวต่อเควสต์
       </p>
-      {data.quests.map((q) => (
+      {visible.length === 0 && <p className="hint">ยังไม่มีเมืองที่ปลดล็อก — เดินทางผจญภัยต่อเพื่อเปิดเนื้อเรื่องของเมืองถัดไป</p>}
+      {visible.map((q) => (
         <div className={`story-card ${q.status}`} key={q.id}>
           <div className="story-top">
             <span className="story-icon">{q.icon}</span>

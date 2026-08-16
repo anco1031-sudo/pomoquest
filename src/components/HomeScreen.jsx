@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, setMuted, isMuted } from '../sound.js';
 import { isNotifyEnabled, setNotifyEnabled, requestNotifyPermission } from '../notify.js';
-import { Bar, Panel, fmtDuration, fmtTime } from './ui.jsx';
+import { Bar, Panel, fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import AdventureLog from './AdventureLog.jsx';
 import AchievementList from './AchievementList.jsx';
@@ -11,6 +11,7 @@ import SessionHistory from './SessionHistory.jsx';
 import DailyQuests from './DailyQuests.jsx';
 import StoryQuests from './StoryQuests.jsx';
 import ChallengeTab from './ChallengeTab.jsx';
+import HomeQuickCards from './HomeQuickCards.jsx';
 import DevPanel from './DevPanel.jsx';
 import { rankOf, companionOf, moraleOf } from '../meta.js';
 
@@ -27,7 +28,7 @@ const TABS = [
 ];
 
 export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, onManageCharacters }) {
-  const { character, progress, settings, achievements, put, refresh, showToast, post, cities } = useGame();
+  const { character, progress, settings, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
   const [showDev, setShowDev] = useState(false);
@@ -219,89 +220,41 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
 
         {tab === 'home' && (
           <>
-            <DailyQuests />
+            <div className="home-grid">
+              <div className="home-col">
+                <DailyQuests />
 
-            <Panel title={`🗺️ ${city.name} — ${city.terrain}`}>
-              <p className="panel-text">
-                เมืองนี้ยังมีเรื่องราวรอคุณอยู่… กดเริ่มผจญภัยเพื่อโฟกัสงาน แล้วตัวละครของคุณจะออกเดินทาง!
-              </p>
-              <div className="focus-task-input">
-                <input
-                  className="input"
-                  placeholder="📋 งานนี้จะโฟกัสอะไร? (optional — เช่น เขียนรายงาน / เรียน / ออกกำลังกาย)"
-                  value={focusTask}
-                  maxLength={40}
-                  onChange={(e) => setFocusTask(e.target.value)}
-                />
-              </div>
-              {hasPausedSession && onContinue && (
-                <>
-                  <p className="paused-note">⏸️ มี session ที่พักไว้อยู่ — กดต่อเพื่อกลับไปโฟกัสต่อ</p>
-                  <button className="btn btn-continue btn-big" onClick={onContinue}>
-                    ▶️ ต่อ session ต่อ (เหลือ {fmtTime(pausedRemain)})
+                <Panel title={`🗺️ ${city.name} — ${city.terrain}`}>
+                  <p className="panel-text">
+                    เมืองนี้ยังมีเรื่องราวรอคุณอยู่… กดเริ่มผจญภัยเพื่อโฟกัสงาน แล้วตัวละครของคุณจะออกเดินทาง!
+                  </p>
+                  <div className="focus-task-input">
+                    <input
+                      className="input"
+                      placeholder="📋 งานนี้จะโฟกัสอะไร? (optional — เช่น เขียนรายงาน / เรียน / ออกกำลังกาย)"
+                      value={focusTask}
+                      maxLength={40}
+                      onChange={(e) => setFocusTask(e.target.value)}
+                    />
+                  </div>
+                  {hasPausedSession && onContinue && (
+                    <>
+                      <p className="paused-note">⏸️ มี session ที่พักไว้อยู่ — กดต่อเพื่อกลับไปโฟกัสต่อ</p>
+                      <button className="btn btn-continue btn-big" onClick={onContinue}>
+                        ▶️ ต่อ session ต่อ (เหลือ {fmtTime(pausedRemain)})
+                      </button>
+                    </>
+                  )}
+                  <button className="btn btn-primary btn-big" onClick={() => onStart(focusTask)} style={hasPausedSession ? { marginTop: 10 } : undefined}>
+                    {hasPausedSession ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)' : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
                   </button>
-                </>
-              )}
-              <button className="btn btn-primary btn-big" onClick={() => onStart(focusTask)} style={hasPausedSession ? { marginTop: 10 } : undefined}>
-                {hasPausedSession ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)' : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
-              </button>
-            </Panel>
-
-            <Panel title="🗺️ เดินทาง (ย้อนกลับ)">
-              <p className="panel-text">
-                ย้อนกลับไปเมืองที่เคยไปมาแล้ว — ค่าเดินทาง 20 ทอง/เมือง (บอสของเมืองนั้นจะ scale ตามเลเวลคุณ)
-              </p>
-              <div className="travel-list">
-                {(cities || [])
-                  .filter((c) => c.index <= character.cityIndex)
-                  .map((c) => {
-                    const dist = character.cityIndex - c.index;
-                    const cost = dist * 20;
-                    const here = dist === 0;
-                    return (
-                      <div className={`travel-city ${here ? 'current' : ''}`} key={c.index}>
-                        <span className="city-ico">{c.icon}</span>
-                        <div className="city-info">
-                          <div className="city-name">
-                            {c.name}
-                            {here && <span className="chip">📍 อยู่ที่นี่</span>}
-                          </div>
-                          <div className="city-sub">
-                            {c.terrain}
-                            {!here && ` · ระยะ ${dist} เมือง`}
-                          </div>
-                        </div>
-                        {!here && (
-                          <button
-                            className="btn"
-                            disabled={character.gold < cost}
-                            onClick={() => post('/travel', { cityIndex: c.index })}
-                          >
-                            {character.gold < cost ? `💰 ไม่พอ (${cost})` : `🚶 ${cost} ทอง`}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                </Panel>
               </div>
-            </Panel>
 
-            <Panel title="📊 สถิติการผจญภัย">
-              <div className="stat-grid">
-                <div className="stat-box"><b>{progress?.sessions_completed || 0}</b><span>session ที่ผ่าน</span></div>
-                <div className="stat-box"><b>{progress?.cycles_completed || 0}</b><span>รอบที่ครบ 4</span></div>
-                <div className="stat-box"><b>{progress?.bosses_defeated || 0}</b><span>บอสที่ชนะ</span></div>
-                <div className="stat-box"><b>{progress?.monsters_slain || 0}</b><span>มอนสเตอร์</span></div>
-                <div className="stat-box"><b>{progress?.treasures_found || 0}</b><span>สมบัติ</span></div>
-                <div className="stat-box"><b>{fmtDuration(progress?.total_focus_sec || 0)}</b><span>เวลาที่โฟกัส</span></div>
-                <div className="stat-box"><b>{progress?.gold_earned || 0}</b><span>ทองที่หามาได้</span></div>
-                <div className="stat-box"><b>{progress?.best_streak || 0}</b><span>คอมโบสูงสุด</span></div>
-                <div className="stat-box"><b>{achievements?.unlocked || 0}/{achievements?.total || 25}</b><span>ตรา</span></div>
-                <div className="stat-box"><b>{progress?.quests_completed || 0}</b><span>ภารกิจสำเร็จ</span></div>
+              <div className="home-col">
+                <HomeQuickCards onGo={setTab} />
               </div>
-            </Panel>
-
-            <AdventureLog limit={10} />
+            </div>
           </>
         )}
 
