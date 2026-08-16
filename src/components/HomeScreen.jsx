@@ -10,12 +10,14 @@ import StatsScreen from './StatsScreen.jsx';
 import SessionHistory from './SessionHistory.jsx';
 import DailyQuests from './DailyQuests.jsx';
 import StoryQuests from './StoryQuests.jsx';
+import ChallengeTab from './ChallengeTab.jsx';
 import DevPanel from './DevPanel.jsx';
 import { rankOf, companionOf, moraleOf } from '../meta.js';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
   { key: 'story', label: 'เนื้อเรื่อง', icon: '📖' },
+  { key: 'challenge', label: 'ชาเลนจ์', icon: '🔥' },
   { key: 'sheet', label: 'ตัวละคร', icon: '🛡️' },
   { key: 'log', label: 'บันทึก', icon: '📜' },
   { key: 'sessions', label: 'Session', icon: '📅' },
@@ -304,6 +306,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
         )}
 
         {tab === 'story' && <StoryQuests />}
+        {tab === 'challenge' && <ChallengeTab />}
         {tab === 'sheet' && <CharacterSheet />}
         {tab === 'log' && <AdventureLog limit={50} />}
         {tab === 'sessions' && <SessionHistory />}

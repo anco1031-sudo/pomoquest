@@ -385,6 +385,19 @@ try {
     expect('story: เควสต์ที่ยังไม่ปลดล็อก → reject', r.status === 400, r.json.error || '');
   }
 
+  // --- 🔥 ชาเลนจ์รายสัปดาห์ (async) ---
+  {
+    const aid = (await api('/state')).json.character.id;
+    await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500 } });
+    r = await api('/challenge/progress');
+    const p = r.json;
+    expect('challenge: คืนข้อมูลโครงสร้างครบ (weekStart/End, days 7, prevWeeks 8)',
+      r.status === 200 && !!p.weekStart && !!p.weekEnd && p.days?.length === 7 && p.prevWeeks?.length === 8,
+      JSON.stringify({ weekStart: p.weekStart, days: p.days?.length, prev: p.prevWeeks?.length }));
+    expect('challenge: นับ session + นาทีโฟกัสของสัปดาห์นี้ได้', p.sessions >= 1 && p.focusSec >= 1500, JSON.stringify({ sessions: p.sessions, focusSec: p.focusSec }));
+    expect('challenge: 7 วันเรียงตามสัปดาห์ (จ-อา) มีค่าไม่ติดลบ', p.days.every((d) => d.weekday && d.sessions >= 0 && d.focusSec >= 0), JSON.stringify(p.days));
+  }
+
   // --- export/backup ---
   const backupRes = await fetch(`${base}/api/backup`);
   const buf = Buffer.from(await backupRes.arrayBuffer());

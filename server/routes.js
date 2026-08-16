@@ -1031,6 +1031,52 @@ router.get('/weekly-summary', (req, res) => {
   });
 });
 
+// ----- ชาเลนจ์รายสัปดาห์ (async — ตั้งเป้าเอง + แชร์รหัส ไม่ต้องมี server กลาง) -----
+// คำนวณ session + นาทีโฟกัสของสัปดาห์นี้ (จันทร์–อาทิตย์ ตามเวลาเครื่อง) + ประวัติ 8 สัปดาห์ก่อน
+router.get('/challenge/progress', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const now = new Date();
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const weekStart = fmt(mon);
+  const weekEnd = fmt(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6));
+
+  const weekRow = (start, end) => db.prepare(`
+    SELECT COUNT(*) AS sessions, COALESCE(SUM(focus_sec),0) AS focus_sec
+    FROM log WHERE character_id=? AND type='session_done' AND date(created_at)>=? AND date(created_at)<=?
+  `).get(c.id, start, end);
+
+  const daysRaw = db.prepare(`
+    SELECT date(created_at) AS d, COUNT(*) AS sessions, COALESCE(SUM(focus_sec),0) AS focus_sec
+    FROM log WHERE character_id=? AND type='session_done' AND date(created_at)>=? AND date(created_at)<=?
+    GROUP BY d
+  `).all(c.id, weekStart, weekEnd);
+  const byDate = Object.fromEntries(daysRaw.map((r) => [r.d, r]));
+
+  const wd = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = fmt(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i));
+    days.push({ date: d, weekday: wd[i], sessions: byDate[d]?.sessions || 0, focusSec: byDate[d]?.focus_sec || 0 });
+  }
+
+  const prevWeeks = [];
+  for (let w = 1; w <= 8; w++) {
+    const pm = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() - w * 7);
+    const ps = fmt(pm);
+    const pe = fmt(new Date(pm.getFullYear(), pm.getMonth(), pm.getDate() + 6));
+    const row = weekRow(ps, pe);
+    prevWeeks.push({ weekStart: ps, weekEnd: pe, sessions: row.sessions, focusSec: row.focus_sec });
+  }
+
+  const cur = weekRow(weekStart, weekEnd);
+  res.json({
+    weekStart, weekEnd, days,
+    sessions: cur.sessions, focusSec: cur.focus_sec,
+    prevWeeks,
+  });
+});
+
 // ----- สถิติละเอียด (หน้า Stats) -----
 router.get('/stats', (req, res) => {
   const c = requireChar(res); if (!c) return;
