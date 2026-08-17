@@ -433,7 +433,14 @@ export default function CharacterSheet() {
                 </div>
                 <div className="inv-actions">
                   {i.type === 'consumable' ? (
-                    <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => useItem(i)}
+                      disabled={!!(i.useEgg && character.hatchPending)}
+                      title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : ''}
+                    >
+                      ใช้
+                    </button>
                   ) : i.type === 'scroll' ? (
                     <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>
                   ) : i.type === 'blueprint' ? (

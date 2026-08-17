@@ -316,6 +316,7 @@ body {
   animation: fadeUp 0.3s ease;
 }
 .timer-city { display: flex; align-items: center; gap: 12px; }
+.timer-city .icon-btn { margin-left: auto; }
 .city-icon { font-size: 40px; }
 .timer-title { font-size: 18px; font-weight: 800; }
 .timer-sub { color: var(--muted); font-size: 13px; }

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
+import { sfx, isMuted, setMuted } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 
 // เวลาสัมพัทธ์ (ms) — ใช้กับ `at` ที่เก็บตอน event เกิด
@@ -15,6 +16,14 @@ function fmtAgo(ms) {
 export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '', pausedSec = 0, onEditTask = null }) {
   const { character, progress } = useGame();
   const logRef = useRef(null);
+  const [muted, setMutedState] = useState(isMuted());
+  const toggleMute = () => {
+    const m = !muted;
+    setMuted(m);
+    setMutedState(m);
+    localStorage.setItem('pomoquest-muted', m ? '1' : '0');
+    sfx.click();
+  };
 
   // เหตุการณ์ใหม่ → เลื่อนไปโชว์เหตุการณ์ล่าสุด (เรียงล่าสุดบนสุด)
   useEffect(() => {
@@ -40,6 +49,9 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
             )}
           </div>
         </div>
+        <button className="icon-btn" onClick={toggleMute} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}>
+          {muted ? '🔇' : '🔊'}
+        </button>
       </div>
 
       <div className="timer-ring" style={{ '--pct': pct }}>

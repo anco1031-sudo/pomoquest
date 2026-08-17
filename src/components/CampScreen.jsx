@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGame } from '../context.jsx';
-import { sfx } from '../sound.js';
+import { sfx, isMuted, setMuted } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
@@ -18,6 +18,13 @@ const TABS = [
 export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, visit, postBoss = null }) {
   const { character, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
+  const [muted, setMutedState] = useState(isMuted());
+  const toggleMute = () => {
+    const m = !muted;
+    setMuted(m);
+    setMutedState(m);
+    localStorage.setItem('pomoquest-muted', m ? '1' : '0');
+  };
   const [shop, setShop] = useState([]);
   const [quests, setQuests] = useState([]);
   const [sellPrices, setSellPrices] = useState({}); // ราคาขายของแต่ละชิ้นตอนค่ายพักนี้ (พ่อค้าต้องการของบางชิ้น → แพงขึ้น)
@@ -134,6 +141,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         </div>
         <div className="camp-header-right">
           <span className="gold-chip" title="ทองของคุณ">💰 {character.gold}</span>
+          <button className="icon-btn" onClick={toggleMute} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'}>
+            {muted ? '🔇' : '🔊'}
+          </button>
           {character.hatchPending && (
             <span className="hatch-chip" title="🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักหลังจบ 1 session โฟกัส">🥚 กำลังฟัก…</span>
           )}
@@ -348,7 +358,14 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                   </div>
                   <div className="inv-actions">
                     {i.type === 'consumable' ? (
-                      <button className="btn btn-sm" onClick={() => useItem(i)}>ใช้</button>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => useItem(i)}
+                        disabled={!!(i.useEgg && character.hatchPending)}
+                        title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : ''}
+                      >
+                        ใช้
+                      </button>
                     ) : i.type === 'scroll' ? (
                       <span className="junk-note">📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)</span>
                     ) : i.type === 'blueprint' ? (
