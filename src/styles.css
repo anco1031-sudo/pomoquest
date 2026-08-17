@@ -1727,6 +1727,45 @@ body {
   justify-content: center;
   cursor: help;
 }
+/* ป้ายไข่กำลังฟักบนหัวค่าย (ใช้ไข่แล้ว รอจบ 1 session ถึงจะฟัก) */
+.hatch-chip {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  animation: hatch-pulse 1.8s ease-in-out infinite;
+}
+/* modal ฉลองไข่ฟัก 🥚 */
+.hatch-modal { text-align: center; }
+.hatch-pet-icon {
+  font-size: 68px;
+  line-height: 1.2;
+  margin: 10px 0 4px;
+  animation: hatch-pop 0.55s ease-out;
+  filter: drop-shadow(0 4px 14px rgba(245, 158, 11, 0.45));
+}
+@keyframes hatch-pop {
+  0% { transform: scale(0.25) rotate(-12deg); opacity: 0; }
+  70% { transform: scale(1.18) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.hatch-pet-name { font-size: 20px; font-weight: 800; margin-bottom: 10px; }
+.hatch-rarity {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.rarity-common { background: #4ade80; color: #052e16; }
+.rarity-rare { background: #60a5fa; color: #0c2a52; }
+.rarity-epic { background: #c084fc; color: #2e1065; }
+.rarity-legend { background: #facc15; color: #422006; }
+
 /* ป้ายไข่กำลังฟัก (ใช้ไข่แล้ว รอจบ 1 session ถึงจะฟัก) */
 .hatch-badge {
   position: absolute;

@@ -134,6 +134,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         </div>
         <div className="camp-header-right">
           <span className="gold-chip" title="ทองของคุณ">💰 {character.gold}</span>
+          {character.hatchPending && (
+            <span className="hatch-chip" title="🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักหลังจบ 1 session โฟกัส">🥚 กำลังฟัก…</span>
+          )}
           {onHome && (
             <button className="btn btn-sm" onClick={onHome} title="กลับหน้าหลัก — เวลาพักยังนับต่อ (หมดเวลาแล้วยังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)">
               🏠 กลับหน้าหลัก

@@ -73,6 +73,7 @@ export default function Game() {
   const [breakStartedAt, setBreakStartedAt] = useState(null); // เริ่มพักเมื่อไหร่ (ms) — ใช้คำนวณเวลาพักจริง
   const [breakAtHome, setBreakAtHome] = useState(false); // กลับหน้าหลักระหว่างพักเบรก — timer ยังนับต่อ (หมดเวลายังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)
   const [postBossNote, setPostBossNote] = useState(null); // ชนะ/หนีบอสแล้ว — อยู่ใน "พักหลังชัยชนะ" (ข้อความสรุปผล) · null = ยังสู้บอสอยู่
+  const [hatchResult, setHatchResult] = useState(null); // 🥚 ผลฟักไข่หลังจบ session — เปิด modal ฉลอง (null = ไม่มี)
 
   // สรุปรวมของรางวัลจากเหตุการณ์ใน session นี้ (โชว์ตอนจบ session)
   const sessionSummary = useMemo(() => {
@@ -150,6 +151,7 @@ export default function Game() {
     setBreakStartedAt(null);
     setBreakAtHome(false);
     setPostBossNote(null);
+    setHatchResult(null);
 
     const t = loadTimer(character.id, epoch);
     if (t) {
@@ -168,6 +170,7 @@ export default function Game() {
       setBreakStartedAt(t.breakStartedAt || null);
       setBreakAtHome(t.breakAtHome || false);
       setPostBossNote(t.postBossNote || null);
+      setHatchResult(t.hatchResult || null);
       setPausedAtHome(t.pausedAtHome || false);
       setPauseStartedAt(t.pauseStartedAt || null);
       setPauseAccumSec(t.pauseAccumSec || 0);
@@ -222,13 +225,13 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, pausedAtHome, pauseStartedAt, pauseAccumSec,
+      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -292,12 +295,10 @@ export default function Game() {
         : '';
       notify('⏰ โฟกัสครบแล้ว!', `ได้ +${res.reward.xp} XP, +${res.reward.gold} ทอง${hatchNote} — พักเบรกหรือลุยต่อ?`);
     }
-    // 🥚 ไข่ที่กำลังฟัก — จบ session แล้วไข่ฟัก (server สุ่มตอนฟักจริง ไม่สปอยล์ก่อนหน้านี้)
+    // 🥚 ไข่ที่กำลังฟัก — จบ session แล้วไข่ฟัก → เปิด modal ฉลอง (server สุ่มตอนฟักจริง ไม่สปอยล์ก่อนหน้านี้)
     if (res.hatch) {
-      const h = res.hatch;
-      if (h.waiting) showToast(`🥚 ${h.message || 'คอกสัตว์เต็ม — ไข่รอฟักอยู่'}`);
-      else if (h.dup) showToast(`🥚 ไข่ฟักเป็น ${h.pet.icon} ${h.pet.name} (${h.rarityLabel}) แต่มีอยู่ในคอกแล้ว — ได้ค่าปลอบใจ +${h.gold} ทอง`);
-      else showToast(`🥚 ไข่ฟักแล้ว! ได้ ${h.pet.icon} ${h.pet.name} (${h.rarityLabel}) — ตั้งเป็นตัวที่ใช้งานแล้ว`);
+      if (res.hatch.waiting) showToast(`🥚 ${res.hatch.message || 'คอกสัตว์เต็ม — ไข่รอฟักอยู่'}`);
+      else setHatchResult(res.hatch);
     }
     setStoryDone(false); // เริ่มรอเรื่องราว — เรื่องต้องโชว์ก่อนถึงจะถามพัก/ข้าม
     setAwaitingBreak(true);
@@ -691,6 +692,30 @@ export default function Game() {
         <EventModal event={eventQueue[0]} onClose={closeEvent} />
       )}
 
+      {/* 🥚 ไข่ฟักแล้ว! — modal ฉลอง (หลัง story/เลเวลอัพ/ตรา/เหตุการณ์ — ก่อนถามพัก/ข้าม) */}
+      {!story && !inActiveWork && !inPausedWork && (!awaitingBreak || storyDone) && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length === 0 && hatchResult && (
+        <div className="modal-backdrop">
+          <div className="modal hatch-modal">
+            <h2>🥚 ไข่ฟักแล้ว!</h2>
+            <div className="hatch-pet-icon">{hatchResult.pet.icon}</div>
+            <div className="hatch-pet-name">
+              {hatchResult.pet.name}
+              <span className={`hatch-rarity rarity-${hatchResult.pet.rarity}`}>{hatchResult.rarityLabel}</span>
+            </div>
+            {hatchResult.dup ? (
+              <p className="hint">🐾 มี {hatchResult.pet.icon} {hatchResult.pet.name} อยู่ในคอกแล้ว — ไข่ฟักเป็นตัวเดิม ได้ค่าปลอบใจ <b>+{hatchResult.gold} ทอง</b></p>
+            ) : (
+              <p className="hint">ยินดีต้อนรับ! {hatchResult.pet.icon} {hatchResult.pet.name} ตั้งเป็นตัวที่ใช้งานแล้ว — ดูค่าพิเศษได้ที่คอกสัตว์ 🐾</p>
+            )}
+            <div className="modal-actions">
+              <button className="btn btn-primary btn-big" onClick={() => { sfx.levelup(); setHatchResult(null); }}>
+                {hatchResult.dup ? 'รับทราบ' : `🐾 รับ ${hatchResult.pet.name} ไว้ดูแล!`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* กำลังรอเรื่องราว (LLM เขียนเรื่อง) — โชว์สถานะแทนหน้าจอว่าง */}
       {awaitingBreak && !storyDone && !story && (
         <div className="story-wait">
@@ -700,7 +725,7 @@ export default function Game() {
       )}
 
       {/* จบ session — ถามว่าจะพักเบรกหรือข้ามไปโฟกัสต่อ (หลังเรื่องราว + modal รางวัลทั้งหมดจบแล้วเท่านั้น) */}
-      {awaitingBreak && storyDone && !story && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length === 0 && (
+      {awaitingBreak && storyDone && !story && !hatchResult && levelUpQueue.length === 0 && achieveQueue.length === 0 && eventQueue.length === 0 && (
         <div className="modal-backdrop">
           <div className="modal">
             <h2>🎉 จบเซสชันที่ {sessionIdx}!</h2>
