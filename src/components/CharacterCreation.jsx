@@ -33,15 +33,27 @@ const CHALLENGES = [
 // modal = แสดงเป็น modal (กดจากปุ่ม "สร้างตัวละครใหม่" ในหน้าเลือกตัวละคร)
 // onClose = กลับไปหน้าเลือกตัวละคร (เฉพาะโหมด modal) · onDone = ปิดเมนูทั้งหมดแล้วใช้ตัวละครที่เพิ่งสร้าง (ไปหน้า Home)
 export default function CharacterCreation({ modal = false, onClose, onDone }) {
-  const { post } = useGame();
+  const { post, characters, showToast } = useGame();
   const [name, setName] = useState('');
   const [cls, setCls] = useState(null);
   const [challenge, setChallenge] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(''); // error inline ใต้ช่องชื่อ (เช่น ชื่อซ้ำ)
   const [created, setCreated] = useState(null); // ตัวละครที่เพิ่งสร้าง (โชว์ modal "ใช้เลยไหม") — เฉพาะโหมด modal
 
   const create = async () => {
     if (!name.trim() || !cls || busy) return;
+    // เช็คชื่อซ้ำฝั่ง client ก่อน (logic เดียวกับ server — ไม่แยกตัวพิมพ์เล็ก/ใหญ่)
+    // ให้ error เด้งชัดเจนใต้ช่องชื่อทันที ไม่ต้องรอ server
+    const trimmed = name.trim();
+    const dup = characters?.some((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase());
+    if (dup) {
+      const msg = `มีตัวละครชื่อ "${trimmed}" อยู่แล้ว — ลองชื่ออื่น`;
+      setErr(msg);
+      showToast(msg);
+      return;
+    }
+    setErr('');
     setBusy(true);
     sfx.start();
     const d = await post('/character/create', { name, class: cls, challengeMode: challenge });
@@ -77,8 +89,9 @@ export default function CharacterCreation({ modal = false, onClose, onDone }) {
           placeholder="ชื่อตัวละครของคุณ…"
           value={name}
           maxLength={20}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => { setName(e.target.value); if (err) setErr(''); }}
         />
+        {err && <div className="form-error">⚠️ {err}</div>}
       </div>
 
       <div className="panel">

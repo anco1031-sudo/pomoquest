@@ -1260,6 +1260,15 @@ body {
   margin: 8px 0;
 }
 
+/* error inline ใต้ input (เช่น ชื่อตัวละครซ้ำ) */
+.form-error {
+  color: #ff6b6b;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 8px;
+  text-align: left;
+}
+
 /* ---------- toast (แบบคิว — โชว์เรียงกันหลายอัน) ---------- */
 .toast-stack {
   position: fixed;

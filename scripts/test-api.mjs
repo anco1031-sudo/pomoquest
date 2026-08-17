@@ -553,10 +553,14 @@ try {
     addItem(petCid, 171, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 171 } });
     expect('pet: บัตรขยายคอก → 2/4 ช่อง', r.status === 200 && r.json.character.petSlots === 2, r.json.message || r.json.error);
-    // ฟักไข่ฟองที่ 2 ได้ (2 ช่องแล้ว)
-    addItem(petCid, 170, 1);
-    r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
-    expect('pet: ฟักไข่ฟองที่ 2 สำเร็จ (2/2)', r.status === 200 && r.json.character.pets.length === 2, r.json.message || r.json.error);
+    // ฟักไข่ฟองที่ 2 ได้ (2 ช่องแล้ว) — ฟักซ้ำได้ถ้าสุ่มเจอตัวเดิม (ไข่ฟักเป็นตัวเดิมไม่ได้)
+    let hatched2 = false;
+    for (let attempt = 0; attempt < 10 && !hatched2; attempt++) {
+      addItem(petCid, 170, 1);
+      r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+      hatched2 = r.status === 200 && r.json.character.pets.length === 2;
+    }
+    expect('pet: ฟักไข่ฟองที่ 2 สำเร็จ (2/2)', hatched2, r.json.message || r.json.error);
     // สลับตัวที่ใช้งาน
     const other = r.json.character.pets.find((p) => p.id !== petId);
     r = await api('/pet/swap', { method: 'POST', body: { petId: other.id } });
