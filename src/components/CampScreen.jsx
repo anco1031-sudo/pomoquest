@@ -43,6 +43,8 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
       if (d) {
         setShop(d.shop || []);
         setQuests(d.quests || []);
+        // ภารกิจที่ทำแล้วในค่ายพักนี้ (server จำ — กลับหน้าหลักแล้วกลับมา ยังทำซ้ำไม่ได้)
+        setDoneQuests(d.doneQuests || {});
         setSellPrices(d.sellPrices || {});
         setBlackMarket(d.blackMarket || null);
         setFestival(d.festival || null);
@@ -65,7 +67,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
 
   const doQuest = async (q) => {
     sfx.click();
-    const d = await post('/quest/do', { questId: q.id });
+    const d = await post('/quest/do', { questId: q.id, visit }); // ส่ง visit — server จำว่าทำภารกิจนี้ในค่ายพักนี้แล้ว (ทำซ้ำไม่ได้)
     if (d) {
       setDoneQuests((s) => ({ ...s, [q.id]: true }));
       setQuestResults((s) => ({ ...s, [q.id]: d.result }));

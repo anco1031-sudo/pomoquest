@@ -537,6 +537,7 @@ router.get('/camp', (req, res) => {
   let stock = db.prepare('SELECT item_id, qty, market FROM camp_shop WHERE character_id = ? AND visit = ?').all(c.id, visit);
   if (!stock.length) {
     db.prepare('DELETE FROM camp_shop WHERE character_id = ?').run(c.id); // ล้าง stock ค่ายเก่า
+    db.prepare('DELETE FROM camp_quest_done WHERE character_id = ?').run(c.id); // ล้างภารกิจที่ทำแล้วของค่ายเก่า (ทำได้ 1 ครั้งต่อพัก)
     // ขายเฉพาะของที่คลาสนี้ใช้ได้ (ไม่ขายอุปกรณ์เฉพาะคลาสอื่นให้รก)
     const pool = SHOP_STOCK.filter((i) => i.type === 'consumable' || ((i.lvl || 1) <= c.level + 1 && (!i.classReq || i.classReq.includes(c.class))));
     // สินค้า 3–5 ชิ้น: ยา 1–2 + อุปกรณ์ 2–3 (สุ่มจำนวนด้วย)
@@ -614,7 +615,9 @@ router.get('/camp', (req, res) => {
     shop,
     festival: fest || null,
     blackMarket: bm ? { items: shop.filter((s) => s.bm), junkMult: BM_JUNK_MULT } : null,
-    quests: rollQuests(c.level, 3),
+    // ภารกิจ deterministic ต่อค่ายพัก (seed = visit — กลับเข้าค่ายเดิมได้ชุดเดิม) + สถานะทำแล้ว (กันทำซ้ำโดยสลับหน้าหลัก/ค่าย)
+    quests: rollQuests(c.level, 3, visit),
+    doneQuests: Object.fromEntries(db.prepare('SELECT quest_id FROM camp_quest_done WHERE character_id = ? AND visit = ?').all(c.id, visit).map((r) => [r.quest_id, true])),
     recipes,
     trophies: getTrophies(c.id),
   });
@@ -1028,9 +1031,14 @@ router.post('/daily/claim-all', (req, res) => {
 // ----- ภารกิจ -----
 router.post('/quest/do', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { questId } = req.body || {};
+  const { questId, visit } = req.body || {};
   const quest = QUESTS.find((q) => q.id === questId);
   if (!quest) return res.status(400).json({ error: 'ภารกิจไม่พบ' });
+  // ทำได้ 1 ครั้งต่อค่ายพัก — เช็คจาก visit (กันทำซ้ำโดยกดกลับหน้าหลักแล้วกลับมาค่ายเดิม)
+  if (visit) {
+    const already = db.prepare('SELECT 1 FROM camp_quest_done WHERE character_id = ? AND visit = ? AND quest_id = ?').get(c.id, visit, questId);
+    if (already) return res.status(400).json({ error: 'ทำภารกิจนี้ไปแล้วในค่ายพักนี้' });
+  }
   const result = resolveQuest(c, quest);
   updateCharacter(c);
   let bagNote = '';
@@ -1047,6 +1055,8 @@ router.post('/quest/do', (req, res) => {
     db.prepare('UPDATE progress SET quests_completed = ? WHERE id = ?').run(prog.quests_completed, prog.id);
   }
   bumpDaily(c.id, 'camp_quests');
+  // บันทึกว่าทำภารกิจนี้ในค่ายพักนี้แล้ว (สำเร็จหรือไม่ก็ตาม — ทำได้ครั้งเดียวต่อพัก) — กันทำซ้ำโดยสลับหน้าหลัก/ค่าย
+  if (visit) db.prepare('INSERT OR IGNORE INTO camp_quest_done (character_id, visit, quest_id) VALUES (?, ?, ?)').run(c.id, visit, questId);
   const ach = checkAchievements(c, prog);
   res.json({
     ...serialize(c), result, inventory: getInventory(c.id),
@@ -1526,7 +1536,7 @@ router.post('/restore', (req, res) => {
 
 // Reset — ล้างข้อมูลเกมทั้งหมด (มีผลทันที ไม่ต้องรีสตาร์ท)
 router.post('/reset', (req, res) => {
-  for (const t of ['achievement_unlock', 'camp_shop', 'character_skill', 'daily_counter', 'daily_quest_done', 'daily_streak', 'story_quest_done', 'inventory', 'log', 'progress', 'character']) {
+  for (const t of ['achievement_unlock', 'camp_shop', 'camp_quest_done', 'character_skill', 'daily_counter', 'daily_quest_done', 'daily_streak', 'story_quest_done', 'inventory', 'log', 'progress', 'character']) {
     db.prepare(`DELETE FROM ${t}`).run();
   }
   db.prepare('DELETE FROM sqlite_sequence').run(); // รีเซ็ต autoincrement

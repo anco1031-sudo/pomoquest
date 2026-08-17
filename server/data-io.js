@@ -1,6 +1,6 @@
 // server/data-io.js — export/import ข้อมูลเกม (ใช้ร่วมกันระหว่าง API routes และ CLI backup)
 // ตารางที่ export/import ได้ (item เป็น data สถิตจากโค้ด — ไม่ export)
-export const WRITABLE_TABLES = ['character', 'progress', 'inventory', 'log', 'achievement_unlock', 'daily_counter', 'daily_quest_done', 'daily_streak', 'camp_shop', 'character_skill', 'settings'];
+export const WRITABLE_TABLES = ['character', 'progress', 'inventory', 'log', 'achievement_unlock', 'daily_counter', 'daily_quest_done', 'daily_streak', 'camp_shop', 'camp_quest_done', 'character_skill', 'settings'];
 
 // เวอร์ชันของ schema/ฟอร์แมต export — ถ้าเปลี่ยนโครงสร้างตาราง/คอลัมน์ที่กระทบ import ให้ +1
 export const SCHEMA_VERSION = 1;

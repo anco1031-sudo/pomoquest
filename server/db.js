@@ -149,6 +149,14 @@ CREATE TABLE IF NOT EXISTS camp_shop (
   PRIMARY KEY (character_id, visit, item_id)
 );
 
+CREATE TABLE IF NOT EXISTS camp_quest_done (
+  character_id INTEGER NOT NULL,
+  visit TEXT NOT NULL,
+  quest_id TEXT NOT NULL,
+  done_at TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (character_id, visit, quest_id)
+);
+
 CREATE TABLE IF NOT EXISTS character_skill (
   character_id INTEGER NOT NULL,
   skill_id TEXT NOT NULL,

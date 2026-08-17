@@ -232,6 +232,32 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('plan: alloc ไม่พอ → ยังสวมไม่ได้', itemReqMissing(gear, afterChar2).length === 1, JSON.stringify(itemReqMissing(gear, afterChar2)));
 }
 
+// --- เวทย์ (นักเวทย์) ใช้สกิลใน event มอนสเตอร์ถี่กว่าคลาสอื่น (CLASS_PERKS.mage.skillUse) ---
+{
+  const { EVENT_SKILL_CHANCE, classPerks } = await import('../server/game.js');
+  const origPerks = process.env.POMOQUEST_CLASS_PERKS;
+  process.env.POMOQUEST_CLASS_PERKS = '1'; // เปิดค่าพิเศษคลาส — ทดสอบเฉพาะส่วนนี้
+  const cpMage = classPerks({ class: 'mage' });
+  const cpWarrior = classPerks({ class: 'warrior' });
+  expect('skill-use: ฐาน 15% · เวทย์คูณ 2.5x (37.5%) · คลาสอื่น 1x', EVENT_SKILL_CHANCE === 0.15 && cpMage.skillUse === 2.5 && cpWarrior.skillUse === 1, JSON.stringify({ base: EVENT_SKILL_CHANCE, mage: cpMage.skillUse, warrior: cpWarrior.skillUse }));
+  // สถิติ: รัน event มอนสเตอร์ 300 ครั้งต่อคลาส — เวทย์ต้องใช้สกิลถี่กว่าชัดเจน (37.5% vs 15%)
+  const mkChar = (cls) => {
+    const base = CLASSES[cls].base;
+    const r = db.prepare(`INSERT INTO character (name, class, hp, max_hp, mp, max_mp, atk, def, spd, crit) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+      .run(`skill-${cls}-${Date.now()}`, cls, base.hp, base.hp, base.mp, base.mp, base.atk, base.def, base.spd, base.crit);
+    return db.prepare('SELECT * FROM character WHERE id = ?').get(r.lastInsertRowid);
+  };
+  const mage = mkChar('mage');
+  const warrior = mkChar('warrior');
+  const N = 300;
+  let mageSkill = 0, warriorSkill = 0;
+  for (let i = 0; i < N; i++) { if (rollEvent(mage, 'monster').skill) mageSkill++; }
+  for (let i = 0; i < N; i++) { if (rollEvent(warrior, 'monster').skill) warriorSkill++; }
+  // ขอบเขตกว้าง ๆ กัน flaky (ค่าเฉลี่ย 112/45 จาก 300 ครั้ง — เยื้อง 3.5σ ขึ้นไป)
+  expect(`skill-use: เวทย์ (${mageSkill}/${N}) ใช้สกิลถี่กว่าคลาสอื่น (${warriorSkill}/${N}) ชัดเจน`, mageSkill >= 80 && warriorSkill <= 70 && mageSkill > warriorSkill, `mage=${mageSkill} warrior=${warriorSkill}`);
+  process.env.POMOQUEST_CLASS_PERKS = origPerks;
+}
+
 // --- ทุก event ต้องมี title/flavor/detail สำหรับแสดงผล ---
 for (const key of ['monster', 'treasure', 'shrine', 'merchant', 'trap']) {
   const ev = rollEvent(c, key);

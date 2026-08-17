@@ -19,9 +19,10 @@ export const isNight = (d) => {
 // ----- จุดเด่น/จุดด้อยเฉพาะคลาส (ตามช่วงเวลา) — คืนตัวคูณให้ระบบต่าง ๆ ใช้ -----
 // gold/xp = % เปลี่ยนรางวัล event · monster = พลังมอนสเตอร์ · monsterW = น้ำหนัก event มอนสเตอร์
 // treasure/shrine/trap = น้ำหนัก event · shrineReward = รางวัลศาลเจ้า · bossAtk = ดาเมจที่ทำกับบอส
+// skillUse = คูณอัตราการใช้สกิลอัตโนมัติใน event มอนสเตอร์ (เวทย์ใช้เวทถี่กว่าคลาสอื่น)
 // POMOQUEST_CLASS_PERKS=0 → ปิด (test ที่ไม่เกี่ยวกับค่าพิเศษคลาส — ค่าเดิมเป๊ะ)
 export function classPerks(c, now = new Date()) {
-  const out = { gold: 1, xp: 1, monster: 1, monsterW: 1, treasure: 1, shrine: 1, shrineReward: 1, trap: 1, bossAtk: 1, night: false, active: null };
+  const out = { gold: 1, xp: 1, monster: 1, monsterW: 1, treasure: 1, shrine: 1, shrineReward: 1, trap: 1, bossAtk: 1, skillUse: 1, night: false, active: null };
   if (!c?.class || process.env.POMOQUEST_CLASS_PERKS === '0') return out;
   const def = CLASS_PERKS[c.class];
   if (!def) return out;
@@ -38,6 +39,7 @@ export function classPerks(c, now = new Date()) {
   if (set.shrineReward) out.shrineReward = set.shrineReward;
   if (set.trap) out.trap = set.trap;
   if (set.bossAtk) out.bossAtk = set.bossAtk;
+  if (set.skillUse) out.skillUse = set.skillUse;
   out.active = { class: c.class, night, text: (def.perkText || {})[night ? 'night' : 'day'] || null };
   return out;
 }
@@ -582,6 +584,8 @@ export function acquireItem(c, itemId, qty = 1, { fullMode = 'sell', checkOnly =
 }
 
 // ----- เหตุการณ์สุ่มระหว่าง session (forceKey = ระบุ event ให้เกิดตาม key — ใช้ใน dev test) -----
+// โอกาสฐานที่ตัวละครใช้สกิลอัตโนมัติใน event มอนสเตอร์ — คลาสเวทย์คูณเพิ่ม (CLASS_PERKS.mage.skillUse)
+export const EVENT_SKILL_CHANCE = 0.15;
 export function rollEvent(c, forceKey = null) {
   const perks = petPerks(c);
   const cperks = classPerks(c); // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙
@@ -670,9 +674,10 @@ export function rollEvent(c, forceKey = null) {
   if (ev.key === 'monster') {
     const m = rollMonster(c.level, c);
     // มีโอกาสเล็กน้อย (15%) ที่ตัวละครใช้สกิลอัตโนมัติ (รวมสกิลจากคัมภีร์) → ชนะง่ายขึ้น + รางวัลเพิ่ม
+    // เวทย์ (นักเวทย์) ได้คูณเพิ่มจาก CLASS_PERKS.mage.skillUse (2.5x = 37.5%) — ใช้สกิลถี่กว่าคลาสอื่น
     const skills = getCharacterSkills(c);
     let skillUsed = null;
-    if (skills.length && Math.random() < 0.15) {
+    if (skills.length && Math.random() < EVENT_SKILL_CHANCE * cperks.skillUse) {
       skillUsed = skills[Math.floor(Math.random() * skills.length)];
     }
     let res;
@@ -1187,11 +1192,13 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
 }
 
 // ----- ภารกิจช่วงพักสั้น -----
-export function rollQuests(level, count = 3) {
+// seed (เช่น visit ค่ายพัก) → ภารกิจ deterministic ต่อค่ายพัก — กลับเข้าค่ายเดิมได้ชุดเดิม (กัน reroll ภารกิจซ้ำ)
+export function rollQuests(level, count = 3, seed = null) {
   const pool = [...QUESTS];
   const picked = [];
+  const rng = seed ? seededRng(`quests-${seed}`) : null;
   while (picked.length < count && pool.length) {
-    const idx = Math.floor(Math.random() * pool.length);
+    const idx = rng ? Math.floor(rng() * pool.length) : Math.floor(Math.random() * pool.length);
     picked.push(pool.splice(idx, 1)[0]);
   }
   return picked.map((q) => ({

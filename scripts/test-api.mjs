@@ -598,9 +598,9 @@ try {
     // ☀️ กลางวัน 12:00
     process.env.POMOQUEST_HOUR = '12';
     let cp = classPerks({ class: 'warrior' });
-    expect('perk: นักรบ ☀️ มอนสเตอร์อ่อนลง 15% + เจอถี่ขึ้น x1.15 + ตีบอส +10%', cp.monster === 0.85 && cp.monsterW === 1.15 && cp.bossAtk === 1.1 && cp.night === false, JSON.stringify(cp));
+    expect('perk: นักรบ ☀️ มอนสเตอร์อ่อนลง 15% + เจอถี่ขึ้น x1.15 + ตีบอส +10% (สกิล event 1x)', cp.monster === 0.85 && cp.monsterW === 1.15 && cp.bossAtk === 1.1 && cp.skillUse === 1 && cp.night === false, JSON.stringify(cp));
     cp = classPerks({ class: 'mage' });
-    expect('perk: เวทย์ ☀️ XP -10% + ตีบอส -10% (จุดด้อย)', cp.xp === 0.9 && cp.bossAtk === 0.9, JSON.stringify(cp));
+    expect('perk: เวทย์ ☀️ XP -10% + ตีบอส -10% (จุดด้อย) + สกิล event 2.5x', cp.xp === 0.9 && cp.bossAtk === 0.9 && cp.skillUse === 2.5, JSON.stringify(cp));
     cp = classPerks({ class: 'rogue' });
     expect('perk: โจร ☀️ ไม่มีค่าพิเศษ (ช่วงปกติ)', cp.gold === 1 && cp.active === null, JSON.stringify(cp));
     // 🌙 กลางคืน 22:00
@@ -608,7 +608,7 @@ try {
     cp = classPerks({ class: 'rogue' });
     expect('perk: โจร 🌙 ทอง +30% + สมบัติ x1.25 + กับดัก x1.3 + ตีบอส +10%', cp.gold === 1.3 && cp.treasure === 1.25 && cp.trap === 1.3 && cp.bossAtk === 1.1 && cp.night === true, JSON.stringify(cp));
     cp = classPerks({ class: 'mage' });
-    expect('perk: เวทย์ 🌙 XP +25% + ตีบอส +10% (จุดเด่น)', cp.xp === 1.25 && cp.bossAtk === 1.1, JSON.stringify(cp));
+    expect('perk: เวทย์ 🌙 XP +25% + ตีบอส +10% (จุดเด่น) + สกิล event 2.5x', cp.xp === 1.25 && cp.bossAtk === 1.1 && cp.skillUse === 2.5, JSON.stringify(cp));
     cp = classPerks({ class: 'cleric' });
     expect('perk: นักบวช 🌙 มอนสเตอร์แข็งขึ้น 10% (จุดด้อย)', cp.monster === 1.1, JSON.stringify(cp));
     // rollMonster: นักรบกลางคืนพลังมอนสเตอร์สูงกว่ากลางวัน (สุ่มตัวเดียวกัน x0.5)
