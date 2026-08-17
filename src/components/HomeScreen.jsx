@@ -218,7 +218,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               <span className="resume-icon">⛺</span>
               <span>
                 {breakOver ? (
-                  <>⏰ พักหมดเวลาแล้ว — กดกลับไปค่ายเพื่อเริ่มโฟกัสหรือต่อเวลาพัก</>
+                  <>⏰ พักหมดเวลาแล้ว — กดกลับไปค่ายเพื่อเริ่มโฟกัสเมื่อพร้อม (เวลายังนับต่อ)</>
                 ) : (
                   <>กำลังพักเบรกอยู่ — เหลือ <b>{fmtTime(breakRemain)}</b> (เวลายังนับต่อ)</>
                 )}

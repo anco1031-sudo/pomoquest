@@ -41,9 +41,6 @@ const randomEventDelay = (remainSec) => {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
 };
 
-// ตัวเลือกต่อเวลาพัก (นาที) — ให้ user เลือกเอง
-const EXTEND_OPTIONS = [1, 5, 10];
-
 export default function Game() {
   const { loading, hasCharacter, character, characters, settings, refresh, post, get, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp, epoch } = useGame();
 
@@ -72,7 +69,7 @@ export default function Game() {
   const [awaitingBreak, setAwaitingBreak] = useState(false); // จบ session แล้ว — รอ user เลือกพักเบรกหรือข้าม
   const [breakOver, setBreakOver] = useState(false); // พักครบเวลาแล้ว — ไม่เริ่มโฟกัสเอง ให้ user กดเอง (เวลายังนับต่อ)
   const [overrun, setOverrun] = useState(0); // วินาทีที่เลยเวลาพัก (นับต่อจาก 0)
-  const [breakExtends, setBreakExtends] = useState(0); // ต่อเวลาพักกี่ครั้ง
+  const [breakOverDismissed, setBreakOverDismissed] = useState(false); // กด "ยังพักต่อ" ปิด modal หมดเวลาพัก — เวลายังนับต่อ (overrun)
   const [breakStartedAt, setBreakStartedAt] = useState(null); // เริ่มพักเมื่อไหร่ (ms) — ใช้คำนวณเวลาพักจริง
   const [breakAtHome, setBreakAtHome] = useState(false); // กลับหน้าหลักระหว่างพักเบรก — timer ยังนับต่อ (หมดเวลายังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)
 
@@ -102,7 +99,6 @@ export default function Game() {
   const remainRef = useRef(remain);
   const breakOverRef = useRef(breakOver);
   const overrunRef = useRef(overrun);
-  const breakExtendsRef = useRef(breakExtends);
   const breakStartedAtRef = useRef(breakStartedAt);
   const pauseStartedAtRef = useRef(null);
   const pauseAccumSecRef = useRef(0);
@@ -114,7 +110,6 @@ export default function Game() {
   remainRef.current = remain;
   breakOverRef.current = breakOver;
   overrunRef.current = overrun;
-  breakExtendsRef.current = breakExtends;
   breakStartedAtRef.current = breakStartedAt;
 
   const fetchBoss = useCallback(async () => {
@@ -150,7 +145,7 @@ export default function Game() {
     setAwaitingBreak(false);
     setBreakOver(false);
     setOverrun(0);
-    setBreakExtends(0);
+    setBreakOverDismissed(false);
     setBreakStartedAt(null);
     setBreakAtHome(false);
 
@@ -168,7 +163,6 @@ export default function Game() {
       setAwaitingBreak(t.awaitingBreak || false);
       setBreakOver(t.breakOver || false);
       setOverrun(t.overrun || 0);
-      setBreakExtends(t.breakExtends || 0);
       setBreakStartedAt(t.breakStartedAt || null);
       setBreakAtHome(t.breakAtHome || false);
       setPausedAtHome(t.pausedAtHome || false);
@@ -224,13 +218,13 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec,
+      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -268,7 +262,7 @@ export default function Game() {
       sfx.complete();
       notify(
         p === 'long_break' ? '👹 ถึงเวลาสู้บอส!' : '☕ พักครบแล้ว',
-        p === 'long_break' ? 'พักใหญ่จบ — สู้บอสต่อ หรือเริ่มโฟกัส' : 'เริ่มโฟกัสต่อได้ หรือต่อเวลาพักเพิ่ม'
+        p === 'long_break' ? 'พักใหญ่จบ — สู้บอสต่อ หรือเริ่มโฟกัส' : 'พักครบแล้ว — เริ่มโฟกัสต่อได้ (ไม่กด = เวลาพักยังนับต่อไป)'
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,7 +358,7 @@ export default function Game() {
     setBreakStartedAt(Date.now());
     setBreakOver(false);
     setOverrun(0);
-    setBreakExtends(0);
+    setBreakOverDismissed(false);
     setRunning(true);
     sfx.complete();
   };
@@ -378,7 +372,7 @@ export default function Game() {
     setBreakStartedAt(Date.now());
     setBreakOver(false);
     setOverrun(0);
-    setBreakExtends(0);
+    setBreakOverDismissed(false);
     setRunning(true);
     sfx.boss();
     fetchBoss();
@@ -404,9 +398,10 @@ export default function Game() {
     const now = Date.now();
     const breakSec = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
     if (breakSec > 0) {
-      await post('/break/done', { breakSec, overrunSec: overrunRef.current, extended: breakExtendsRef.current });
+      await post('/break/done', { breakSec, overrunSec: overrunRef.current });
     }
     setBreakOver(false);
+    setBreakOverDismissed(false);
     const p = phaseRef.current;
     beginWork(p === 'long_break' ? 1 : sessionIdxRef.current + 1);
   };
@@ -422,12 +417,9 @@ export default function Game() {
     sfx.click();
   };
 
-  // ---- ต่อเวลาพัก (+1/+5/+10 นาที ตามที่เลือก) — นับครั้งที่ต่อ ----
-  const extendBreak = (min) => {
-    setBreakExtends((n) => n + 1);
-    setBreakOver(false);
-    setOverrun(0); // ต่อเวลาแล้ว — เลยเวลาเดิมถูกนับรวมในการต่อ เริ่มนับใหม่
-    setRemain((r) => r + min * 60);
+  // ---- ปิด modal หมดเวลาพัก (ยังไม่เริ่มโฟกัส) — ไม่มีปุ่มต่อเวลาเพราะเวลานับต่ออยู่แล้ว (overrun) ----
+  const dismissBreakOver = () => {
+    setBreakOverDismissed(true);
     sfx.click();
   };
 
@@ -710,8 +702,8 @@ export default function Game() {
         </div>
       )}
 
-      {/* พักครบเวลา — ไม่เริ่มโฟกัสเอง ให้ user กดเอง (เวลายังนับต่อ) */}
-      {breakOver && (
+      {/* พักครบเวลา — ไม่เริ่มโฟกัสเอง ให้ user กดเอง (เวลายังนับต่อเป็น overrun — ไม่มีปุ่มต่อเวลา เพราะเวลานับต่ออยู่แล้ว) */}
+      {breakOver && !breakOverDismissed && (
         <div className="modal-backdrop">
           <div className="modal">
             <h2>⏰ หมดเวลาพักแล้ว!</h2>
@@ -719,18 +711,11 @@ export default function Game() {
               พักไปแล้ว <b>{fmtDuration(breakSecSoFar)}</b>
               {overrun > 0 && <> — เลยเวลามาแล้ว <b>{fmtTime(overrun)}</b></>}
               <br />
-              เริ่มโฟกัสต่อได้เลย หรือต่อเวลาพักเพิ่ม
+              เริ่มโฟกัสต่อได้เลย — หรือพักต่อไปอีกสักหน่อย (เวลาจะนับต่อเรื่อย ๆ)
             </p>
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={finishBreak}>▶️ เริ่มโฟกัส</button>
-              <div className="modal-row">
-                <span className="modal-row-label">⏱️ ต่อเวลาพักเพิ่ม{breakExtends > 0 ? ` (ต่อแล้ว ${breakExtends} ครั้ง)` : ''}</span>
-                <div className="modal-row-btns">
-                  {EXTEND_OPTIONS.map((m) => (
-                    <button key={m} className="btn" onClick={() => extendBreak(m)}>+{m} นาที</button>
-                  ))}
-                </div>
-              </div>
+              <button className="btn" onClick={dismissBreakOver}>⏳ ยังพักต่อ (เวลานับต่อไป)</button>
             </div>
           </div>
         </div>

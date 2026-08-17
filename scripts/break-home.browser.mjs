@@ -96,28 +96,32 @@ const t1 = parseInt(bar1.match(/เหลือ\s+(\d+):(\d+)/)?.[1] ?? '0', 10)
 const t2 = parseInt(bar2.match(/เหลือ\s+(\d+):(\d+)/)?.[1] ?? '0', 10) * 60 + parseInt(bar2.match(/เหลือ\s+\d+:(\d+)/)?.[1] ?? '0', 10);
 expect('บน Home: เวลาพักยังนับถอยหลัง', t2 < t1, `เหลือ ${t1}s → ${t2}s`);
 
-// 4) รอจนหมดเวลา → modal ถามเริ่มโฟกัส/ต่อพักเด้งบน Home
+// 4) รอจนหมดเวลา → modal ถามเริ่มโฟกัส/ยังพักต่อเด้งบน Home (ไม่มีปุ่มต่อเวลาพักแล้ว)
 await sleep(12000);
 const modalText = await evalJs(`[...document.querySelectorAll('.modal')].map(m => m.textContent.replace(/\\s+/g, ' ').trim()).join(' | ') || ''`);
 const hasModal = await evalJs(`document.body.innerText.includes('หมดเวลาพักแล้ว!')`);
 const hasStart = await evalJs(`!![...document.querySelectorAll('button')].find(b => b.textContent.includes('เริ่มโฟกัส'))`);
-const hasExtend = await evalJs(`[...document.querySelectorAll('button')].some(b => b.textContent.includes('ต่อเวลาพักเพิ่ม') || /^\\+1 นาที$/.test(b.textContent.trim()))`);
-expect('หมดเวลา → modal ถามเริ่มโฟกัส/ต่อพักโผล่บน Home', hasModal && hasStart && hasExtend, `'${modalText.slice(0, 120)}'`);
+const hasKeepRest = await evalJs(`[...document.querySelectorAll('button')].some(b => b.textContent.includes('ยังพักต่อ'))`);
+const noExtend = await evalJs(`![...document.querySelectorAll('button')].some(b => b.textContent.includes('ต่อเวลาพักเพิ่ม') || /^\\+\d+ นาที$/.test(b.textContent.trim()))`);
+expect('หมดเวลา → modal ถามเริ่มโฟกัส/ยังพักต่อโผล่บน Home (ไม่มีปุ่มต่อเวลา)', hasModal && hasStart && hasKeepRest && noExtend, `'${modalText.slice(0, 120)}'`);
 
-// 5) กดต่อเวลาพัก +1 → modal ปิด กลับมาที่ Home แถบพักยังโชว์ (เวลาใหม่ ~1 นาที)
-await evalJs(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === '+1 นาที')?.click()`);
+// 5) กด "ยังพักต่อ" → modal ปิด + ยังอยู่ Home + แถบโชว์ "พักหมดเวลาแล้ว" (เวลายังนับต่อ)
+await evalJs(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('ยังพักต่อ'))?.click()`);
 await sleep(1200);
 const modalGone = await evalJs(`!document.body.innerText.includes('หมดเวลาพักแล้ว!')`);
 const bar3 = await evalJs(`document.querySelector('.resume-bar')?.textContent?.replace(/\\s+/g, ' ').trim() || ''`);
-// ต่อเวลาพัก +1 นาที — เหลือควรเป็น ~1:00 (อาจนับไป 1-2 วิแล้ว → 00:5x ก็ได้)
-const extendedOk = modalGone && /เหลือ (1:00|00:5\d)/.test(bar3);
-expect('ต่อเวลาพัก +1 → modal ปิด + ยังอยู่ Home แถบพักโชว์เวลาใหม่', extendedOk, `'${bar3}'`);
+expect('กดยังพักต่อ → modal ปิด + แถบโชว์พักหมดเวลาแล้ว', modalGone && bar3.includes('พักหมดเวลาแล้ว'), `'${bar3}'`);
 
-// 6) กดกลับไปค่าย → กลับหน้า camp พัก
+// 6) กลับไปค่าย → หน้า camp โชว์ "เลยเวลาพัก X" และ X ยังนับเพิ่มเรื่อย ๆ (เวลาพักยังนับต่อ)
 await evalJs(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('กลับไปค่าย'))?.click()`);
 await sleep(1200);
 const backOnCamp = await evalJs(`document.body.innerText.includes('🔥 ค่ายพัก')`);
-expect('กด ⛺ กลับไปค่าย → กลับหน้า camp พัก', backOnCamp, '');
+const campT1 = (await evalJs(`document.querySelector('.camp-sub')?.textContent?.replace(/\\s+/g, ' ').trim() || ''`)) || '';
+await sleep(3000);
+const campT2 = (await evalJs(`document.querySelector('.camp-sub')?.textContent?.replace(/\\s+/g, ' ').trim() || ''`)) || '';
+const ov1 = parseInt(campT1.match(/เลยเวลาพัก\s+(\d+):(\d+)/)?.[1] ?? '0', 10) * 60 + parseInt(campT1.match(/เลยเวลาพัก\s+\d+:(\d+)/)?.[1] ?? '0', 10);
+const ov2 = parseInt(campT2.match(/เลยเวลาพัก\s+(\d+):(\d+)/)?.[1] ?? '0', 10) * 60 + parseInt(campT2.match(/เลยเวลาพัก\s+\d+:(\d+)/)?.[1] ?? '0', 10);
+expect('กลับไปค่าย: เลยเวลาพักยังนับเพิ่มเรื่อย ๆ', backOnCamp && campT1.includes('เลยเวลาพัก') && ov2 > ov1, `'${campT1}' → '${campT2}'`);
 
 chrome.kill();
 console.log(`\nผลลัพธ์: ${pass} ผ่าน, ${fail} ตก`);

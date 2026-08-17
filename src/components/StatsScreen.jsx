@@ -291,7 +291,6 @@ export default function StatsScreen() {
       <Panel title="☕ สถิติการพัก">
         <div className="stat-grid">
           <div className="stat-box"><b>{fmtDuration(p.break_sec)}</b><span>เวลาพักเบรกระหว่าง session</span></div>
-          <div className="stat-box"><b>{p.break_extended}</b><span>ครั้งที่ต่อเวลาพัก</span></div>
           <div className="stat-box"><b>{fmtDuration(p.break_overrun_sec)}</b><span>เวลาที่เลยพักทั้งหมด</span></div>
           <div className="stat-box"><b>{fmtDuration(p.pause_sec || 0)}</b><span>พักกลาง session (⏸️ หยุดพัก/กลับหน้าหลัก)</span></div>
         </div>
