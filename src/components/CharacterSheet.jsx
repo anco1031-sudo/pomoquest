@@ -4,6 +4,7 @@ import { sfx } from '../sound.js';
 import { Panel, StatRow } from './ui.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
 import { CLASS_WEIGHTS, AUTO_KEYS, gearAdjustedWeights, allocatePoints, equipGoals, allocateWithGoals } from '../alloc.js';
+import { petMoodOf, petPerkLabel } from '../meta.js';
 
 export function StatAllocator({ onDone }) {
   const { character, inventory, post } = useGame();
@@ -185,6 +186,73 @@ function SkillList({ skills }) {
   );
 }
 
+// คอกสัตว์เลี้ยง — ฟักจาก 🥚 ไข่ปริศนา (ดรอปหายากจากสมบัติ/event) · ตัวที่ active เท่านั้นที่ค่าพิเศษมีผล
+// สลับตัวที่ใช้งานได้ฟรี · คอกเต็มต้องปล่อยตัวหนึ่งก่อน (ได้ทองปลอบใจ)
+function PetStable() {
+  const { character, progress, post } = useGame();
+  const pets = character.pets || [];
+  const lastFocusDate = progress?.last_focus_date;
+  const slots = character.petSlots || 1;
+  const maxSlots = character.petMaxSlots || 4;
+  const RARITY_LABEL = { common: 'ทั่วไป', rare: 'หายาก', epic: 'หายากมาก', legend: 'ตำนาน' };
+
+  const swap = async (p) => {
+    sfx.click();
+    await post('/pet/swap', { petId: p.id });
+  };
+  const release = async (p) => {
+    if (!window.confirm(`ปล่อย ${p.icon} ${p.name} (Lv.${p.level}) เป็นอิสระ? ได้ทองปลอบใจเล็กน้อย — กู้คืนไม่ได้!`)) return;
+    sfx.click();
+    await post('/pet/release', { petId: p.id });
+  };
+
+  return (
+    <Panel title={`🐾 คอกสัตว์ (${pets.length}/${slots})`}>
+      <p className="panel-text">
+        ฟักจาก 🥚 ไข่ปริศนา (ดรอปหายากจากกล่องสมบัติ ~4% / event พิเศษ) — ตัวที่ <b>ใช้งาน</b> เท่านั้นที่ค่าพิเศษมีผล ·
+        เลเวล pet เพิ่มขึ้นจากโฟกัส + ร่วมผจญภัย (ค่าพิเศษ +10%/เลเวล) · คอกเต็มใช้ 💳 บัตรขยายคอก (ดรอปหายากมาก + บอสลับการันตีใบแรก)
+      </p>
+      {pets.length === 0 ? (
+        <p className="hint">ยังไม่มีสัตว์เลี้ยง — ออกผจญภัยหาความหวังจากกล่องสมบัติสิ! 🥚</p>
+      ) : (
+        <div className="pet-list">
+          {pets.map((p) => {
+            const mood = petMoodOf(p, lastFocusDate);
+            return (
+              <div className={`pet-card ${p.active ? 'pet-active' : ''}`} key={p.id}>
+                <span className="pet-icon">{p.icon}</span>
+                <div className="pet-info">
+                  <div className="pet-name">
+                    {p.name} <span className={`pet-rarity pet-rarity-${p.rarity}`}>{RARITY_LABEL[p.rarity] || p.rarity}</span>
+                    {p.active && <span className="chip pet-active-chip">✨ ใช้งาน</span>}
+                  </div>
+                  <div className="pet-desc">{p.desc}</div>
+                  <div className="pet-perk">📈 {petPerkLabel(p)}</div>
+                  <div className="pet-level-row">
+                    <span className="pet-lv">Lv.{p.level}</span>
+                    <div className="skill-xp-bar"><div className="skill-xp-fill" style={{ width: `${Math.min(100, (p.xp / p.xpNext) * 100)}%` }} /></div>
+                    <span className="skill-xp-text">XP {p.xp}/{p.xpNext}</span>
+                  </div>
+                </div>
+                <div className="pet-actions">
+                  {!p.active && (
+                    <button className="btn btn-sm" onClick={() => swap(p)}>สลับใช้</button>
+                  )}
+                  <button className="btn btn-sm btn-danger" onClick={() => release(p)} title="ปล่อยเป็นอิสระ (ได้ทองปลอบใจ)">🕊️ ปล่อย</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="hint pet-mood-hint">{pets.length > 0 ? `💬 อารมณ์: ${pets.map((p) => `${p.icon} ${petMoodOf(p, lastFocusDate).msg.split(' ').slice(1).join(' ')}`).join(' · ')}` : ''}</p>
+      {slots < maxSlots && (
+        <p className="hint">💳 คอก ${slots}/${maxSlots} — หา 💳 บัตรขยายคอก (ดรอปหายากมากจากสมบัติ / บอสลับการันตีใบแรก) เพื่อขยายช่อง</p>
+      )}
+    </Panel>
+  );
+}
+
 export default function CharacterSheet() {
   const { character, inventory, post, cities } = useGame();
   if (!character) return null;
@@ -287,6 +355,8 @@ export default function CharacterSheet() {
         <p className="hint">💡 สกิลสะสม XP ทุกครั้งที่ใช้สู้บอส — เลเวลยิ่งสูง ยิ่งแรง (+10%/เลเวล) · คัมภีร์หายาก 📜 เรียนสกิลเพิ่มได้จากกล่องสมบัติ</p>
       </Panel>
 
+      <PetStable />
+
       <Panel title="🔧 อุปกรณ์ที่สวม">
         {slots.map((s) => (
           <div className="slot-row" key={s.col}>
@@ -316,6 +386,15 @@ export default function CharacterSheet() {
       )}
 
       <Panel title="🎒 ไอเทมในกระเป๋า">
+        <div className={`bag-meter ${inventory.length >= character.bagSize ? 'bag-full' : inventory.length >= character.bagSize - 3 ? 'bag-warn' : ''}`}>
+          <span>🎒 {inventory.length}/{character.bagSize} ช่อง</span>
+          <div className="bag-bar"><div className="bag-fill" style={{ width: `${Math.min(100, (inventory.length / character.bagSize) * 100)}%` }} /></div>
+          {inventory.length >= character.bagSize - 3 && (
+            <span className="bag-note">
+              {inventory.length >= character.bagSize ? '🚨 กระเป๋าเต็ม! ขายของก่อนซื้อ/คราฟต์ — ของรางวัลจะขายอัตโนมัติราคาพื้นฐาน' : '⚠️ ใกล้เต็ม — ของรางวัล/ดรอปใหม่จะขายอัตโนมัติเมื่อเต็ม (ราคาพื้นฐาน ไม่รอวันพ่อค้าต้องการ)'}
+            </span>
+          )}
+        </div>
         {inventory.length === 0 ? (
           <p className="hint">ยังไม่มีไอเทม — ออกผจญภัยเพื่อหาของ!</p>
         ) : (

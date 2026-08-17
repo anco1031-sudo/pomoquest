@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ITEMS, ITEM_BY_ID } from './data.js';
+import { ITEMS, ITEM_BY_ID, petXpToNext } from './data.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, 'data');
@@ -179,6 +179,16 @@ CREATE TABLE IF NOT EXISTS trophy (
   won_at TEXT DEFAULT (datetime('now','localtime')),
   PRIMARY KEY (character_id, boss_key)
 );
+
+CREATE TABLE IF NOT EXISTS pet (
+  character_id INTEGER NOT NULL,
+  pet_id TEXT NOT NULL,
+  level INTEGER DEFAULT 1,
+  xp INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 0,
+  acquired_at TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (character_id, pet_id)
+);
 `);
 
 // migration: เติมคอลัมน์ใหม่ถ้ายังไม่มี (กัน DB เก่าใช้งานไม่ได้)
@@ -234,6 +244,13 @@ ensureColumn('log', 'challenge_mode', "TEXT DEFAULT ''");
 ensureColumn('log', 'focus_task', 'TEXT');
 // โล่โฟกัส: 1 = กันคอมโบหาย 1 ครั้ง (ใช้ไอเทม 🛡️ โล่โฟกัสแล้ว) — แตกเมื่อพัก/ทิ้ง session
 ensureColumn('progress', 'combo_shield', 'INTEGER DEFAULT 0');
+// กระเป๋า: จำนวนช่องสูงสุด (ของแต่ละชนิด = 1 ช่อง — ไอเทมซ้ำรวมกองกันไม่กินช่องเพิ่ม)
+// เริ่ม 20 ช่อง — กันเก็บของไว้รอขายราคาดีไม่อั้น (เต็มแล้วต้องขาย/รับรางวัลขายอัตโนมัติ)
+ensureColumn('progress', 'bag_size', 'INTEGER DEFAULT 20');
+// คอกสัตว์เลี้ยง: จำนวนช่องที่ขยายแล้ว (เริ่ม 1 — ขยายด้วย 💳 บัตรขยายคอก สูงสุด 4)
+ensureColumn('progress', 'pet_slots', 'INTEGER DEFAULT 1');
+// โล่กับดักยูนิคอร์น: 1 = กันกับดักได้อีก 1 ครั้ง (รีเซ็ตทุกครั้งที่ชนะบอส — 1 ครั้ง/รอบ)
+ensureColumn('progress', 'pet_trap_shield', 'INTEGER DEFAULT 0');
 // จำนวนรอบที่เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส — ความยาก/รางวัล/ตลาดมืดเพิ่มตามรอบ (รีเซ็ตเมื่อย้ายเมือง)
 ensureColumn('character', 'city_rounds', 'INTEGER DEFAULT 0');
 ensureColumn('daily_quest_done', 'reward', 'TEXT');
@@ -328,6 +345,9 @@ export const deleteCharacter = (id) => {
   db.prepare('DELETE FROM log WHERE character_id = ?').run(id);
   db.prepare('DELETE FROM achievement_unlock WHERE character_id = ?').run(id);
   db.prepare('DELETE FROM character_skill WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM character_recipe WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM trophy WHERE character_id = ?').run(id);
+  db.prepare('DELETE FROM pet WHERE character_id = ?').run(id);
   db.prepare('DELETE FROM character WHERE id = ?').run(id);
 };
 
@@ -407,6 +427,56 @@ export const addTrophy = (charId, bossKey, icon) =>
   db.prepare('INSERT OR IGNORE INTO trophy (character_id, boss_key, icon) VALUES (?, ?, ?)').run(charId, bossKey, icon).changes;
 export const getTrophies = (charId) =>
   db.prepare('SELECT boss_key, icon, won_at FROM trophy WHERE character_id = ? ORDER BY won_at').all(charId);
+
+// ----- สัตว์เลี้ยง (Pet) — ฟักจากไข่ปริศนา 🥚 -----
+export const getPets = (charId) =>
+  db.prepare('SELECT pet_id, level, xp, is_active, acquired_at FROM pet WHERE character_id = ? ORDER BY acquired_at').all(charId);
+
+export const getPet = (charId, petId) =>
+  db.prepare('SELECT pet_id, level, xp, is_active, acquired_at FROM pet WHERE character_id = ? AND pet_id = ?').get(charId, petId);
+
+// ฟัก pet ใหม่ — คืน 1 ถ้าเพิ่มสำเร็จ / 0 ถ้ามีอยู่แล้ว (ไข่ซ้ำฟักตัวเดิมไม่ได้)
+export const addPet = (charId, petId) =>
+  db.prepare('INSERT OR IGNORE INTO pet (character_id, pet_id) VALUES (?, ?)').run(charId, petId).changes;
+
+// สลับ pet ที่ "ใช้งาน" (active) — ค่าพิเศษเฉพาะตัวที่ active เท่านั้นมีผล
+export const setActivePet = (charId, petId) => {
+  db.prepare('UPDATE pet SET is_active = 0 WHERE character_id = ?').run(charId);
+  db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
+};
+
+// ปล่อย pet (คอกเต็ม — ต้องปล่อยตัวหนึ่งก่อน) — ลบออกจากคอก
+// ใช้ใน transaction: ลบแถว + รีเซ็ต active ถ้าปล่อยตัวที่ active อยู่
+export const releasePet = (charId, petId) => {
+  db.prepare('DELETE FROM pet WHERE character_id = ? AND pet_id = ?').run(charId, petId);
+  // ถ้าปล่อยตัวที่ active → ตัวแรกที่เหลือขึ้นเป็น active
+  const rest = db.prepare('SELECT pet_id FROM pet WHERE character_id = ? ORDER BY acquired_at LIMIT 1').get(charId);
+  if (rest) db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(charId, rest.pet_id);
+};
+
+export const setPetTrapShield = (charId, val) =>
+  db.prepare('UPDATE progress SET pet_trap_shield = ? WHERE character_id = ?').run(val, charId);
+
+// ----- กระเป๋า (bag) — จำนวนช่องที่ใช้ไป (ของแต่ละชนิด = 1 ช่อง) + ความจุ -----
+export const bagSlotsUsed = (charId) =>
+  db.prepare('SELECT COUNT(*) AS n FROM inventory WHERE character_id = ? AND qty > 0').get(charId).n;
+
+export const bagSlots = (charId) => getProgress(charId).bag_size || 20;
+
+export const grantPetXp = (charId, petId, amount) => {
+  const row = db.prepare('SELECT level, xp FROM pet WHERE character_id = ? AND pet_id = ?').get(charId, petId);
+  if (!row) return { levelUp: false, level: 1 };
+  let { level, xp } = row;
+  xp += amount;
+  let leveled = 0;
+  while (xp >= petXpToNext(level)) {
+    xp -= petXpToNext(level);
+    level += 1;
+    leveled += 1;
+  }
+  db.prepare('UPDATE pet SET level = ?, xp = ? WHERE character_id = ? AND pet_id = ?').run(level, xp, charId, petId);
+  return { levelUp: leveled > 0, leveled, level };
+};
 
 export const addItem = (charId, itemId, qty = 1) => {
   db.prepare(`INSERT INTO inventory (character_id, item_id, qty) VALUES (?, ?, ?)

@@ -1,6 +1,7 @@
 import { DAILY_QUESTS, ITEM_BY_ID } from './data.js';
 import { gainXp } from './game.js';
 import { db, today, getDailyCounters, addLog, addItem, updateCharacter } from './db.js';
+import { acquireItem } from './game.js';
 
 // PRNG แบบ seeded (mulberry32) — quest ของวันเดียวกันต้องเหมือนกันทั้งวัน
 function mulberry32(seed) {
@@ -113,8 +114,13 @@ export function claimDailyQuest(c, questId, reward = 'gold') {
     granted = { rewardType: 'xp', xp: base.xp, ups };
   } else if (reward === 'item') {
     const item = randomRewardItem(c);
-    addItem(c.id, item.id);
-    granted = { rewardType: 'item', item: { id: item.id, name: item.name, icon: item.icon } };
+    // กระเป๋าเต็ม + ของรางวัล → ขายอัตโนมัติราคาพื้นฐาน (กันเก็บไว้รอราคาดีไม่อั้น)
+    const got = acquireItem(c, item.id, 1, { fullMode: 'sell' });
+    granted = {
+      rewardType: 'item',
+      item: { id: item.id, name: item.name, icon: item.icon },
+      sold: got.sold, soldGold: got.gold,
+    };
   } else {
     c.gold += base.gold;
     granted = { rewardType: 'gold', gold: base.gold };
@@ -124,7 +130,7 @@ export function claimDailyQuest(c, questId, reward = 'gold') {
     .run(granted.rewardType, c.id, date, questId);
   updateCharacter(c);
   const detail = granted.rewardType === 'item'
-    ? `รางวัลภารกิจประจำวัน: ได้ ${granted.item.icon} ${granted.item.name}`
+    ? `รางวัลภารกิจประจำวัน: ได้ ${granted.item.icon} ${granted.item.name}${granted.sold ? ` (🎒 กระเป๋าเต็ม — ขายอัตโนมัติ +${granted.soldGold} ทอง)` : ''}`
     : `รางวัลภารกิจประจำวัน: +${granted.xp ?? granted.gold} ${REWARD_LABEL[granted.rewardType]}`;
   addLog(c.id, { type: 'daily_quest', title: `📅 ${q.name}`, detail, xp: granted.xp || 0, gold: granted.gold || 0 });
   return granted;
@@ -162,12 +168,14 @@ export function claimDailyAll(c) {
   } else {
     item = ITEM_BY_ID[4];
   }
-  addItem(c.id, item.id);
+  // กระเป๋าเต็ม + ของรางวัล → ขายอัตโนมัติราคาพื้นฐาน (กันเก็บไว้รอราคาดีไม่อั้น)
+  const got = acquireItem(c, item.id, 1, { fullMode: 'sell' });
+  const soldNote = got.sold ? ` (🎒 กระเป๋าเต็ม — ขายอัตโนมัติ +${got.gold} ทอง)` : '';
 
   updateCharacter(c);
   addLog(c.id, {
-    type: 'daily_quest', title: '🎁 โบนัสครบทุกภารกิจ', detail: `+${xp} XP, +${gold} ทอง และได้ ${item.icon} ${item.name}! (คอมโบภารกิจ ${nextStreak} วัน)`,
+    type: 'daily_quest', title: '🎁 โบนัสครบทุกภารกิจ', detail: `+${xp} XP, +${gold} ทอง และได้ ${item.icon} ${item.name}!${soldNote} (คอมโบภารกิจ ${nextStreak} วัน)`,
     xp, gold,
   });
-  return { gold, xp, ups, item: { id: item.id, name: item.name, icon: item.icon }, streak: nextStreak, mult };
+  return { gold, xp, ups, item: { id: item.id, name: item.name, icon: item.icon }, sold: got.sold, soldGold: got.gold, streak: nextStreak, mult };
 }

@@ -533,6 +533,87 @@ try {
     expect('challenge: 7 วันเรียงตามสัปดาห์ (จ-อา) มีค่าไม่ติดลบ', p.days.every((d) => d.weekday && d.sessions >= 0 && d.focusSec >= 0), JSON.stringify(p.days));
   }
 
+  // --- 🐾 ระบบสัตว์เลี้ยง: ฟักไข่ / บัตรขยายคอก / สลับ / ปล่อย ---
+  {
+    const petCid = (await api('/state')).json.character.id;
+    // เริ่ม: ยังไม่มี pet, คอก 1 ช่อง
+    r = await api('/state');
+    expect('pet: เริ่มต้นมีคอก 1 ช่อง ไม่มีสัตว์เลี้ยง', r.json.character.petSlots === 1 && r.json.character.pets.length === 0, JSON.stringify(r.json.character.pets));
+    // ฟักไข่ → ได้ pet (สุ่ม rarity) + ตั้งเป็น active อัตโนมัติ
+    addItem(petCid, 170, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+    expect('pet: ฟักไข่สำเร็จได้ pet + active', r.status === 200 && r.json.character.pets.length === 1 && r.json.character.pets[0].active === true, r.json.message || r.json.error);
+    const petId = r.json.character.pets[0].id;
+    expect('pet: serialize มีค่าพิเศษ + เลเวล + XP', !!r.json.character.pets[0].desc && r.json.character.pets[0].level === 1 && r.json.character.pets[0].xpNext > 0, JSON.stringify(r.json.character.pets[0]));
+    // คอกเต็ม 1/1 → ฟักไข่ฟองที่ 2 ไม่ได้
+    addItem(petCid, 170, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+    expect('pet: คอกเต็ม → ฟักไข่ไม่ได้', r.status === 400 && r.json.error.includes('คอก'), r.json.error || '');
+    // บัตรขยายคอก → 2 ช่อง
+    addItem(petCid, 171, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 171 } });
+    expect('pet: บัตรขยายคอก → 2/4 ช่อง', r.status === 200 && r.json.character.petSlots === 2, r.json.message || r.json.error);
+    // ฟักไข่ฟองที่ 2 ได้ (2 ช่องแล้ว)
+    addItem(petCid, 170, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+    expect('pet: ฟักไข่ฟองที่ 2 สำเร็จ (2/2)', r.status === 200 && r.json.character.pets.length === 2, r.json.message || r.json.error);
+    // สลับตัวที่ใช้งาน
+    const other = r.json.character.pets.find((p) => p.id !== petId);
+    r = await api('/pet/swap', { method: 'POST', body: { petId: other.id } });
+    expect('pet: สลับตัวที่ใช้งานได้', r.status === 200 && r.json.character.pets.find((p) => p.id === other.id).active === true && r.json.character.pets.find((p) => p.id === petId).active === false, r.json.message || r.json.error);
+    // ปล่อย pet → ได้ทองปลอบใจ + ช่องว่าง
+    const goldBefore = r.json.character.gold;
+    r = await api('/pet/release', { method: 'POST', body: { petId: petId } });
+    expect('pet: ปล่อย pet → ทองปลอบใจ + เหลือ 1 ตัว', r.status === 200 && r.json.character.pets.length === 1 && r.json.character.gold > goldBefore, r.json.message || r.json.error);
+    // event → pet ได้ XP
+    r = await api('/adventure/event', { method: 'POST', body: { key: 'treasure' } });
+    expect('pet: event → pet สะสม XP', r.status === 200 && r.json.character.pets[0].xp > 0, JSON.stringify(r.json.character.pets));
+    // adventure complete → pet ได้ XP จากโฟกัส
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
+    expect('pet: โฟกัส → pet สะสม XP (25 นาที = 25 XP)', r.status === 200 && r.json.character.pets[0].xp >= 25, JSON.stringify(r.json.character.pets[0]));
+  }
+
+  // --- 🎒 ระบบกระเป๋า: ลิมิต 20 ช่อง + ของรางวัลขายอัตโนมัติ + บล็อกซื้อ/คราฟต์ ---
+  {
+    const bcid = (await api('/state')).json.character.id;
+    db.prepare('DELETE FROM inventory WHERE character_id = ?').run(bcid); // ล้างกระเป๋าเก่า (ตัวละครนี้ผ่านเทสต์อื่นมาแล้ว)
+    r = await api('/state');
+    expect('bag: เริ่มต้น 20 ช่อง ใช้ 0', r.json.character.bagSize === 20 && r.json.character.bagUsed === 0,
+      `${r.json.character.bagUsed}/${r.json.character.bagSize}`);
+    // เติม 20 ชนิด (ไอเทมซ้ำรวมกอง ไม่กินช่องเพิ่ม)
+    const fillIds = [1, 3, 4, 5, 6, 7, 10, 12, 14, 15, 20, 21, 30, 31, 45, 46, 47, 48, 49, 150];
+    for (const id of fillIds) addItem(bcid, id, 1);
+    r = await api('/state');
+    expect('bag: เติม 20 ชนิด → ใช้ 20/20', r.json.character.bagUsed === 20, `${r.json.character.bagUsed}/${r.json.character.bagSize}`);
+    // ของซ้ำ (ชนิดเดิม) → รวมกอง ไม่เกินลิมิต
+    addItem(bcid, 1, 5);
+    r = await api('/state');
+    expect('bag: ไอเทมซ้ำรวมกอง ไม่กินช่องเพิ่ม', r.json.character.bagUsed === 20, `${r.json.character.bagUsed}/${r.json.character.bagSize}`);
+    // ของรางวัลจาก event (ของชนิดใหม่) → ขายอัตโนมัติราคาพื้นฐานเมื่อเต็ม
+    let sold = null;
+    for (let i = 0; i < 30 && !sold; i++) {
+      r = await api('/adventure/event', { method: 'POST', body: { key: 'merchant' } });
+      if (r.json.event?.item && r.json.event?.detail?.includes('ขาย')) sold = r.json;
+    }
+    expect('bag: ของรางวัลเต็ม → ขายอัตโนมัติราคาพื้นฐาน + ทองเพิ่ม', !!sold && sold.event.detail.includes('กระเป๋าเต็ม') && sold.character.bagUsed === 20,
+      sold?.event?.detail?.slice(0, 90) || 'no auto-sell');
+    // ซื้อของที่ยังไม่มีในร้าน → บล็อก
+    let target = null, bvisit = null;
+    for (let v = 1; v <= 10 && !target; v++) {
+      bvisit = `bag-buy-${v}`;
+      r = await api(`/camp?visit=${bvisit}`);
+      target = (r.json.shop || []).filter((s) => !s.bm).find((s) => !fillIds.includes(s.id));
+    }
+    db.prepare('UPDATE character SET gold = 5000 WHERE id = ?').run(bcid);
+    r = await api('/shop/buy', { method: 'POST', body: { itemId: target.id, visit: bvisit } });
+    expect('bag: กระเป๋าเต็ม → ซื้อไม่ได้ (บล็อก)', r.status === 400 && r.json.error.includes('กระเป๋าเต็ม'), r.json.error || '');
+    // คราฟต์ของที่ยังไม่มี → บล็อก
+    db.prepare("INSERT OR IGNORE INTO character_recipe (character_id, recipe_id) VALUES (?, 'rc_dragon_armor')").run(bcid);
+    addItem(bcid, 127, 3); addItem(bcid, 125, 2); // เกล็ดมังกร x3 + ไม้กวาดแม่มด x2 (วัสดุ — ชนิดที่ยังไม่มี)
+    r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_dragon_armor' } });
+    expect('bag: กระเป๋าเต็ม → คราฟต์ไม่ได้ (บล็อก)', r.status === 400 && r.json.error.includes('กระเป๋าเต็ม'), r.json.error || '');
+  }
+
   // --- export/backup ---
   const backupRes = await fetch(`${base}/api/backup`);
   const buf = Buffer.from(await backupRes.arrayBuffer());

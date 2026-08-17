@@ -1,5 +1,5 @@
-import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, COMPANIONS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID } from './data.js';
-import { today, getSkillRows, getSkillRow, upsertSkillRow } from './db.js';
+import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_MAX_SLOTS, petXpToNext } from './data.js';
+import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -68,7 +68,8 @@ export function mysteryBoxRoll(visit, c) {
   if (roll < 0.05) return ITEM_BY_ID[pick(SCROLL_ITEMS)];
   if (roll < 0.25) return ITEM_BY_ID[pick(RARE_JUNK)];
   if (roll < 0.5) {
-    const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'mystery' && i.type !== 'blueprint' && (!i.classReq || i.classReq.includes(c?.class)) && (i.type === 'consumable' || (i.lvl || 1) <= lvl + 1));
+    // ไม่รวมไข่🥚/บัตรขยายคอก — มีช่องทางดรอปเฉพาะ (ไข่จากสมบัติ ~4%) กันดรอปซ้ำซ้อน
+    const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !i.use_stall && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'mystery' && i.type !== 'blueprint' && (!i.classReq || i.classReq.includes(c?.class)) && (i.type === 'consumable' || (i.lvl || 1) <= lvl + 1));
     if (pool.length) return pick(pool);
   }
   const items = [1, 2, 3, 4, 5, 6, 7, 150].map((id) => ITEM_BY_ID[id]).filter(Boolean);
@@ -295,6 +296,33 @@ export function serializeCharacter(c) {
       feet: itemOf(c.feet_id),
       accessories: [c.accessory_id, c.accessory_2_id, c.accessory_3_id, c.accessory_4_id].map(itemOf),
     },
+    // สัตว์เลี้ยง (คอก) — ฟักจากไข่ 🥚 · petSlots = จำนวนช่องที่ขยายแล้ว (เริ่ม 1 สูงสุด 4)
+    pets: getPets(c.id).map((p) => {
+      const def = PET_BY_ID[p.pet_id] || {};
+      return {
+        id: p.pet_id,
+        name: def.name || p.pet_id,
+        icon: def.icon || '❓',
+        rarity: def.rarity || 'common',
+        desc: def.desc || '',
+        moods: def.moods || [],
+        // ค่าพิเศษดิบ (client คำนวณตามเลเวลเหมือน server: +10%/เลเวล)
+        gold: def.gold || 0, xp: def.xp || 0, monster: def.monster || 0,
+        treasure: def.treasure || 0, shrine: def.shrine || 0, trap: def.trap || 0,
+        steal: def.steal || 0, trapShield: def.trapShield || 0,
+        level: p.level,
+        xp: p.xp,
+        xpNext: petXpToNext(p.level),
+        active: !!p.is_active,
+        acquiredAt: p.acquired_at,
+      };
+    }),
+    petSlots: getProgress(c.id).pet_slots || 1,
+    petTrapShield: getProgress(c.id).pet_trap_shield || 0,
+    petMaxSlots: PET_MAX_SLOTS,
+    // กระเป๋า: ช่องที่ใช้ไป / ความจุ (ของแต่ละชนิด = 1 ช่อง)
+    bagUsed: bagSlotsUsed(c.id),
+    bagSize: bagSlots(c.id),
     ...stats,
   };
 }
@@ -422,18 +450,76 @@ export function resolveCombat(c, monster) {
   return { win, xp, gold, hpLoss, detail, monster, ups };
 }
 
+// ----- ค่าพิเศษของ pet ที่ active (เลเวลสูง = ค่าพิเศษแรงขึ้น: x1 + 0.1*(level-1) — Lv.10 = x2) -----
+// gold/xp = ตัวคูณรางวัลจากเหตุการณ์ · monster/treasure/shrine/trap = ตัวคูณน้ำหนัก event
+// steal = แมวซนขโมยของกลับมาได้ตอนตกกับดัก · trapShield = ยูนิคอร์นกันกับดัก 1 ครั้ง/รอบ
+export function petPerks(c) {
+  const out = { gold: 1, xp: 1, monster: 1, treasure: 1, shrine: 1, trap: 1, steal: 0, trapShield: 0, active: null };
+  const row = getPets(c.id).find((p) => p.is_active);
+  if (!row) return out;
+  const def = PET_BY_ID[row.pet_id];
+  if (!def) return out;
+  const mult = 1 + 0.1 * (row.level - 1); // ค่าพิเศษ +10%/เลเวล
+  out.active = { ...def, level: row.level, xp: row.xp, xpNext: petXpToNext(row.level) };
+  if (def.gold) out.gold = 1 + def.gold * mult;
+  if (def.xp) out.xp = 1 + def.xp * mult;
+  if (def.monster) out.monster = def.monster * mult;
+  if (def.treasure) out.treasure = def.treasure * mult;
+  if (def.shrine) out.shrine = def.shrine * mult;
+  if (def.trap) out.trap = def.trap * mult;
+  if (def.steal) out.steal = def.steal;
+  if (def.trapShield) out.trapShield = def.trapShield;
+  return out;
+}
+
+// ----- กระเป๋า: รับไอเทมใหม่ตามลิมิตช่อง (ของแต่ละชนิด = 1 ช่อง — ไอเทมซ้ำรวมกองไม่กินช่องเพิ่ม) -----
+// fullMode = 'sell' (ของรางวัล/ดรอป → ขายอัตโนมัติราคาพื้นฐานเมื่อเต็ม) | 'block' (ซื้อ/คราฟต์ → บล็อก)
+// คืน { ok, added, sold, gold, item, blocked }
+export function acquireItem(c, itemId, qty = 1, { fullMode = 'sell', checkOnly = false } = {}) {
+  const def = ITEM_BY_ID[itemId];
+  const inv = getInventory(c.id);
+  const owned = inv.some((i) => i.item_id === itemId); // มีอยู่แล้ว → รวมกอง ไม่กินช่องเพิ่ม
+  const used = inv.length;
+  const cap = bagSlots(c.id);
+  // ของพิเศษราคา 0 (ไข่🥚/บัตรขยายคอก💳) — เข้ากระเป๋าได้เสมอ (ของหายาก ขายไม่ได้ ไม่งั้นเสียของฟรี)
+  if (owned || used < cap || !def?.price) {
+    if (!checkOnly) addItem(c.id, itemId, qty);
+    return { ok: true, added: true, item: def };
+  }
+  // กระเป๋าเต็ม + ยังไม่เคยมีของชนิดนี้
+  if (fullMode === 'sell') {
+    const gold = def.price * qty; // ขายอัตโนมัติราคาพื้นฐาน (ไม่รอราคาดี)
+    if (!checkOnly) {
+      c.gold += gold;
+      updateCharacter(c);
+    }
+    return { ok: true, sold: true, gold, item: def };
+  }
+  return { ok: false, blocked: true, used, cap, item: def };
+}
+
 // ----- เหตุการณ์สุ่มระหว่าง session (forceKey = ระบุ event ให้เกิดตาม key — ใช้ใน dev test) -----
 export function rollEvent(c, forceKey = null) {
+  const perks = petPerks(c);
+  // น้ำหนัก event ปรับตาม pet ที่ active (นกฮูกเจอมอนสเตอร์ถี่ขึ้น / มังกรน้อยเจอสมบัติถี่ขึ้น / ยูนิคอร์นเจอศาลเจ้าถี่ขึ้น / แมวซนเจอกับดักถี่ขึ้น)
+  const wOf = (e) => {
+    let w = e.weight;
+    if (e.key === 'monster') w *= perks.monster;
+    if (e.key === 'treasure') w *= perks.treasure;
+    if (e.key === 'shrine') w *= perks.shrine;
+    if (e.key === 'trap') w *= perks.trap;
+    return w;
+  };
   let ev;
   if (forceKey) {
     ev = EVENT_POOL.find((e) => e.key === forceKey);
     if (!ev) return null;
   } else {
-    const total = EVENT_POOL.reduce((a, e) => a + e.weight, 0);
+    const total = EVENT_POOL.reduce((a, e) => a + wOf(e), 0);
     let r = Math.random() * total;
     ev = EVENT_POOL[0];
     for (const e of EVENT_POOL) {
-      r -= e.weight;
+      r -= wOf(e);
       if (r <= 0) { ev = e; break; }
     }
   }
@@ -444,6 +530,33 @@ export function rollEvent(c, forceKey = null) {
     title: ev.title,
     flavor: ev.flavor.replace('{monster}', '???'),
     xp: 0, gold: 0, item: null, hpChange: 0, mpChange: 0,
+  };
+  // เก็บ pet ที่ active ไว้ใช้ท้ายสุด (ให้ XP + ค่าพิเศษ) — event ที่สุ่มได้จริงเท่านั้น
+  const activePet = perks.active;
+  const applyPetRewards = (result) => {
+    // ค่าพิเศษ pet: คูณ XP/ทองจากเหตุการณ์ (เฉพาะ pet ที่ active)
+    if (activePet && result.gold > 0 && perks.gold > 1) {
+      const bonus = Math.round(result.gold * (perks.gold - 1));
+      if (bonus > 0) {
+        c.gold += bonus;
+        result.gold += bonus;
+        result.detail += ` (🐾 ${activePet.icon} +${bonus} ทอง)`;
+      }
+    }
+    if (activePet && result.xp > 0 && perks.xp > 1) {
+      const bonus = Math.round(result.xp * (perks.xp - 1));
+      if (bonus > 0) {
+        result.ups = (result.ups || 0) + gainXp(c, bonus);
+        result.xp += bonus;
+        result.detail += ` (🐾 ${activePet.icon} +${bonus} XP)`;
+      }
+    }
+    // pet XP สะสมทุกครั้งที่ร่วมผจญภัย (event เกิด — เลเวลอัพค่าพิเศษแรงขึ้น)
+    if (activePet) {
+      const g = grantPetXp(c.id, activePet.id, 5);
+      if (g.levelUp) result.detail += ` ⭐ ${activePet.icon} ${activePet.name} เลเวลขึ้นเป็น Lv.${g.level}!`;
+    }
+    return result;
   };
 
   if (ev.key === 'monster') {
@@ -479,7 +592,7 @@ export function rollEvent(c, forceKey = null) {
         res.detail += ` และได้ ${loot.icon} ${loot.name}!`;
       }
     }
-    return {
+    return applyPetRewards({
       ...base,
       flavor: ev.flavor.replace('{monster}', `${m.icon} ${m.name} (พลัง ${m.power})`),
       xp: res.xp, gold: res.gold, hpChange: -res.hpLoss,
@@ -489,7 +602,7 @@ export function rollEvent(c, forceKey = null) {
       item: loot ? { id: loot.id, name: loot.name, icon: loot.icon, lvl: loot.lvl || 1, type: loot.type } : null,
       logType: res.win ? 'battle_win' : 'battle_lose',
       ups: res.ups,
-    };
+    });
   }
 
   if (ev.key === 'treasure') {
@@ -501,8 +614,13 @@ export function rollEvent(c, forceKey = null) {
     base.xp = xp; base.gold = gold;
     base.ups = ups;
     base.detail = `เปิดกล่องสมบัติ: ได้ทอง ${gold} และประสบการณ์ ${xp}`;
-    // โอกาสได้ไอเทม 12% (แบบเดิม) — แต่ขยะที่วันนี้พ่อค้าไม่ค่อยต้องการ (ราคาต่ำ) จะเจอบ่อยกว่า
-    if (Math.random() < 0.12) {
+    // 🥚 ไข่ปริศนา — ~4% เจอไข่แทนของปกติ (หายาก — ฟักเป็นสัตว์เลี้ยง สุ่มตัว)
+    if (Math.random() < 0.04) {
+      const egg = ITEM_BY_ID[PET_EGG_ID];
+      base.item = { id: egg.id, name: egg.name, icon: egg.icon, lvl: 1, type: egg.type };
+      base.detail += ` — และพบ ${egg.icon} ${egg.name}! (ฟักได้เป็นสัตว์เลี้ยง)`;
+    } else if (Math.random() < 0.12) {
+      // โอกาสได้ไอเทม 12% (แบบเดิม) — แต่ขยะที่วันนี้พ่อค้าไม่ค่อยต้องการ (ราคาต่ำ) จะเจอบ่อยกว่า
       let item;
       const roll = Math.random();
       if (roll < 0.03) {
@@ -517,7 +635,8 @@ export function rollEvent(c, forceKey = null) {
         item = ITEM_BY_ID[pick(RARE_JUNK)]; // ของขวัญหายาก — ดรอปยาก (ออกทางนี้ทางเดียว)
       } else {
         // เกียร์ที่เจอต้องสวมได้กับคลาสนี้ (ไม่ดรอปของคลาสอื่นให้รกกระเป๋า)
-        const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (!i.classReq || i.classReq.includes(c.class)) && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
+        // ไม่รวมไข่🥚/บัตรขยายคอก (มีช่องทางดรอปเฉพาะของตัวเอง — ไข่จากสมบัติ ~4% ฯลฯ)
+        const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !i.use_stall && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (!i.classReq || i.classReq.includes(c.class)) && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
         // น้ำหนัก: ขยะที่วันนี้ขายถูก (พ่อค้าไม่ต้องการ) x4 — ของแพง/เป็นที่ต้องการเจอยากกว่า
         const dayKey = today();
         const weighted = [];
@@ -531,7 +650,16 @@ export function rollEvent(c, forceKey = null) {
       base.detail += ` — และพบ ${item.icon} ${item.name}!${base.learnedSkill ? ` (เรียนรู้สกิล ${base.learnedSkill})` : ''}${base.learnedRecipe ? ` (เรียนรู้สูตร ${base.learnedRecipe})` : ''}`;
     }
     base.logType = 'treasure';
-    return base;
+    return applyPetRewards(base);
+  }
+
+  // 🥚 event พิเศษ "ไข่ปริศนา" — event หายาก (weight 1) ให้ไข่โดยตรง (เหมือนดรอปจากสมบัติ)
+  if (ev.key === 'egg') {
+    const egg = ITEM_BY_ID[PET_EGG_ID];
+    base.item = { id: egg.id, name: egg.name, icon: egg.icon, lvl: 1, type: egg.type };
+    base.detail = `เจอ ${egg.icon} ${egg.name}! (ฟักได้เป็นสัตว์เลี้ยง — สุ่มตัวนึง)`;
+    base.logType = 'egg';
+    return applyPetRewards(base);
   }
 
   if (ev.key === 'shrine') {
@@ -548,7 +676,7 @@ export function rollEvent(c, forceKey = null) {
       base.detail = `พลังศักดิ์สิทธิ์หลั่งไหลเข้าใส่ (+${mp} MP)`;
     }
     base.logType = 'shrine';
-    return base;
+    return applyPetRewards(base);
   }
 
   if (ev.key === 'merchant') {
@@ -564,11 +692,18 @@ export function rollEvent(c, forceKey = null) {
       base.detail = `พ่อค้าใจดีแถม ${ITEM_BY_ID[itemId].icon} ${ITEM_BY_ID[itemId].name} ให้ฟรี!`;
     }
     base.logType = 'merchant';
-    return base;
+    return applyPetRewards(base);
   }
 
   if (ev.key === 'trap') {
     const stats = computeStats(c);
+    // 🦄 ยูนิคอร์น (กันกับดัก 1 ครั้ง/รอบ — โล่สะสมตอนชนะบอส): ใช้เขาขวางกับดักแทน ไม่เสียพลัง
+    if (perks.trapShield && getProgress(c.id).pet_trap_shield > 0) {
+      setPetTrapShield(c.id, 0);
+      base.detail = '🦄 ยูนิคอร์นใช้เขาขวางกับดักไว้! ไม่เสียพลังเลย (โล่ใช้หมดแล้ว — ชนะบอสหน้าได้โล่ใหม่)';
+      base.logType = 'trap';
+      return applyPetRewards(base);
+    }
     const hpLoss = Math.round(stats.maxHp * 0.06) + rand(2, 5);
     c.hp = Math.max(1, c.hp - hpLoss);
     base.hpChange = -hpLoss;
@@ -579,8 +714,15 @@ export function rollEvent(c, forceKey = null) {
       base.xp = xp;
       base.detail += ` (+${xp} XP)`;
     }
+    // 🐈 แมวซน (gimmick): ตกกับดักแล้ว 40% แอบขโมยของกลับมาได้ (ของแถม: ยา/ของขวัญธรรมดา)
+    if (perks.steal && Math.random() < perks.steal) {
+      const itemId = pick(COMMON_LOOT);
+      const it = ITEM_BY_ID[itemId];
+      base.item = { id: itemId, name: it.name, icon: it.icon };
+      base.detail += ` — แต่ 🐈 แมวซนแอบขโมย ${it.icon} ${it.name} กลับมาได้!`;
+    }
     base.logType = 'trap';
-    return base;
+    return applyPetRewards(base);
   }
   return base;
 }
@@ -982,23 +1124,6 @@ export function rankOf(totalFocusSec) {
   }
   return {
     name: cur.name, icon: cur.icon, min,
-    nextName: next?.name || null, nextIcon: next?.icon || null,
-    pct: next ? Math.min(100, Math.round(((min - cur.minMin) / (next.minMin - cur.minMin)) * 100)) : 100,
-    nextIn: next ? next.minMin - min : 0,
-  };
-}
-
-// ----- Companion — โตตามเวลาโฟกัสสะสม -----
-export function companionOf(totalFocusSec) {
-  const min = Math.round((totalFocusSec || 0) / 60);
-  let cur = COMPANIONS[0];
-  let next = null;
-  for (const c of COMPANIONS) {
-    if (min >= c.minMin) cur = c;
-    else { next = c; break; }
-  }
-  return {
-    name: cur.name, icon: cur.icon, desc: cur.desc, min,
     nextName: next?.name || null, nextIcon: next?.icon || null,
     pct: next ? Math.min(100, Math.round(((min - cur.minMin) / (next.minMin - cur.minMin)) * 100)) : 100,
     nextIn: next ? next.minMin - min : 0,

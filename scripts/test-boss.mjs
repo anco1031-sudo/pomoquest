@@ -237,6 +237,27 @@ try {
   const trophies = db.prepare('SELECT boss_key FROM trophy WHERE character_id = ?').all(cid2);
   expect('api: ชนะบอส → เก็บถ้วยรางวัลบอสนั้น (ครั้งแรก)', trophies.length === 1 && !!trophies[0].boss_key, JSON.stringify(trophies));
 
+  // --- 🦄 ยูนิคอร์น: กันกับดัก 1 ครั้ง/รอบ (โล่สะสมตอนชนะบอส → ตกกับดักไม่เสียพลัง) ---
+  {
+    const uc = cid2;
+    db.prepare("INSERT OR IGNORE INTO pet (character_id, pet_id, is_active) VALUES (?, 'p_unicorn', 1)").run(uc);
+    db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(uc, 'p_unicorn');
+    db.prepare('UPDATE pet SET is_active = 0 WHERE character_id = ? AND pet_id != ?').run(uc, 'p_unicorn');
+    // ตั้งโล่กับดัก (เหมือนชนะบอสเพิ่งได้) + ฟื้น HP เต็ม
+    db.prepare('UPDATE progress SET pet_trap_shield = 1 WHERE character_id = ?').run(uc);
+    db.prepare('UPDATE character SET hp = max_hp WHERE id = ?').run(uc);
+    const hpBefore = db.prepare('SELECT hp FROM character WHERE id = ?').get(uc).hp;
+    r = await api('/adventure/event', { method: 'POST', body: { key: 'trap' } });
+    const hpAfter = db.prepare('SELECT hp FROM character WHERE id = ?').get(uc).hp;
+    expect('pet: ยูนิคอร์นกันกับดัก → ไม่เสียพลัง + โล่หาย', r.status === 200 && hpAfter === hpBefore
+      && db.prepare('SELECT pet_trap_shield FROM progress WHERE character_id = ?').get(uc).pet_trap_shield === 0,
+      `hp ${hpBefore} → ${hpAfter} · detail: ${r.json.event?.detail}`);
+    // โล่หมดแล้ว → ตกกับดักครั้งถัดไปเสียพลังปกติ
+    r = await api('/adventure/event', { method: 'POST', body: { key: 'trap' } });
+    const hpAfter2 = db.prepare('SELECT hp FROM character WHERE id = ?').get(uc).hp;
+    expect('pet: ยูนิคอร์นโล่หมด → ตกกับดักเสียพลังปกติ', hpAfter2 < hpAfter, `hp ${hpAfter} → ${hpAfter2}`);
+  }
+
   // --- reset: หมุน "world epoch" — session ที่พักค้างใน localStorage (โลกเก่า) ถูกทิ้งอัตโนมัติ ---
   r = await api('/state');
   expect('epoch: /state มี epoch', typeof r.json.epoch === 'string' && r.json.epoch.length > 0);

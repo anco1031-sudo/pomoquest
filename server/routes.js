@@ -7,16 +7,18 @@ import {
   db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
   getSkillRow, learnSkill, getEpoch, rotateEpoch, learnRecipe, getLearnedRecipes, addTrophy, getTrophies,
+  getPets, getPet, addPet, setActivePet, releasePet, grantPetXp, setPetTrapShield,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ALT_BOSSES, altBossAt,
   ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID,
+  PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT, campFreebieId,
   rewardMult, dropMult, priceMult, challengeOf, CHALLENGES, festivalFor, storyReqMet, storyReqLabel,
-  exploreMult, exploreRewardMult, bmExtraChance, mysteryBoxRoll, wanderingBossAt,
+  exploreMult, exploreRewardMult, bmExtraChance, mysteryBoxRoll, wanderingBossAt, petPerks, acquireItem,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -196,8 +198,15 @@ router.post('/adventure/event', (req, res) => {
   const ev = rollEvent(c, key || null);
   if (!ev) return res.status(400).json({ error: 'event ไม่พบ' });
   updateCharacter(c);
+  // กระเป๋าเต็ม + ของดรอป/รางวัล → ขายอัตโนมัติราคาพื้นฐาน (กันเก็บไว้รอราคาดีไม่อั้น)
+  let bagNote = '';
+  if (ev.item) {
+    const got = acquireItem(c, ev.item.id, 1, { fullMode: 'sell' });
+    if (got.sold) bagNote = ` (🎒 กระเป๋าเต็ม — ขาย ${ev.item.icon} ${ev.item.name} อัตโนมัติ +${got.gold} ทอง)`;
+  }
+  updateCharacter(c);
+  if (bagNote) ev.detail = (ev.detail || '') + bagNote;
   addLog(c.id, { type: ev.logType || ev.key, title: ev.title, detail: ev.detail, xp: ev.xp, gold: ev.gold, hpChange: ev.hpChange || 0, mpChange: ev.mpChange || 0, sessionKey });
-  if (ev.item) addItem(c.id, ev.item.id);
   // อัปเดต counter สถิติ (รวมตัวที่ใช้ตรวจตราลับ)
   const prog = getProgress(c.id);
   const up = (col, val) => db.prepare(`UPDATE progress SET ${col}=? WHERE id=?`).run(val, prog.id);
@@ -271,6 +280,17 @@ router.post('/adventure/complete', (req, res) => {
   prog.total_focus_sec += focusSec;
   // พักกลาง session (กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส) — แยกจาก break_sec (พักระหว่าง session)
   prog.pause_sec += Math.max(0, Math.round(pauseSec));
+  // 🐾 สัตว์เลี้ยงสะสม XP จากเวลาโฟกัส (โฟกัส 1 นาที = 1 XP — ฟัก/ร่วมผจญภัยก็ได้ XP จาก event ด้วย)
+  const petLevelNote = (() => {
+    const active = getPets(c.id).find((p) => p.is_active);
+    if (!active) return '';
+    const g = grantPetXp(c.id, active.pet_id, Math.max(1, Math.round(focusSec / 60)));
+    if (g.levelUp) {
+      const def = PET_BY_ID[active.pet_id];
+      return ` · 🐾 ${def?.icon || ''} ${def?.name || active.pet_id} เลเวลขึ้นเป็น Lv.${g.level}!`;
+    }
+    return '';
+  })();
 
   const bonus = 1 + Math.min(prog.streak - 1, 4) * 0.1;
   const chMult = rewardMult(c); // โหมดท้าทาย: XP/ทอง x1.5 (เสี่ยงสูง รางวัลสูง)
@@ -299,7 +319,7 @@ router.post('/adventure/complete', (req, res) => {
     ? ` · ⏸️ พัก ${Math.round(pauseSecRounded / 60)} นาที`
     : pauseSecRounded > 0 ? ` · ⏸️ พัก ${pauseSecRounded} วิ` : '';
   const taleAfter = addLog(c.id, {
-    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
+    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${petLevelNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
     xp, gold, focusSec, pauseSec: pauseSecRounded, focusTask,
   });
   if (survivalFall) {
@@ -624,14 +644,20 @@ router.post('/shop/buy', (req, res) => {
     price = Math.round(marketPrice(item, today()).price * priceMult(c));
   }
   if (c.gold < price) return res.status(400).json({ error: `ทองไม่พอ! (ต้องใช้ ${price} ทอง)` });
+  // กระเป๋าเต็ม + ยังไม่เคยมีของชนิดนี้ → บล็อกการซื้อ (ต้องขายของก่อน)
+  // กล่องลึกลับ: เช็คของที่จะได้ (เปิดหน้าเดิม deterministic) ก่อนตัดเงิน
+  const boxItem = itemId === MYSTERY_BOX_ID ? mysteryBoxRoll(visit, c) : null;
+  const willAdd = boxItem ? boxItem.id : itemId;
+  const preCheck = acquireItem(c, willAdd, 1, { fullMode: 'block', checkOnly: true });
+  if (preCheck.blocked) {
+    return res.status(400).json({ error: `🎒 กระเป๋าเต็ม (${preCheck.used}/${preCheck.cap}) — ขายของก่อนซื้อ (${preCheck.item?.icon} ${preCheck.item?.name} จะใช้ช่องใหม่)` });
+  }
   c.gold -= price;
   // กล่องลึกลับ — เปิดเลย ไม่เข้าสู่กระเป๋า (สุ่ม deterministic จากค่ายพัก — เปิดหน้าเดิมได้ของเดิม)
-  let boxItem = null;
-  if (itemId === MYSTERY_BOX_ID) {
-    boxItem = mysteryBoxRoll(visit, c);
-    if (boxItem) addItem(c.id, boxItem.id, 1);
+  if (boxItem) {
+    acquireItem(c, boxItem.id, 1, { fullMode: 'block' }); // เช็คผ่านแล้ว → เพิ่มได้
   } else {
-    addItem(c.id, itemId, 1);
+    acquireItem(c, itemId, 1, { fullMode: 'block' });
   }
   db.prepare('UPDATE camp_shop SET qty = qty + 1 WHERE character_id = ? AND visit = ? AND item_id = ?').run(c.id, visit, itemId);
   updateCharacter(c);
@@ -744,6 +770,52 @@ router.post('/inventory/use', (req, res) => {
     });
   }
 
+  // 🥚 ไข่ปริศนา — ใช้แล้วฟักออกมาเป็นสัตว์เลี้ยง (สุ่ม rarity ฝั่ง server — ไม่สปอยล์)
+  if (item.use_egg) {
+    const prog = getProgress(c.id);
+    const slots = prog.pet_slots || 1;
+    const petCount = getPets(c.id).length;
+    if (petCount >= slots) return res.status(400).json({ error: `🐾 คอกสัตว์เต็ม (${petCount}/${slots}) — ปล่อยตัวหนึ่งก่อน หรือใช้ 💳 บัตรขยายคอก` });
+    // สุ่ม pet ตาม rarity: ทั่วไป 60% / หายาก 28% / หายากมาก 10% / ตำนาน 2%
+    const total = PET_RARITY_ROLL.reduce((a, r) => a + r.weight, 0);
+    let roll = Math.random() * total;
+    let rarity = 'common';
+    for (const r of PET_RARITY_ROLL) {
+      roll -= r.weight;
+      if (roll <= 0) { rarity = r.rarity; break; }
+    }
+    const pool = PETS.filter((p) => p.rarity === rarity);
+    const pet = pool[Math.floor(Math.random() * pool.length)];
+    if (!addPet(c.id, pet.id)) return res.status(400).json({ error: `มี ${pet.icon} ${pet.name} อยู่ในคอกแล้ว — ไข่ฟักเป็นตัวเดิมไม่ได้ (ปล่อยตัวเดิมก่อน)` });
+    setActivePet(c.id, pet.id); // ตัวที่ฟักใหม่ = ตัวที่ใช้งานอัตโนมัติ
+    db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+    const RARITY_LABEL = { common: 'ทั่วไป', rare: 'หายาก', epic: 'หายากมาก', legend: 'ตำนาน' };
+    addLog(c.id, { type: 'pet_hatch', title: `🥚 ฟักไข่สำเร็จ!`, detail: `${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) ฟักออกมาจากไข่แล้ว! — ${pet.desc}` });
+    return res.json({
+      ...serialize(c), inventory: getInventory(c.id),
+      message: `🥚 ฟักออกมาแล้ว! ได้ ${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) — ตั้งเป็นตัวที่ใช้งานแล้ว`,
+      ...dailyPayload(c),
+      levelUps: { levels: 0, statPoints: c.stat_points },
+    });
+  }
+
+  // 💳 บัตรขยายคอก — ใช้แล้วขยายช่องเลี้ยงสัตว์ +1 (เริ่ม 1 ช่อง สูงสุด 4)
+  if (item.use_stall) {
+    const prog = getProgress(c.id);
+    const cur = prog.pet_slots || 1;
+    if (cur >= PET_MAX_SLOTS) return res.status(400).json({ error: `คอกสัตว์เต็มที่แล้ว (${PET_MAX_SLOTS} ช่อง) — ใช้บัตรเพิ่มไม่ได้` });
+    prog.pet_slots = cur + 1;
+    db.prepare('UPDATE progress SET pet_slots = ? WHERE id = ?').run(prog.pet_slots, prog.id);
+    db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+    addLog(c.id, { type: 'pet_stall', title: '💳 ขยายคอกสัตว์', detail: `ขยายคอกสัตว์เป็น ${prog.pet_slots}/${PET_MAX_SLOTS} ช่อง — เลี้ยงสัตว์เลี้ยงได้มากขึ้น!` });
+    return res.json({
+      ...serialize(c), inventory: getInventory(c.id),
+      message: `💳 ขยายคอกสัตว์เป็น ${prog.pet_slots}/${PET_MAX_SLOTS} ช่องแล้ว!`,
+      ...dailyPayload(c),
+      levelUps: { levels: 0, statPoints: c.stat_points },
+    });
+  }
+
   // 🛡️ โล่โฟกัส — ใช้แล้วติดตั้งโล่กันคอมโบ 1 ครั้ง (มีอยู่แล้วใช้ซ้ำไม่ได้)
   if (item.use_shield) {
     const sh = getProgress(c.id);
@@ -771,6 +843,31 @@ router.post('/inventory/use', (req, res) => {
   });
 });
 
+// ----- สัตว์เลี้ยง: สลับตัวที่ใช้งาน / ปล่อย (คอกเต็มต้องปล่อยก่อน — ได้ทองปลอบใจ) -----
+router.post('/pet/swap', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { petId } = req.body || {};
+  if (!getPet(c.id, petId)) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้ในคอก' });
+  setActivePet(c.id, petId);
+  const def = PET_BY_ID[petId];
+  addLog(c.id, { type: 'pet_swap', title: '🐾 สลับสัตว์เลี้ยง', detail: `ตั้ง ${def?.icon || ''} ${def?.name || petId} เป็นตัวที่ใช้งาน — ค่าพิเศษของมันมีผลแล้ว!` });
+  res.json({ ...serialize(c), message: `🐾 ตั้ง ${def?.icon || ''} ${def?.name || petId} เป็นตัวที่ใช้งานแล้ว` });
+});
+
+router.post('/pet/release', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { petId } = req.body || {};
+  const row = getPet(c.id, petId);
+  if (!row) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้ในคอก' });
+  const def = PET_BY_ID[petId];
+  const gold = 20 + (row.level - 1) * 10; // ทองปลอบใจตามเลเวล
+  releasePet(c.id, petId);
+  c.gold += gold;
+  updateCharacter(c);
+  addLog(c.id, { type: 'pet_release', title: '🕊️ ปล่อยสัตว์เลี้ยง', detail: `ปล่อย ${def?.icon || ''} ${def?.name || petId} (Lv.${row.level}) เป็นอิสระ — ได้ทองปลอบใจ ${gold}` });
+  res.json({ ...serialize(c), message: `🕊️ ปล่อย ${def?.icon || ''} ${def?.name || petId} เป็นอิสระแล้ว — ได้ทองปลอบใจ +${gold}` });
+});
+
 // ----- คราฟต์ (ต้องเรียนรู้สูตรจากแบบแปลนก่อน — วัสดุคือของขวัญ junk ในกระเป๋า) -----
 router.post('/craft', (req, res) => {
   const c = requireChar(res); if (!c) return;
@@ -786,11 +883,16 @@ router.post('/craft', (req, res) => {
       return res.status(400).json({ error: `วัสดุไม่พอ: ${it?.icon || ''} ${it?.name || m.id} ต้องใช้ ${m.qty} ชิ้น (มี ${have})` });
     }
   }
+  // กระเป๋าเต็ม + ยังไม่เคยมีของที่คราฟต์ได้ → บล็อก (กันของที่คราฟต์ไปโดนขาย/หาย)
+  const result = ITEM_BY_ID[rc.result.id];
+  const preCheck = acquireItem(c, result.id, rc.result.qty || 1, { fullMode: 'block', checkOnly: true });
+  if (preCheck.blocked) {
+    return res.status(400).json({ error: `🎒 กระเป๋าเต็ม (${preCheck.used}/${preCheck.cap}) — ขายของก่อนคราฟต์ (${result.icon} ${result.name} จะใช้ช่องใหม่)` });
+  }
   for (const m of rc.materials) {
     db.prepare('UPDATE inventory SET qty = qty - ? WHERE character_id = ? AND item_id = ?').run(m.qty, c.id, m.id);
   }
-  const result = ITEM_BY_ID[rc.result.id];
-  addItem(c.id, result.id, rc.result.qty || 1);
+  acquireItem(c, result.id, rc.result.qty || 1, { fullMode: 'block' }); // เช็คผ่านแล้ว → เพิ่มได้
   const matLabel = rc.materials.map((m) => `${ITEM_BY_ID[m.id]?.icon} ${ITEM_BY_ID[m.id]?.name} x${m.qty}`).join(' + ');
   addLog(c.id, { type: 'craft', title: `🛠️ คราฟต์: ${rc.icon} ${rc.name}`, detail: `${matLabel} → ได้ ${result.icon} ${result.name} x${rc.result.qty || 1}` });
   res.json({ ...serialize(c), inventory: getInventory(c.id), message: `🛠️ คราฟต์ ${result.icon} ${result.name} สำเร็จ!` });
@@ -934,8 +1036,13 @@ router.post('/quest/do', (req, res) => {
   if (!quest) return res.status(400).json({ error: 'ภารกิจไม่พบ' });
   const result = resolveQuest(c, quest);
   updateCharacter(c);
-  if (result.item) addItem(c.id, result.item.id);
-  addLog(c.id, { type: result.success ? 'quest_win' : 'quest_fail', title: `📜 ${quest.title}`, detail: result.detail, xp: result.xp, gold: result.gold });
+  let bagNote = '';
+  if (result.item) {
+    const got = acquireItem(c, result.item.id, 1, { fullMode: 'sell' });
+    if (got.sold) bagNote = ` (🎒 กระเป๋าเต็ม — ขาย ${result.item.icon} ${result.item.name} อัตโนมัติ +${got.gold} ทอง)`;
+  }
+  updateCharacter(c);
+  addLog(c.id, { type: result.success ? 'quest_win' : 'quest_fail', title: `📜 ${quest.title}`, detail: result.detail + bagNote, xp: result.xp, gold: result.gold });
   // นับภารกิจที่ทำสำเร็จ
   const prog = getProgress(c.id);
   if (result.success) {
@@ -1058,44 +1165,42 @@ router.post('/boss/act', (req, res) => {
     db.prepare(`UPDATE progress SET cycles_completed=@cycles_completed, bosses_defeated=@bosses_defeated, gold_earned=@gold_earned,
       hard_cycles=@hard_cycles, marathon_cycles=@marathon_cycles, survival_cycles=@survival_cycles,
       charge_breaks=@charge_breaks WHERE id=@id`).run(prog);
-    if (result.item) addItem(c.id, result.item.id);
+    // กระเป๋าเต็ม + ของรางวัล/ดรอป → ขายอัตโนมัติราคาพื้นฐาน (กันเก็บไว้รอราคาดีไม่อั้น)
+    let lootNote = '';
+    const lootAdd = (itemId, note) => {
+      const got = acquireItem(c, itemId, 1, { fullMode: 'sell' });
+      const def = ITEM_BY_ID[itemId];
+      return `${note}${got.sold ? ` (🎒 เต็ม — ขาย ${def?.icon} ${def?.name} อัตโนมัติ +${got.gold} ทอง)` : ''}`;
+    };
+    if (result.item) lootNote = lootAdd(result.item.id, ` และได้ ${result.item.icon} ${result.item.name}!`);
     // เมืองยังไม่ย้ายอัตโนมัติ — client จะถามว่า "เดินทางต่อ" หรือ "สำรวจเมืองเดิมต่อ" (POST /boss/after)
     fights.delete(c.id);
     // ของรางวัลเฉพาะบอส — ปกติโอกาส ~50% ได้ของขวัญประจำตัว (ขายได้ที่แคมป์)
     // บอสลับ (สำรวจเมืองเดิมครบรอบ) → ได้ของพิเศษการันตีครั้งแรกของเมืองนั้น · มีแล้วได้ค่าหัวทองแทน (กันฟาร์มซ้ำ)
     // ชนะด้วยฝีมือ (สลายท่าไม้ตาย ≥1 ครั้ง หรืออดทนสู้จนบอสสุดทน) → การันตีของรางวัลบอส (แทนสุ่ม 50%)
     const masterWin = (result.breaks || 0) > 0 || result.furyWin;
-    let lootNote = '';
     if (fight.boss.isWander && fight.boss.loot) {
       // บอสเร่ร่อน — ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ (แหล่งหาแบบแปลนที่แน่นอน)
-      const loot = ITEM_BY_ID[fight.boss.loot];
-      if (loot) {
-        addItem(c.id, loot.id);
-        lootNote = ` และได้ ${loot.icon} ${loot.name}! (ของรางวัลบอสเร่ร่อน)`;
-      }
+      lootNote += lootAdd(fight.boss.loot, ' และได้ของรางวัลบอสเร่ร่อน');
       const bp = ITEM_BY_ID[BLUEPRINT_ITEMS[Math.floor(Math.random() * BLUEPRINT_ITEMS.length)]];
-      if (bp) {
-        addItem(c.id, bp.id);
-        lootNote += ` + แบบแปลน ${bp.icon} ${bp.name}`;
-      }
+      if (bp) lootNote += lootAdd(bp.id, ` + แบบแปลน ${bp.icon} ${bp.name}`);
     } else if (fight.boss.isAlt && fight.boss.loot) {
       const owned = getInventory(c.id).some((i) => i.item_id === fight.boss.loot);
       if (owned) {
         c.gold += 150;
-        lootNote = ' และได้ค่าหัวบอสลับ +150 ทอง';
+        lootNote += ' และได้ค่าหัวบอสลับ +150 ทอง';
       } else {
-        const loot = ITEM_BY_ID[fight.boss.loot];
-        if (loot) {
-          addItem(c.id, loot.id);
-          lootNote = ` และได้ ${loot.icon} ${loot.name}! (ของพิเศษบอสลับ)`;
-        }
+        lootNote += lootAdd(fight.boss.loot, ' และได้ของพิเศษบอสลับ');
       }
     } else if (fight.boss.loot && (masterWin || Math.random() < 0.5)) {
-      const loot = ITEM_BY_ID[fight.boss.loot];
-      if (loot) {
-        addItem(c.id, loot.id);
-        lootNote = ` และได้ ${loot.icon} ${loot.name}!${masterWin ? ' (รางวัลฝีมือ — การันตี)' : ''}`;
-      }
+      lootNote += lootAdd(fight.boss.loot, ` และได้ของรางวัลบอส${masterWin ? ' (รางวัลฝีมือ — การันตี)' : ''}`);
+    }
+    // 🦄 ยูนิคอร์น — กันกับดัก 1 ครั้ง/รอบ (โล่สะสมใหม่ทุกครั้งที่ชนะบอส)
+    if (petPerks(c).trapShield) setPetTrapShield(c.id, 1);
+    // 💳 บอสลับ — การันตีบัตรขยายคอก 1 ใบแรก (ถ้ายังไม่มีเลย) — คอกสัตว์ขยายช่องได้
+    if (fight.boss.isAlt && !getInventory(c.id).some((i) => i.item_id === 171)) {
+      addItem(c.id, 171, 1);
+      lootNote += ' + 💳 บัตรขยายคอก (ของรางวัลบอสลับ — ครั้งแรก)';
     }
     updateCharacter(c);
     addTrophy(c.id, fight.boss.name, fight.boss.icon); // ห้องเก็บถ้วยรางวัล — ชนะบอสครั้งแรกของบอสนั้น (INSERT OR IGNORE)

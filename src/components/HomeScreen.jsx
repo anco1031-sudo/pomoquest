@@ -13,7 +13,7 @@ import StoryQuests from './StoryQuests.jsx';
 import ChallengeTab from './ChallengeTab.jsx';
 import HomeQuickCards from './HomeQuickCards.jsx';
 import DevPanel from './DevPanel.jsx';
-import { rankOf, companionOf, moraleOf } from '../meta.js';
+import { rankOf, moraleOf, petMoodOf, petPerkLabel } from '../meta.js';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
@@ -69,8 +69,10 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   const city = character.city;
   const xpPct = Math.min(100, (character.xp / character.xpToNext) * 100);
   const rank = rankOf(progress?.total_focus_sec || 0);
-  const companion = companionOf(progress?.total_focus_sec || 0);
   const morale = moraleOf(progress?.last_focus_date);
+  // สัตว์เลี้ยง — ตัวที่ active เท่านั้นที่มีค่าพิเศษ · ฟองอารมณ์ตามวันไม่ได้โฟกัส (เหมือนขวัญกำลังใจ)
+  const activePet = (character.pets || []).find((p) => p.active) || null;
+  const petMood = activePet ? petMoodOf(activePet, progress?.last_focus_date) : null;
 
   const toggleMute = () => {
     const m = !muted;
@@ -216,9 +218,20 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
           <div className="hero-top">
             <div className="hero-avatar">
               {character.classIcon}
-              <div className="companion-bubble" title={`🐾 Companion: ${companion.name} — ${companion.desc}${companion.nextIn > 0 ? ` · วิวัฒน์ในอีก ${companion.nextIn} นาที (${companion.nextIcon} ${companion.nextName})` : ' · วิวัฒน์เต็มที่แล้ว!'}`}>
-                {companion.icon}
-              </div>
+              {activePet ? (
+                <div
+                  className={`companion-bubble pet-mood-${petMood.level}`}
+                  title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
+                >
+                  {activePet.icon}
+                  <span className="pet-lv-tag">Lv.{activePet.level}</span>
+                  <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
+                </div>
+              ) : (
+                <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~4%) แล้วใช้ฟักดูสิ!">
+                  🥚
+                </div>
+              )}
             </div>
             <div className="hero-info">
               <div className="hero-name">{character.name}</div>

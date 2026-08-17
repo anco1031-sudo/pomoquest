@@ -64,6 +64,18 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
   expect('merchant: ได้ทองหรือไอเทม', ev.gold > 0 || ev.item !== null, `gold=${ev.gold}, item=${ev.item?.name || '-'}`);
 }
 
+// --- egg: event พิเศษให้ไข่ปริศนา (ระบบสัตว์เลี้ยง) ---
+{
+  const ev = rollEvent(c, 'egg');
+  expect('egg: logType = egg + ได้ไข่ (item 170)', ev.logType === 'egg' && ev.item?.id === 170, `item=${ev.item?.name || '-'}`);
+}
+
+// --- treasure: มีโอกาสเจอไข่แทนของปกติ (สุ่ม — ตรวจว่าโครงสร้างไม่พัง + ได้ของ) ---
+{
+  const ev = rollEvent(c, 'treasure');
+  expect('treasure: ได้ทอง + XP เสมอ', ev.gold > 0 && ev.xp > 0, `gold=${ev.gold}, xp=${ev.xp}`);
+}
+
 // --- trap: เสีย HP ---
 {
   const hpBefore = c.hp;
