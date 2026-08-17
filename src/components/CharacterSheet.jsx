@@ -247,7 +247,7 @@ function PetStable() {
       )}
       <p className="hint pet-mood-hint">{pets.length > 0 ? `💬 อารมณ์: ${pets.map((p) => `${p.icon} ${petMoodOf(p, lastFocusDate).msg.split(' ').slice(1).join(' ')}`).join(' · ')}` : ''}</p>
       {slots < maxSlots && (
-        <p className="hint">💳 คอก ${slots}/${maxSlots} — หา 💳 บัตรขยายคอก (ดรอปหายากมากจากสมบัติ / บอสลับการันตีใบแรก) เพื่อขยายช่อง</p>
+        <p className="hint">💳 คอก {slots}/{maxSlots} — หา 💳 บัตรขยายคอก (ดรอปหายากมากจากสมบัติ / บอสลับการันตีใบแรก) เพื่อขยายช่อง</p>
       )}
     </Panel>
   );

@@ -88,6 +88,13 @@ if (!hasStable) {
 }
 expect('CharacterSheet: มีคอกสัตว์ (pet stable)', hasStable, '');
 
+// ข้อความคอก (ห้ามมี $ หลุด — bug: `${slots}` ใน JSX text กลายเป็น $1/$4)
+const pTexts = (await evalJs(`[...document.querySelectorAll('p')].map(p => p.textContent.trim())`)) || [];
+const stableHint = pTexts.find((t) => /คอก \d+\/\d+/.test(t)) || '';
+const noDollar = !stableHint.includes('$');
+const rightFmt = /คอก \d+\/\d+/.test(stableHint);
+expect('pet: ข้อความคอก "คอก 1/4" ไม่มี $ หลุด', noDollar && rightFmt, `'${stableHint}'`);
+
 // กดเปิดแท็บตัวละคร (CharacterSheet)
 const hasPetPanel = await evalJs(`!![...document.querySelectorAll('button')].find(b => b.textContent.includes('จัดการตัวละคร')) || document.body.innerText.includes('ไอเทมในกระเป๋า')`);
 console.log(`${hasPetPanel ? '✅' : 'ℹ️'} เปิดหน้าแผ่นตัวละครได้`, '');
