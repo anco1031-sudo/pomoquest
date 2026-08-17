@@ -1,5 +1,5 @@
-import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_MAX_SLOTS, petXpToNext } from './data.js';
-import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter } from './db.js';
+import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
+import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -268,6 +268,45 @@ export function skillPower(skill, level = 1, xp = 0, source = 'class') {
 }
 
 // รวมสกิลทั้งหมดของตัวละคร = สกิลคลาส (เลเวล 1 เสมอ) + สกิลที่เรียนจากคัมภีร์ — พร้อมเลเวล/XP จริง
+// 🥚 ฟักไข่ที่กำลังฟักอยู่ (ใช้ไข่แล้ว → รอจบ 1 session) — สุ่ม pet ตาม rarity ตอนฟักจริง (ไม่สปอยล์)
+// คืน { pet, rarityLabel, dup, gold } หรือ null ถ้าไม่มีไข่กำลังฟัก · waiting = คอกเต็ม รอฟักก่อน
+const RARITY_LABEL = { common: 'ทั่วไป', rare: 'หายาก', epic: 'หายากมาก', legend: 'ตำนาน' };
+export function hatchEgg(c) {
+  if (!c.hatch_pending) return null;
+  const prog = getProgress(c.id);
+  const slots = prog.pet_slots || 1;
+  const petCount = getPets(c.id).length;
+  c.hatch_pending = 0;
+  // คอกเต็มตอนฟัก (ขยายช่องไม่ทัน) — ไข่ยังฟักไม่ได้ กลับไปรอ (สถานะยังค้างไว้)
+  if (petCount >= slots) {
+    c.hatch_pending = 1;
+    updateCharacter(c);
+    return { waiting: true, message: 'คอกสัตว์เต็ม — ไข่รอฟักอยู่ รอจนกว่าจะมีที่ว่าง' };
+  }
+  const total = PET_RARITY_ROLL.reduce((a, r) => a + r.weight, 0);
+  let roll = Math.random() * total;
+  let rarity = 'common';
+  for (const r of PET_RARITY_ROLL) {
+    roll -= r.weight;
+    if (roll <= 0) { rarity = r.rarity; break; }
+  }
+  const pool = PETS.filter((p) => p.rarity === rarity);
+  const pet = pool[Math.floor(Math.random() * pool.length)];
+  const result = { pet: { id: pet.id, name: pet.name, icon: pet.icon, rarity: pet.rarity }, rarityLabel: RARITY_LABEL[pet.rarity] };
+  if (!addPet(c.id, pet.id)) {
+    // ฟักเจอตัวที่อยู่ในคอกแล้ว → ได้ค่าปลอบใจทอง (ไข่ใบนั้นจบไป)
+    const gold = 60;
+    c.gold += gold;
+    updateCharacter(c);
+    addLog(c.id, { type: 'pet_hatch_dup', title: '🥚 ไข่ฟักเป็นตัวเดิม', detail: `${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) มีอยู่ในคอกแล้ว — ได้ค่าปลอบใจ +${gold} ทอง` });
+    return { ...result, dup: true, gold };
+  }
+  setActivePet(c.id, pet.id); // ตัวที่ฟักใหม่ = ตัวที่ใช้งานอัตโนมัติ
+  updateCharacter(c);
+  addLog(c.id, { type: 'pet_hatch', title: '🥚 ไข่ฟักสำเร็จ!', detail: `${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) ฟักออกมาจากไข่แล้ว! — ${pet.desc}` });
+  return { ...result, dup: false, gold: 0 };
+}
+
 export function getCharacterSkills(c) {
   const rows = getSkillRows(c.id);
   const leveled = Object.fromEntries(rows.map((r) => [r.skill_id, r]));
@@ -323,6 +362,8 @@ export function serializeCharacter(c) {
     exploreRewardMult: +(1 + 0.2 * (c.city_rounds || 0)).toFixed(2),
     altBossAtRound: altBossAt(c.city_index % CITIES.length),
     challengeMode: c.challenge_mode || '',
+    // ไข่ที่กำลังฟัก (ใช้ไข่แล้ว รอจบ 1 session) — client ใช้แสดงป้าย "🥚 กำลังฟัก"
+    hatchPending: !!c.hatch_pending,
     // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙 — โชว์สถานะปัจจุบันบนแผ่นตัวละคร
     classPerk: classPerks(c),
     skills: getCharacterSkills(c), // สกิลคลาส + สกิลจากคัมภีร์ พร้อมเลเวล/XP — ใช้ตอนสู้บอส

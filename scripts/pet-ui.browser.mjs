@@ -64,8 +64,17 @@ const activeId = db.prepare('SELECT active_character_id FROM settings WHERE id =
 if (activeId) {
   const hasPet = db.prepare('SELECT COUNT(*) AS n FROM pet WHERE character_id = ?').get(activeId).n > 0;
   if (!hasPet) {
+    // ใช้ไข่ = เริ่มฟัก (ยังไม่ฟักทันที — รอจบ 1 session)
     db.prepare('INSERT OR IGNORE INTO inventory (character_id, item_id, qty) VALUES (?, 170, 1)').run(activeId);
     await fetch('http://127.0.0.1:3001/api/inventory/use', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: 170 }) });
+    // ป้าย "🥚 กำลังฟัก" ขึ้นบน Home (ยังไม่มี pet จนกว่าจะจบ session)
+    await send('Page.navigate', { url: 'http://127.0.0.1:3001/' });
+    await sleep(1500);
+    const hatchBadge = await evalJs(`document.querySelector('.hatch-badge')?.textContent?.trim() || ''`);
+    const noPetYet = await evalJs(`!document.querySelector('.pet-lv-tag')`);
+    expect('pet: ใช้ไข่แล้ว → ป้าย "🥚 กำลังฟัก" ขึ้นบน Home + ยังไม่มี pet', hatchBadge.includes('กำลังฟัก') && noPetYet, `badge='${hatchBadge}'`);
+    // จบ 1 session → ไข่ฟัก
+    await fetch('http://127.0.0.1:3001/api/adventure/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ focusSec: 1500, events: [] }) });
   }
   await send('Page.navigate', { url: 'http://127.0.0.1:3001/' });
   await sleep(2500);

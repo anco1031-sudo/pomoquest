@@ -287,7 +287,17 @@ export default function Game() {
     lastResRef.current = res;
     if (!res) { setPhase('idle'); return; }
     if (res.reward) {
-      notify('⏰ โฟกัสครบแล้ว!', `ได้ +${res.reward.xp} XP, +${res.reward.gold} ทอง — พักเบรกหรือลุยต่อ?`);
+      const hatchNote = res.hatch && !res.hatch.waiting && !res.hatch.dup
+        ? ` · 🥚 ไข่ฟักเป็น ${res.hatch.pet.icon} ${res.hatch.pet.name}!`
+        : '';
+      notify('⏰ โฟกัสครบแล้ว!', `ได้ +${res.reward.xp} XP, +${res.reward.gold} ทอง${hatchNote} — พักเบรกหรือลุยต่อ?`);
+    }
+    // 🥚 ไข่ที่กำลังฟัก — จบ session แล้วไข่ฟัก (server สุ่มตอนฟักจริง ไม่สปอยล์ก่อนหน้านี้)
+    if (res.hatch) {
+      const h = res.hatch;
+      if (h.waiting) showToast(`🥚 ${h.message || 'คอกสัตว์เต็ม — ไข่รอฟักอยู่'}`);
+      else if (h.dup) showToast(`🥚 ไข่ฟักเป็น ${h.pet.icon} ${h.pet.name} (${h.rarityLabel}) แต่มีอยู่ในคอกแล้ว — ได้ค่าปลอบใจ +${h.gold} ทอง`);
+      else showToast(`🥚 ไข่ฟักแล้ว! ได้ ${h.pet.icon} ${h.pet.name} (${h.rarityLabel}) — ตั้งเป็นตัวที่ใช้งานแล้ว`);
     }
     setStoryDone(false); // เริ่มรอเรื่องราว — เรื่องต้องโชว์ก่อนถึงจะถามพัก/ข้าม
     setAwaitingBreak(true);

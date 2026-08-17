@@ -253,6 +253,12 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                   🥚
                 </div>
               )}
+              {/* ไข่กำลังฟัก (ใช้ไข่แล้ว — จะฟักหลังจบ 1 session) */}
+              {character.hatchPending && (
+                <div className="hatch-badge" title="🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักออกมาเป็นสัตว์เลี้ยงหลังจบ 1 session โฟกัส">
+                  🥚 กำลังฟัก…
+                </div>
+              )}
             </div>
             <div className="hero-info">
               <div className="hero-name">{character.name}</div>

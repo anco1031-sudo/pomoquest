@@ -7,18 +7,18 @@ import {
   db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
   getSkillRow, learnSkill, getEpoch, rotateEpoch, learnRecipe, getLearnedRecipes, addTrophy, getTrophies,
-  getPets, getPet, addPet, setActivePet, releasePet, grantPetXp, setPetTrapShield,
+  getPets, getPet, setActivePet, releasePet, grantPetXp, setPetTrapShield,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ALT_BOSSES, altBossAt,
   ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID,
-  PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS,
+  PET_BY_ID, PET_MAX_SLOTS,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
   rollQuests, resolveQuest, campSellPrice, marketPrice, SLOT_COLS, blackMarketStock, blackMarketOpen, BM_JUNK_MULT, campFreebieId,
   rewardMult, dropMult, priceMult, challengeOf, CHALLENGES, festivalFor, storyReqMet, storyReqLabel,
-  exploreMult, exploreRewardMult, bmExtraChance, mysteryBoxRoll, wanderingBossAt, petPerks, acquireItem,
+  exploreMult, exploreRewardMult, bmExtraChance, mysteryBoxRoll, wanderingBossAt, petPerks, acquireItem, hatchEgg,
 } from './game.js';
 import { checkAchievements, getAchievementList } from './achievements.js';
 import { getDailyQuests, claimDailyQuest, claimDailyAll } from './daily.js';
@@ -390,6 +390,12 @@ router.post('/adventure/complete', (req, res) => {
     }).then((tale) => recordTale(tale || fallbackTale()))
       .catch(() => recordTale(fallbackTale()));
   }
+  // 🥚 ไข่ที่กำลังฟัก (ใช้ไข่แล้ว) — จบ 1 session ครบแล้ว → ไข่ฟักออกมาเป็นสัตว์เลี้ยง
+  const hatch = hatchEgg(c);
+  if (hatch && !hatch.waiting && !hatch.dup) {
+    // ฟักสำเร็จ — แจ้งใน log session ด้วย
+    addLog(c.id, { type: 'session_done_hatch', title: '🥚 ไข่ฟักแล้ว!', detail: `หลังจบ session ไข่ปริศนาฟักออกมาเป็น ${hatch.pet.icon} ${hatch.pet.name} (${hatch.rarityLabel}) — ตั้งเป็นตัวที่ใช้งานแล้ว` });
+  }
   // ตัวนับรายวัน (Daily Quest)
   bumpDaily(c.id, 'sessions');
   bumpDaily(c.id, 'focus_sec', focusSec);
@@ -404,6 +410,7 @@ router.post('/adventure/complete', (req, res) => {
     taleAfter,
     talePending: llmEnabled() && !isDevDryRun(),
     survivalFall,
+    hatch,
   });
 });
 
@@ -770,30 +777,20 @@ router.post('/inventory/use', (req, res) => {
     });
   }
 
-  // 🥚 ไข่ปริศนา — ใช้แล้วฟักออกมาเป็นสัตว์เลี้ยง (สุ่ม rarity ฝั่ง server — ไม่สปอยล์)
+  // 🥚 ไข่ปริศนา — ใช้แล้วเริ่มฟัก: ยังไม่ฟักทันที ต้องจบ 1 session (adventure/complete) ไข่ถึงจะฟัก (สุ่ม rarity ตอนฟักจริง — ไม่สปอยล์)
   if (item.use_egg) {
     const prog = getProgress(c.id);
     const slots = prog.pet_slots || 1;
     const petCount = getPets(c.id).length;
     if (petCount >= slots) return res.status(400).json({ error: `🐾 คอกสัตว์เต็ม (${petCount}/${slots}) — ปล่อยตัวหนึ่งก่อน หรือใช้ 💳 บัตรขยายคอก` });
-    // สุ่ม pet ตาม rarity: ทั่วไป 60% / หายาก 28% / หายากมาก 10% / ตำนาน 2%
-    const total = PET_RARITY_ROLL.reduce((a, r) => a + r.weight, 0);
-    let roll = Math.random() * total;
-    let rarity = 'common';
-    for (const r of PET_RARITY_ROLL) {
-      roll -= r.weight;
-      if (roll <= 0) { rarity = r.rarity; break; }
-    }
-    const pool = PETS.filter((p) => p.rarity === rarity);
-    const pet = pool[Math.floor(Math.random() * pool.length)];
-    if (!addPet(c.id, pet.id)) return res.status(400).json({ error: `มี ${pet.icon} ${pet.name} อยู่ในคอกแล้ว — ไข่ฟักเป็นตัวเดิมไม่ได้ (ปล่อยตัวเดิมก่อน)` });
-    setActivePet(c.id, pet.id); // ตัวที่ฟักใหม่ = ตัวที่ใช้งานอัตโนมัติ
+    if (c.hatch_pending) return res.status(400).json({ error: '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' });
+    c.hatch_pending = 1;
+    updateCharacter(c);
     db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
-    const RARITY_LABEL = { common: 'ทั่วไป', rare: 'หายาก', epic: 'หายากมาก', legend: 'ตำนาน' };
-    addLog(c.id, { type: 'pet_hatch', title: `🥚 ฟักไข่สำเร็จ!`, detail: `${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) ฟักออกมาจากไข่แล้ว! — ${pet.desc}` });
+    addLog(c.id, { type: 'pet_incubate', title: '🥚 ไข่เริ่มฟัก', detail: 'ไข่ปริศนาเริ่มฟักแล้ว — จะฟักออกมาเป็นสัตว์เลี้ยงหลังจบ 1 session โฟกัส!' });
     return res.json({
       ...serialize(c), inventory: getInventory(c.id),
-      message: `🥚 ฟักออกมาแล้ว! ได้ ${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) — ตั้งเป็นตัวที่ใช้งานแล้ว`,
+      message: '🥚 ไข่เริ่มฟักแล้ว! จะฟักออกมาหลังจบ 1 session โฟกัส — ไปโฟกัสงานกันเถอะ!',
       ...dailyPayload(c),
       levelUps: { levels: 0, statPoints: c.stat_points },
     });

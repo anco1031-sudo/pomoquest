@@ -535,34 +535,44 @@ try {
     expect('challenge: 7 วันเรียงตามสัปดาห์ (จ-อา) มีค่าไม่ติดลบ', p.days.every((d) => d.weekday && d.sessions >= 0 && d.focusSec >= 0), JSON.stringify(p.days));
   }
 
-  // --- 🐾 ระบบสัตว์เลี้ยง: ฟักไข่ / บัตรขยายคอก / สลับ / ปล่อย ---
+  // --- 🐾 ระบบสัตว์เลี้ยง: ใช้ไข่ = เริ่มฟัก (รอจบ 1 session) / บัตรขยายคอก / สลับ / ปล่อย ---
   {
     const petCid = (await api('/state')).json.character.id;
     // เริ่ม: ยังไม่มี pet, คอก 1 ช่อง
     r = await api('/state');
     expect('pet: เริ่มต้นมีคอก 1 ช่อง ไม่มีสัตว์เลี้ยง', r.json.character.petSlots === 1 && r.json.character.pets.length === 0, JSON.stringify(r.json.character.pets));
-    // ฟักไข่ → ได้ pet (สุ่ม rarity) + ตั้งเป็น active อัตโนมัติ
+    // ใช้ไข่ → เริ่มฟัก (ยังไม่ฟักทันที — รอจบ 1 session) + ป้าย hatchPending
     addItem(petCid, 170, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
-    expect('pet: ฟักไข่สำเร็จได้ pet + active', r.status === 200 && r.json.character.pets.length === 1 && r.json.character.pets[0].active === true, r.json.message || r.json.error);
+    expect('pet: ใช้ไข่ → เริ่มฟัก (hatchPending, ยังไม่มี pet)', r.status === 200 && r.json.character.hatchPending === true && r.json.character.pets.length === 0, r.json.message || r.json.error);
+    // ใช้ไข่ใบที่ 2 ตอนกำลังฟัก → บล็อก
+    addItem(petCid, 170, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+    expect('pet: มีไข่กำลังฟัก → ใช้ใบใหม่ไม่ได้', r.status === 400 && r.json.error.includes('กำลังฟัก'), r.json.error || '');
+    // จบ 1 session → ไข่ฟัก ได้ pet + active อัตโนมัติ
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
+    expect('pet: จบ session → ไข่ฟักได้ pet + active', r.status === 200 && r.json.hatch && !r.json.hatch.dup && r.json.character.pets.length === 1 && r.json.character.pets[0].active === true,
+      r.json.message || r.json.error || JSON.stringify(r.json.hatch));
     const petId = r.json.character.pets[0].id;
     expect('pet: serialize มีค่าพิเศษ + เลเวล + XP', !!r.json.character.pets[0].desc && r.json.character.pets[0].level === 1 && r.json.character.pets[0].xpNext > 0, JSON.stringify(r.json.character.pets[0]));
-    // คอกเต็ม 1/1 → ฟักไข่ฟองที่ 2 ไม่ได้
+    expect('pet: ฟักแล้ว hatchPending กลับเป็น false', r.json.character.hatchPending === false, String(r.json.character.hatchPending));
+    // คอกเต็ม 1/1 → ใช้ไข่ฟองใหม่ไม่ได้ (เช็คตอนเริ่มฟัก)
     addItem(petCid, 170, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
-    expect('pet: คอกเต็ม → ฟักไข่ไม่ได้', r.status === 400 && r.json.error.includes('คอก'), r.json.error || '');
+    expect('pet: คอกเต็ม → ใช้ไข่ไม่ได้', r.status === 400 && r.json.error.includes('คอก'), r.json.error || '');
     // บัตรขยายคอก → 2 ช่อง
     addItem(petCid, 171, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 171 } });
     expect('pet: บัตรขยายคอก → 2/4 ช่อง', r.status === 200 && r.json.character.petSlots === 2, r.json.message || r.json.error);
-    // ฟักไข่ฟองที่ 2 ได้ (2 ช่องแล้ว) — ฟักซ้ำได้ถ้าสุ่มเจอตัวเดิม (ไข่ฟักเป็นตัวเดิมไม่ได้)
+    // ฟักไข่ฟองที่ 2 (ใช้ไข่ → จบ session) — อาจฟักเจอตัวเดิม (ค่าปลอบใจ) หรือตัวใหม่ — ลองจนได้ตัวใหม่
     let hatched2 = false;
     for (let attempt = 0; attempt < 10 && !hatched2; attempt++) {
       addItem(petCid, 170, 1);
       r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+      r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
       hatched2 = r.status === 200 && r.json.character.pets.length === 2;
     }
-    expect('pet: ฟักไข่ฟองที่ 2 สำเร็จ (2/2)', hatched2, r.json.message || r.json.error);
+    expect('pet: ฟักไข่ฟองที่ 2 สำเร็จ (2/2)', hatched2, r.json.message || r.json.error || JSON.stringify(r.json.hatch));
     // สลับตัวที่ใช้งาน
     const other = r.json.character.pets.find((p) => p.id !== petId);
     r = await api('/pet/swap', { method: 'POST', body: { petId: other.id } });
