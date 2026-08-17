@@ -15,7 +15,7 @@ const TABS = [
   { key: 'trophy', label: 'ถ้วยรางวัล', icon: '🏆' },
 ];
 
-export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, visit }) {
+export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, visit, postBoss = null }) {
   const { character, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
   const [shop, setShop] = useState([]);
@@ -123,11 +123,13 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
     <div className="screen">
       <header className="camp-header">
         <div>
-          <div className="timer-title">🔥 ค่ายพัก</div>
+          <div className="timer-title">{postBoss ? '🏆 พักหลังชัยชนะ!' : '🔥 ค่ายพัก'}</div>
           <div className="camp-sub">
             {breakOver
               ? `⏰ เลยเวลาพัก ${fmtTime(overrun)} — กด "เริ่มโฟกัส" เมื่อพร้อม`
-              : `พักผ่อน เตรียมตัว เตรียมใจ ⏳ ${fmtTime(remain)}`}
+              : postBoss
+                ? `${postBoss} — เตรียมตัวให้พร้อมก่อนเริ่มรอบใหม่ ⏳ ${fmtTime(remain)}`
+                : `พักผ่อน เตรียมตัว เตรียมใจ ⏳ ${fmtTime(remain)}`}
           </div>
         </div>
         <div className="camp-header-right">

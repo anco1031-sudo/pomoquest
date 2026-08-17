@@ -222,6 +222,12 @@ try {
   expect('api /boss/act guard: ไม่ error + มี fight state', r.status === 200 && !r.json.error && r.json.fight && r.json.fight.rage === false,
     JSON.stringify(r.json.fight));
   expect('api /boss/act guard: บอสยังอยู่', !!r.json.boss && r.json.boss.hp > 0);
+  // สกิลต้องส่งเป็น skillId (บั๊กเดิม: client ส่งเป็น itemId → server หาไม่เจอ → "สกิลไม่พบ")
+  r = await api('/boss/act', { method: 'POST', body: { action: 'skill', skillId: 'ws_power' } });
+  expect('api /boss/act skill: ส่ง skillId ใช้ได้ (ไม่ error "สกิลไม่พบ")', r.status === 200 && !r.json.error,
+    JSON.stringify(r.json.error || '(ไม่มี error)'));
+  expect('api /boss/act skill: log มีการใช้สกิล (ฟันแหลก)', r.status === 200 && r.json.log?.some((l) => l.includes('ฟันแหลก')),
+    JSON.stringify(r.json.log || []));
   // ชนะบอสผ่าน API (อัปเกรดพลัง → ชนะภายในไม่กี่เทิร์น) — ตรวจ response มี breaks/furyWin + progress.charge_breaks
   const cid2 = r.json.character.id;
   db.prepare('UPDATE character SET level = 50, max_hp = 5000, hp = 5000, mp = 500, max_mp = 500, atk = 2000, def = 500, spd = 0, crit = 0 WHERE id = ?').run(cid2);

@@ -72,6 +72,7 @@ export default function Game() {
   const [breakOverDismissed, setBreakOverDismissed] = useState(false); // กด "ยังพักต่อ" ปิด modal หมดเวลาพัก — เวลายังนับต่อ (overrun)
   const [breakStartedAt, setBreakStartedAt] = useState(null); // เริ่มพักเมื่อไหร่ (ms) — ใช้คำนวณเวลาพักจริง
   const [breakAtHome, setBreakAtHome] = useState(false); // กลับหน้าหลักระหว่างพักเบรก — timer ยังนับต่อ (หมดเวลายังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)
+  const [postBossNote, setPostBossNote] = useState(null); // ชนะ/หนีบอสแล้ว — อยู่ใน "พักหลังชัยชนะ" (ข้อความสรุปผล) · null = ยังสู้บอสอยู่
 
   // สรุปรวมของรางวัลจากเหตุการณ์ใน session นี้ (โชว์ตอนจบ session)
   const sessionSummary = useMemo(() => {
@@ -148,6 +149,7 @@ export default function Game() {
     setBreakOverDismissed(false);
     setBreakStartedAt(null);
     setBreakAtHome(false);
+    setPostBossNote(null);
 
     const t = loadTimer(character.id, epoch);
     if (t) {
@@ -165,6 +167,7 @@ export default function Game() {
       setOverrun(t.overrun || 0);
       setBreakStartedAt(t.breakStartedAt || null);
       setBreakAtHome(t.breakAtHome || false);
+      setPostBossNote(t.postBossNote || null);
       setPausedAtHome(t.pausedAtHome || false);
       setPauseStartedAt(t.pauseStartedAt || null);
       setPauseAccumSec(t.pauseAccumSec || 0);
@@ -203,7 +206,8 @@ export default function Game() {
         } else {
           setRunning(true);
         }
-        if (t.phase === 'long_break') fetchBoss();
+        // อยู่ใน "พักหลังชัยชนะ" แล้ว → ไม่ต้องโหลดบอส (บอสจบแล้ว — ไปค่ายพักเลย)
+        if (t.phase === 'long_break' && !t.postBossNote) fetchBoss();
       } else {
         setRunning(true);
       }
@@ -218,13 +222,13 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec,
+      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, pausedAtHome, pauseStartedAt, pauseAccumSec,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -352,6 +356,7 @@ export default function Game() {
   const startShortBreak = () => {
     resetPause(); // ออกจากโหมด work — เลิกนับพักกลาง session
     setBreakAtHome(false); // พักใหม่ — เริ่มที่หน้า camp เสมอ
+    setPostBossNote(null);
     setRemain(settings.short_break_min * 60);
     setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`); // ค่ายพักใหม่ = stock ร้านใหม่
     setPhase('short_break');
@@ -366,6 +371,7 @@ export default function Game() {
   const startLongBreak = () => {
     resetPause(); // ออกจากโหมด work — เลิกนับพักกลาง session
     setBreakAtHome(false);
+    setPostBossNote(null); // พักใหญ่ใหม่ → กลับไปสู้บอสอีกครั้ง
     setRemain(settings.long_break_min * 60);
     setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
     setPhase('long_break');
@@ -391,9 +397,8 @@ export default function Game() {
     beginWork(sessionIdxRef.current >= settings.sessions_per_cycle ? 1 : sessionIdxRef.current + 1);
   };
 
-  // ---- จบพักเบรก (เริ่มโฟกัส / จบพักเร็ว / หนีบอส / ชนะบอส) — บันทึกสถิติแล้วเริ่มงาน ----
-  const finishBreak = async () => {
-    setBreakAtHome(false); // จบพัก (เริ่มโฟกัส/จบพักเร็ว) — กลับมาอยู่หน้าโฟกัส ไม่ค้างที่หน้าหลัก
+  // ---- บันทึกสถิติพักเบรก (เวลาพักจริง + เลยเวลา) แล้วรีเซ็ตสถานะพัก — ยังไม่เริ่มโฟกัส ----
+  const recordBreak = async () => {
     const startedAt = breakStartedAtRef.current;
     const now = Date.now();
     const breakSec = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
@@ -402,6 +407,13 @@ export default function Game() {
     }
     setBreakOver(false);
     setBreakOverDismissed(false);
+  };
+
+  // ---- จบพักเบรก (เริ่มโฟกัส / จบพักเร็ว) — บันทึกสถิติแล้วเริ่มงาน ----
+  const finishBreak = async () => {
+    setBreakAtHome(false); // จบพัก (เริ่มโฟกัส/จบพักเร็ว) — กลับมาอยู่หน้าโฟกัส ไม่ค้างที่หน้าหลัก
+    await recordBreak();
+    setPostBossNote(null); // เลิกสถานะพักหลังชัยชนะ (เริ่มโฟกัสแล้ว)
     const p = phaseRef.current;
     beginWork(p === 'long_break' ? 1 : sessionIdxRef.current + 1);
   };
@@ -504,8 +516,9 @@ export default function Game() {
     }
   };
 
-  const bossAct = async (action, itemId) => {
-    const d = await post('/boss/act', { action, itemId });
+  const bossAct = async (action, arg) => {
+    // สกิลต้องส่งเป็น skillId (server อ่าน req.body.skillId) — ส่งเป็น itemId จะหาไม่เจอ → "สกิลไม่พบ"
+    const d = await post('/boss/act', action === 'skill' ? { action, skillId: arg } : { action, itemId: arg });
     if (!d) return null;
     setBossState((s) => ({
       boss: d.boss,
@@ -519,16 +532,32 @@ export default function Game() {
     return d;
   };
 
-  const bossRetreat = async () => {
-    await post('/boss/retreat');
-    setBossState(null);
-    await finishBreak();
+  // ---- หลังสู้บอสเสร็จ (ชนะ/หนี) — เข้าสู่ "พักหลังชัยชนะ" ที่ค่าย (ไม่กลับไปโฟกัสทันที — ให้ได้พักจริง) ----
+  // ต่อเวลาพักยาวที่เหลืออยู่ (สู้บอสไปเท่าไหร่ เหลือเท่านั้น) · สู้กินเวลาจนหมด → ให้พักขั้นต่ำ 3 นาที
+  const startPostBossBreak = (note) => {
+    setPostBossNote(note);
+    setBossState(null); // ปิดหน้าจอบอส — เข้าค่ายพัก
+    setBreakAtHome(false);
+    setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`); // ค่ายใหม่ (ย้ายเมือง/รอบใหม่) — stock ร้านใหม่
+    if (remainRef.current <= 0) setRemain(3 * 60); // สู้กินเวลาพักจนหมด → ให้พักขั้นต่ำ 3 นาที
+    setBreakOver(false);
+    setBreakOverDismissed(false);
+    setOverrun(0);
+    setRunning(true);
+    sfx.complete();
   };
 
-  // หลังชนะบอส — เลือก "เดินทางต่อ" (เมืองใหม่) หรือ "สำรวจเมืองเดิมต่อ" (ความยาก/รางวัล/ตลาดมืดเพิ่ม)
+  const bossRetreat = async () => {
+    const d = await post('/boss/retreat');
+    if (!d) return;
+    startPostBossBreak(d.message);
+  };
+
+  // หลังชนะบอส — เลือก "เดินทางต่อ" (เมืองใหม่) หรือ "สำรวจเมืองเดิมต่อ" → กลับไปพักที่ค่ายก่อนเริ่มโฟกัส
   const bossWinChoice = async (choice) => {
-    await post('/boss/after', { choice }); // server โชว์ toast ยืนยันเองผ่าน d.message
-    await finishBreak();
+    const d = await post('/boss/after', { choice }); // server โชว์ toast ยืนยันเองผ่าน d.message
+    if (!d) return;
+    startPostBossBreak(d.message);
   };
 
   // กำลังโฟกัสงานอยู่ → ซ่อน notification (เลเวลอัพ/รางวัล) ไว้แจ้งหลังจบ session แทน
@@ -606,7 +635,7 @@ export default function Game() {
         />
       )}
 
-      {phase === 'long_break' && (
+      {phase === 'long_break' && !postBossNote && (
         <BossScreen
           bossState={bossState}
           remain={remain}
@@ -617,6 +646,21 @@ export default function Game() {
           onAct={bossAct}
           onRetreat={bossRetreat}
           onWinChoice={bossWinChoice}
+        />
+      )}
+
+      {/* ชนะ/หนีบอสแล้ว — พักหลังชัยชนะที่ค่าย (ต่างจากค่ายพักสั้น: header + ข้อความสรุปผลต่างกัน) */}
+      {phase === 'long_break' && postBossNote && (
+        <CampScreen
+          remain={remain}
+          total={settings.long_break_min * 60}
+          running={running}
+          breakOver={breakOver}
+          overrun={overrun}
+          onSkip={finishBreak}
+          onHome={handleBreakHome}
+          visit={breakVisit}
+          postBoss={postBossNote}
         />
       )}
 
@@ -703,7 +747,8 @@ export default function Game() {
       )}
 
       {/* พักครบเวลา — ไม่เริ่มโฟกัสเอง ให้ user กดเอง (เวลายังนับต่อเป็น overrun — ไม่มีปุ่มต่อเวลา เพราะเวลานับต่ออยู่แล้ว) */}
-      {breakOver && !breakOverDismissed && (
+      {/* ระหว่างสู้บอส (หน้าจอบอสยังเปิด) ไม่เด้ง modal นี้ — กันขัดการสู้/การเลือกผลชนะ (หลังสู้เสร็จจะเข้าพักหลังชัยชนะเอง) */}
+      {breakOver && !breakOverDismissed && !(phase === 'long_break' && bossState) && (
         <div className="modal-backdrop">
           <div className="modal">
             <h2>⏰ หมดเวลาพักแล้ว!</h2>

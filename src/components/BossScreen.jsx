@@ -36,7 +36,6 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
   const stayRound = (character.cityRound || 0) + 1;
   const stayEnemy = +(1 + 0.15 * stayRound).toFixed(2);
   const stayReward = +(1 + 0.2 * stayRound).toFixed(2);
-  const altNext = stayRound >= (character.altBossAtRound || 99);
 
   const act = async (action, arg) => {
     sfx.click();
@@ -205,9 +204,8 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
             </button>
             <button className="btn btn-big btn-stay" onClick={() => { sfx.levelup(); onWinChoice('stay'); }}>
               🏠 สำรวจ {character.city.name} ต่อ (รอบที่ {stayRound})
-              <span className="stay-detail">
-                ศัตรู x{stayEnemy} · รางวัล x{stayReward}{altNext ? ' · 👁️ บอสลับมาแล้ว!' : ` · บอสลับอีกรอบ ${Math.max(0, character.altBossAtRound - stayRound)} รอบ`}
-              </span>
+              {/* ไม่โชว์ตารางรอบบอสลับ — ให้ผู้เล่นเจอเองตอนสู้ (เดาสุ่มเอา) */}
+              <span className="stay-detail">ศัตรู x{stayEnemy} · รางวัล x{stayReward}</span>
             </button>
           </div>
         </div>
