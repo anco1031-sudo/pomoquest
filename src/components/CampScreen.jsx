@@ -15,7 +15,7 @@ const TABS = [
   { key: 'trophy', label: 'ถ้วยรางวัล', icon: '🏆' },
 ];
 
-export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, visit }) {
+export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, visit }) {
   const { character, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
   const [shop, setShop] = useState([]);
@@ -132,6 +132,11 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         </div>
         <div className="camp-header-right">
           <span className="gold-chip" title="ทองของคุณ">💰 {character.gold}</span>
+          {onHome && (
+            <button className="btn btn-sm" onClick={onHome} title="กลับหน้าหลัก — เวลาพักยังนับต่อ (หมดเวลาแล้วยังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)">
+              🏠 กลับหน้าหลัก
+            </button>
+          )}
           <button className="btn btn-sm" onClick={onSkip}>จบพักเร็ว ⏩</button>
         </div>
       </header>

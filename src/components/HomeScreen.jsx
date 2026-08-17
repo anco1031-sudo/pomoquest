@@ -27,7 +27,7 @@ const TABS = [
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
-export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pausedTask = '', onDiscard = null, onManageCharacters }) {
+export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pausedTask = '', onDiscard = null, onManageCharacters, breakAtHome = false, breakRemain = 0, breakOver = false, onBreakBack = null }) {
   const { character, progress, settings, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
@@ -210,6 +210,27 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
             </div>
           </div>
         )}
+
+        {/* ---- แถบพักเบรกค้างที่หน้าหลัก — กดกลับหน้าหลักจากหน้า camp: timer ยังนับต่อ จบเวลายังถามเหมือนเดิม ---- */}
+        {breakAtHome && onBreakBack && (
+          <div className={`resume-bar${barCollapsed ? ' collapsed' : ''}`}>
+            <div className="resume-info">
+              <span className="resume-icon">⛺</span>
+              <span>
+                {breakOver ? (
+                  <>⏰ พักหมดเวลาแล้ว — กดกลับไปค่ายเพื่อเริ่มโฟกัสหรือต่อเวลาพัก</>
+                ) : (
+                  <>กำลังพักเบรกอยู่ — เหลือ <b>{fmtTime(breakRemain)}</b> (เวลายังนับต่อ)</>
+                )}
+              </span>
+            </div>
+            <div className="resume-actions">
+              <button className="btn btn-primary btn-resume" onClick={onBreakBack} title="กลับไปค่ายพัก — เวลาพักยังนับต่อ">
+                ⛺ กลับไปค่าย
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <main className="content">
@@ -306,8 +327,16 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                       onChange={(e) => setFocusTask(e.target.value)}
                     />
                   </div>
-                  <button className="btn btn-primary btn-big" onClick={() => onStart(focusTask)}>
-                    {hasPausedSession ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)' : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
+                  <button
+                    className="btn btn-primary btn-big"
+                    onClick={() => (breakAtHome ? onBreakBack?.() : onStart(focusTask))}
+                    title={breakAtHome ? '⏳ พักเบรกยังไม่จบ — กลับไปค่ายเพื่อพักต่อ (หรือรอให้หมดเวลา)' : undefined}
+                  >
+                    {breakAtHome
+                      ? '⛺ กำลังพักอยู่ — กลับไปค่ายเพื่อพักต่อ'
+                      : hasPausedSession
+                        ? '🔄 เริ่ม session ใหม่ (ทิ้ง session ที่พักไว้)'
+                        : '⚔️ เริ่มผจญภัย (โฟกัส ' + settings.work_min + ' นาที)'}
                   </button>
                 </Panel>
               </div>

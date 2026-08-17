@@ -74,6 +74,7 @@ export default function Game() {
   const [overrun, setOverrun] = useState(0); // วินาทีที่เลยเวลาพัก (นับต่อจาก 0)
   const [breakExtends, setBreakExtends] = useState(0); // ต่อเวลาพักกี่ครั้ง
   const [breakStartedAt, setBreakStartedAt] = useState(null); // เริ่มพักเมื่อไหร่ (ms) — ใช้คำนวณเวลาพักจริง
+  const [breakAtHome, setBreakAtHome] = useState(false); // กลับหน้าหลักระหว่างพักเบรก — timer ยังนับต่อ (หมดเวลายังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)
 
   // สรุปรวมของรางวัลจากเหตุการณ์ใน session นี้ (โชว์ตอนจบ session)
   const sessionSummary = useMemo(() => {
@@ -151,6 +152,7 @@ export default function Game() {
     setOverrun(0);
     setBreakExtends(0);
     setBreakStartedAt(null);
+    setBreakAtHome(false);
 
     const t = loadTimer(character.id, epoch);
     if (t) {
@@ -168,6 +170,7 @@ export default function Game() {
       setOverrun(t.overrun || 0);
       setBreakExtends(t.breakExtends || 0);
       setBreakStartedAt(t.breakStartedAt || null);
+      setBreakAtHome(t.breakAtHome || false);
       setPausedAtHome(t.pausedAtHome || false);
       setPauseStartedAt(t.pauseStartedAt || null);
       setPauseAccumSec(t.pauseAccumSec || 0);
@@ -221,13 +224,13 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec,
+      awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakExtends, breakStartedAt, breakAtHome, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -354,6 +357,7 @@ export default function Game() {
 
   const startShortBreak = () => {
     resetPause(); // ออกจากโหมด work — เลิกนับพักกลาง session
+    setBreakAtHome(false); // พักใหม่ — เริ่มที่หน้า camp เสมอ
     setRemain(settings.short_break_min * 60);
     setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`); // ค่ายพักใหม่ = stock ร้านใหม่
     setPhase('short_break');
@@ -367,6 +371,7 @@ export default function Game() {
 
   const startLongBreak = () => {
     resetPause(); // ออกจากโหมด work — เลิกนับพักกลาง session
+    setBreakAtHome(false);
     setRemain(settings.long_break_min * 60);
     setBreakVisit(`${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
     setPhase('long_break');
@@ -394,6 +399,7 @@ export default function Game() {
 
   // ---- จบพักเบรก (เริ่มโฟกัส / จบพักเร็ว / หนีบอส / ชนะบอส) — บันทึกสถิติแล้วเริ่มงาน ----
   const finishBreak = async () => {
+    setBreakAtHome(false); // จบพัก (เริ่มโฟกัส/จบพักเร็ว) — กลับมาอยู่หน้าโฟกัส ไม่ค้างที่หน้าหลัก
     const startedAt = breakStartedAtRef.current;
     const now = Date.now();
     const breakSec = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
@@ -403,6 +409,17 @@ export default function Game() {
     setBreakOver(false);
     const p = phaseRef.current;
     beginWork(p === 'long_break' ? 1 : sessionIdxRef.current + 1);
+  };
+
+  // ---- กลับหน้าหลักระหว่างพักเบรก: timer ยังนับต่อ — หมดเวลาพัก modal ถามเริ่มโฟกัส/ต่อพักยังโผล่เหมือนเดิม ----
+  const handleBreakHome = () => {
+    setBreakAtHome(true);
+    sfx.click();
+  };
+
+  const handleBreakBack = () => {
+    setBreakAtHome(false);
+    sfx.click();
   };
 
   // ---- ต่อเวลาพัก (+1/+5/+10 นาที ตามที่เลือก) — นับครั้งที่ต่อ ----
@@ -461,6 +478,7 @@ export default function Game() {
     setPhase('idle');
     setRunning(false);
     setPausedAtHome(false);
+    setBreakAtHome(false);
     setSessionIdx(1);
     setElapsed(0);
     setAwaitingBreak(false);
@@ -547,7 +565,7 @@ export default function Game() {
 
   return (
     <div className="app">
-      {(phase === 'idle' || pausedAtHome) && (
+      {(phase === 'idle' || pausedAtHome || breakAtHome) && (
         <HomeScreen
           onStart={(task) => beginWork(1, task)}
           onContinue={pausedAtHome ? handleContinue : null}
@@ -557,6 +575,10 @@ export default function Game() {
           pausedTask={focusTask}
           onDiscard={handleDiscardPaused}
           onManageCharacters={() => setShowCharSelect(true)}
+          breakAtHome={breakAtHome}
+          breakRemain={remain}
+          breakOver={breakOver}
+          onBreakBack={handleBreakBack}
         />
       )}
 
@@ -579,7 +601,7 @@ export default function Game() {
         />
       )}
 
-      {phase === 'short_break' && (
+      {phase === 'short_break' && !breakAtHome && (
         <CampScreen
           remain={remain}
           total={settings.short_break_min * 60}
@@ -587,6 +609,7 @@ export default function Game() {
           breakOver={breakOver}
           overrun={overrun}
           onSkip={finishBreak}
+          onHome={handleBreakHome}
           visit={breakVisit}
         />
       )}
