@@ -1,4 +1,4 @@
-// ตรวจสอบระบบเสียงชุดใหม่: Web Audio ทำงาน + flow จริง (จบ session/ไข่ฟัก/หมดเวลาพัก/event) ไม่มี JS error
+// ตรวจสอบระบบเสียง: Web Audio ทำงาน + flow จริง (จบ session/ไข่ฟัก/หมดเวลาพัก) ไม่มี JS error + event เงียบไม่รบกวน
 import { spawn } from 'node:child_process';
 import Database from 'better-sqlite3';
 
@@ -99,16 +99,16 @@ await sleep(5000);
 const breakOverSeen = await evalJs(`document.body.innerText.includes('หมดเวลาพักแล้ว!')`);
 expect('หมดเวลาพัก modal เด้ง (sfx.breakOver รันจริง)', breakOverSeen, '');
 
-// 4) event ระหว่างโฟกัส (sfx.event / sfx.coin / sfx.trap ตามชนิด) — งานยาว 60 วิ ให้ event เกิดภายใน ~1 วิ
+// 4) event ระหว่างโฟกัส — ไม่มีเสียง (กันรบกวน) แต่ session ทำงานปกติ ไม่มี error — งานยาว 60 วิ ให้ event เกิดภายใน ~1 วิ
 await setTimer({ phase: 'work', sessionIdx: 1, remain: 60, running: true, elapsed: 0, nextEventIn: 1, sessionEvents: [], sessionKey: `ev-${Date.now()}`, breakVisit: null, awaitingBreak: false, breakOver: false, overrun: 0, breakStartedAt: null, breakAtHome: false, postBossNote: null, pausedAtHome: false, pauseStartedAt: null, pauseAccumSec: 0, focusTask: '', expiresAt: null });
 await send('Page.navigate', { url: 'http://127.0.0.1:3001/' });
 await sleep(6000);
-const eventLogged = await evalJs(`document.body.innerText.includes('พักเบรก') || document.body.innerText.includes('กำลังโฟกัส') || document.body.innerText.includes('เริ่มผจญภัย')`);
-expect('event ระหว่างโฟกัสเกิด (sfx.event/coin/trap รันจริง)', eventLogged, '');
+const workRunning = await evalJs(`document.body.innerText.includes('กำลังโฟกัส') || document.body.innerText.includes('พักเบรก')`);
+expect('event ระหว่างโฟกัสเกิดเงียบ ๆ (session ทำงานปกติ ไม่มีเสียง)', workRunning, '');
 
 // 5) ไม่มี JS error ตลอดการเล่นเสียง
 const realErrors = jsErrors.filter((e) => !/ResizeObserver/.test(e));
-expect('ไม่มี JS error ระหว่างเล่นเสียง (จบ session/พัก/ฟัก/event)', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
+expect('ไม่มี JS error ระหว่างเล่นเสียง (จบ session/พัก/ฟัก + event เงียบ)', realErrors.length === 0, realErrors.slice(0, 3).join(' | '));
 
 chrome.kill();
 console.log(`\nผลลัพธ์: ${pass} ผ่าน, ${fail} ตก`);

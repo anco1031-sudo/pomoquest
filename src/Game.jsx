@@ -460,13 +460,7 @@ export default function Game() {
       const remainNow = remainRef.current;
       // เหลือน้อยกว่า 30 วิ → ไม่สุ่ม event ใหม่ (session ใกล้จบ) กัน event ซ้อนที่ท้าย session
       setNextEventIn(remainNow < 30 ? remainNow + 3600 : randomEventDelay(remainNow));
-      // เสียงแยกตามชนิดเหตุการณ์: กับดักวูบ / สมบัติ-พ่อค้าเหรียญดิง / อื่น ๆ ประกาย
-      if (res && res.event) {
-        const k = res.event.key;
-        if (k === 'trap') sfx.trap();
-        else if (k === 'treasure' || k === 'merchant') sfx.coin();
-        else sfx.event();
-      }
+      // ไม่มีเสียง event — กันรบกวนการโฟกัส (เสียงมีเฉพาะช่วงพัก/จบ session/ฟักไข่)
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextEventIn, phase, running]);

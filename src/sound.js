@@ -65,9 +65,6 @@ export const sfx = {
   // หยุดพัก (⏸️) — นุ่ม ๆ ค่อยจาง
   pause: () => tone(330, { dur: 0.28, type: 'triangle', vol: 0.09, glide: 280 }),
 
-  // เหตุการณ์สุ่มทั่วไป — ประกายสองจังหวะ
-  event: () => seq([880, 1175], { dur: 0.09, type: 'triangle', vol: 0.11, gap: 0.06, harmonics: [{ mult: 2, vol: 0.3 }] }),
-
   // จบ work session — แฟนแฟร์ "สำเร็จ" กระดิ่งดัง ๆ (C5 E5 G5 C6)
   complete: () => seq([523, 659, 784, 1047], { dur: 0.32, type: 'sine', vol: 0.16, gap: 0.11, harmonics: [{ mult: 2, vol: 0.35 }, { mult: 3, vol: 0.14 }] }),
 
@@ -82,9 +79,6 @@ export const sfx = {
     tone(392, { dur: 0.12, type: 'triangle', vol: 0.12, glide: 520 });
     seq([784, 1047, 1319], { dur: 0.24, type: 'sine', vol: 0.13, gap: 0.1, delay: 0.12, harmonics: [{ mult: 2, vol: 0.3 }] });
   },
-
-  // กับดัก — วูบลง (เสียงตกหลุม)
-  trap: () => tone(300, { dur: 0.38, type: 'sawtooth', vol: 0.09, glide: 130 }),
 
   // เหรียญทอง — ดิงสั้น ๆ (สมบัติ/พ่อค้า/ค่าปลอบใจ)
   coin: () => tone(1320, { dur: 0.2, type: 'sine', vol: 0.1, harmonics: [{ mult: 2.01, vol: 0.25 }] }),
