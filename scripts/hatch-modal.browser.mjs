@@ -86,17 +86,17 @@ expect('หัวค่าย: มีป้าย "🥚 กำลังฟัก
 
 // 2) จบ work session → modal ฉลองไข่ฟัก — ตั้ง timer งานเหลือ 2 วิแล้วโหลดหน้า
 const workTimer = {
-  phase: 'work', sessionIdx: 1, remain: 2, running: true, elapsed: 0, nextEventIn: 9999,
+  phase: 'work', sessionIdx: 1, remain: 3, running: true, elapsed: 0, nextEventIn: 9999,
   sessionEvents: [], sessionKey: `wk-${Date.now()}`, breakVisit: null, awaitingBreak: false,
   breakOver: false, overrun: 0, breakStartedAt: null, breakAtHome: false, postBossNote: null,
   pausedAtHome: false, pauseStartedAt: null, pauseAccumSec: 0, focusTask: '', epoch,
-  expiresAt: Date.now() + 2000,
+  expiresAt: null, // ให้ remain คงเดิม (กัน recompute จนเหลือ 0 ถ้าโหลดช้า)
 };
 await evalJs(`localStorage.setItem('pomoquest-timer-${charId}', ${JSON.stringify(JSON.stringify(workTimer))})`);
 await send('Page.navigate', { url: 'http://127.0.0.1:3001/' });
 // รอ session จบ + คลิกผ่าน modal อื่นในคิว (ตรา "ก้าวแรก" ถ้ามี) จนเจอ modal ไข่ฟัก
 let hatchSeen = false;
-for (let i = 0; i < 20 && !hatchSeen; i++) {
+for (let i = 0; i < 40 && !hatchSeen; i++) {
   await sleep(1200);
   hatchSeen = await evalJs(`document.body.innerText.includes('🥚 ไข่ฟักแล้ว!')`);
   if (!hatchSeen) {

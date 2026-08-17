@@ -266,7 +266,7 @@ export default function Game() {
     } else if (p === 'short_break' || p === 'long_break') {
       // พักครบเวลา — ไม่เริ่มโฟกัสเอง ให้ user กดเอง (เวลายังนับต่อเป็น overrun)
       setBreakOver(true);
-      sfx.complete();
+      sfx.breakOver(); // "ติ๊งต่อง" บอกว่าพักครบเวลา
       notify(
         p === 'long_break' ? '👹 ถึงเวลาสู้บอส!' : '☕ พักครบแล้ว',
         p === 'long_break' ? 'พักใหญ่จบ — สู้บอสต่อ หรือเริ่มโฟกัส' : 'พักครบแล้ว — เริ่มโฟกัสต่อได้ (ไม่กด = เวลาพักยังนับต่อไป)'
@@ -298,7 +298,11 @@ export default function Game() {
     // 🥚 ไข่ที่กำลังฟัก — จบ session แล้วไข่ฟัก → เปิด modal ฉลอง (server สุ่มตอนฟักจริง ไม่สปอยล์ก่อนหน้านี้)
     if (res.hatch) {
       if (res.hatch.waiting) showToast(`🥚 ${res.hatch.message || 'คอกสัตว์เต็ม — ไข่รอฟักอยู่'}`);
-      else setHatchResult(res.hatch);
+      else {
+        if (res.hatch.dup) sfx.coin(); // ฟักเป็นตัวเดิม → ได้ค่าปลอบใจทอง
+        else sfx.hatch(); // ป๊อป + สายฟ้า — ฉลอง pet ใหม่
+        setHatchResult(res.hatch);
+      }
     }
     setStoryDone(false); // เริ่มรอเรื่องราว — เรื่องต้องโชว์ก่อนถึงจะถามพัก/ข้าม
     setAwaitingBreak(true);
@@ -376,7 +380,7 @@ export default function Game() {
     setOverrun(0);
     setBreakOverDismissed(false);
     setRunning(true);
-    sfx.complete();
+    sfx.breakStart(); // เสียงเริ่มพักเบรก — นุ่มลงมา
   };
 
   const startLongBreak = () => {
@@ -456,7 +460,13 @@ export default function Game() {
       const remainNow = remainRef.current;
       // เหลือน้อยกว่า 30 วิ → ไม่สุ่ม event ใหม่ (session ใกล้จบ) กัน event ซ้อนที่ท้าย session
       setNextEventIn(remainNow < 30 ? remainNow + 3600 : randomEventDelay(remainNow));
-      if (res && res.event) sfx.event();
+      // เสียงแยกตามชนิดเหตุการณ์: กับดักวูบ / สมบัติ-พ่อค้าเหรียญดิง / อื่น ๆ ประกาย
+      if (res && res.event) {
+        const k = res.event.key;
+        if (k === 'trap') sfx.trap();
+        else if (k === 'treasure' || k === 'merchant') sfx.coin();
+        else sfx.event();
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextEventIn, phase, running]);
@@ -555,7 +565,7 @@ export default function Game() {
     setBreakOverDismissed(false);
     setOverrun(0);
     setRunning(true);
-    sfx.complete();
+    sfx.breakStart(); // เสียงเริ่มพักหลังชัยชนะ
   };
 
   const bossRetreat = async () => {
