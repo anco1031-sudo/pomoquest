@@ -1,3 +1,5 @@
+process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษคลาส (ทดสอบเฉพาะใน test-class-perks)
+
 // ทดสอบระบบสำรวจเมืองเดิมต่อ — ชนะบอสแล้วเลือกเดินทางต่อ/อยู่ต่อ + บอสลับ + ความยาก/รางวัล/ตลาดมืด + ราคาร้าน
 process.env.POMOQUEST_DB = `/tmp/pq-test-explore-${Date.now()}.db`;
 process.env.POMOQUEST_NO_WANDER = '1'; // ปิดบอสเร่ร่อนรายสัปดาห์ — กันผลขึ้นกับสัปดาห์จริง (ทดสอบบอสเมือง/บอสลับตรง ๆ)

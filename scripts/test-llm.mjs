@@ -1,3 +1,5 @@
+process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษคลาส (ทดสอบเฉพาะใน test-class-perks)
+
 // ทดสอบโมดูล LLM ด้วย mock server ในเครื่อง — ไม่พึ่งเครือข่าย/credits จริง
 // รัน: npm run test:llm
 import http from 'node:http';

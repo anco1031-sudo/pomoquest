@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
-import { SKILLS } from '../../server/data.js';
+import { SKILLS, CLASS_PERKS } from '../../server/data.js';
 
 const CLASSES = [
   { key: 'warrior', name: 'นักรบ', en: 'Warrior', icon: '⚔️', desc: 'เลือดหนา พลังโจมตีสูง เหมาะกับสายบุก', base: 'HP 120 · ATK 14 · DEF 10' },
@@ -124,6 +124,12 @@ export default function CharacterCreation({ modal = false, onClose, onDone }) {
               <div className="class-name">{c.name} <span className="class-en">{c.en}</span></div>
               <div className="class-desc">{c.desc}</div>
               <div className="class-base">{c.base}</div>
+              {/* จุดเด่น/จุดด้อยเฉพาะคลาสตามช่วงเวลา ☀️/🌙 */}
+              <div className="class-perks">
+                {(CLASS_PERKS[c.key]?.perkText ? [CLASS_PERKS[c.key].perkText.day, CLASS_PERKS[c.key].perkText.night].filter(Boolean) : []).map((t, i) => (
+                  <div key={i} className={`class-perk-line ${t.startsWith('☀️') ? 'day' : 'night'}`}>{t}</div>
+                ))}
+              </div>
               <div className="class-skills">
                 {(SKILLS[c.key] || []).map((s) => (
                   <span key={s.id} className="class-skill-chip" title={`${s.name}: ${s.desc} (${s.mp} MP)`}>

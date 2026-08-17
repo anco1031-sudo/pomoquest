@@ -1,9 +1,47 @@
-import { CLASSES, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_MAX_SLOTS, petXpToNext } from './data.js';
+import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_MAX_SLOTS, petXpToNext } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ----- ช่วงเวลา ☀️/🌙 — ใช้เวลาจริงของเครื่อง (กลางคืน = 18:00-05:59) -----
+// POMOQUEST_HOUR = บังคับชั่วโมง (dev/test ให้ deterministic — ตั้ง env ก่อน import server)
+export function gameHour(d = new Date()) {
+  const forced = Number.isInteger(+process.env.POMOQUEST_HOUR) ? +process.env.POMOQUEST_HOUR : d.getHours();
+  return ((forced % 24) + 24) % 24;
+}
+export const isNight = (d) => {
+  const h = gameHour(d);
+  return h >= 18 || h < 6;
+};
+
+// ----- จุดเด่น/จุดด้อยเฉพาะคลาส (ตามช่วงเวลา) — คืนตัวคูณให้ระบบต่าง ๆ ใช้ -----
+// gold/xp = % เปลี่ยนรางวัล event · monster = พลังมอนสเตอร์ · monsterW = น้ำหนัก event มอนสเตอร์
+// treasure/shrine/trap = น้ำหนัก event · shrineReward = รางวัลศาลเจ้า · bossAtk = ดาเมจที่ทำกับบอส
+// POMOQUEST_CLASS_PERKS=0 → ปิด (test ที่ไม่เกี่ยวกับค่าพิเศษคลาส — ค่าเดิมเป๊ะ)
+export function classPerks(c, now = new Date()) {
+  const out = { gold: 1, xp: 1, monster: 1, monsterW: 1, treasure: 1, shrine: 1, shrineReward: 1, trap: 1, bossAtk: 1, night: false, active: null };
+  if (!c?.class || process.env.POMOQUEST_CLASS_PERKS === '0') return out;
+  const def = CLASS_PERKS[c.class];
+  if (!def) return out;
+  const night = isNight(now);
+  out.night = night;
+  const set = night ? def.night : def.day;
+  if (!set) return out;
+  if (set.gold) out.gold = 1 + set.gold;
+  if (set.xp) out.xp = 1 + set.xp;
+  if (set.monster) out.monster = set.monster;
+  if (set.monsterW) out.monsterW = set.monsterW;
+  if (set.treasure) out.treasure = set.treasure;
+  if (set.shrine) out.shrine = set.shrine;
+  if (set.shrineReward) out.shrineReward = set.shrineReward;
+  if (set.trap) out.trap = set.trap;
+  if (set.bossAtk) out.bossAtk = set.bossAtk;
+  out.active = { class: c.class, night, text: (def.perkText || {})[night ? 'night' : 'day'] || null };
+  return out;
+}
+
 
 // ----- PRNG แบบ seed ได้ — ราคาขายตอนค่ายพักต้องคำนวณซ้ำได้เหมือนเดิมจาก visit เดียวกัน -----
 const hashSeed = (str) => {
@@ -285,6 +323,8 @@ export function serializeCharacter(c) {
     exploreRewardMult: +(1 + 0.2 * (c.city_rounds || 0)).toFixed(2),
     altBossAtRound: altBossAt(c.city_index % CITIES.length),
     challengeMode: c.challenge_mode || '',
+    // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙 — โชว์สถานะปัจจุบันบนแผ่นตัวละคร
+    classPerk: classPerks(c),
     skills: getCharacterSkills(c), // สกิลคลาส + สกิลจากคัมภีร์ พร้อมเลเวล/XP — ใช้ตอนสู้บอส
     equipment: {
       weapon: itemOf(c.weapon_id),
@@ -378,9 +418,11 @@ export const exploreMult = (c) => 1 + 0.15 * exploreRound(c);            // ต�
 export const exploreRewardMult = (c) => 1 + 0.2 * exploreRound(c);       // ตัวคูณรางวัล XP/ทอง
 
 // ----- ระบบมอนสเตอร์ / ต่อสู้อัตโนมัติ (ช่วง work session — ไม่รบกวนสมาธิ) -----
+// ค่าพิเศษคลาส: นักรบกลางวันมอนสเตอร์อ่อนลง (พลัง -15%) / กลางคืนแข็งขึ้น · นักบวชกลางคืนแข็งขึ้น
+// (พลังมอนสเตอร์ = โอกาสชนะ + HP ที่เสีย — ต่ำ = สู้ง่าย)
 export function rollMonster(level, c = null) {
   const m = pick(MONSTERS);
-  const power = Math.round((12 + 5 * level) * m.power * enemyMult(c) * exploreMult(c));
+  const power = Math.round((12 + 5 * level) * m.power * enemyMult(c) * exploreMult(c) * classPerks(c).monster);
   return { ...m, power };
 }
 
@@ -501,13 +543,15 @@ export function acquireItem(c, itemId, qty = 1, { fullMode = 'sell', checkOnly =
 // ----- เหตุการณ์สุ่มระหว่าง session (forceKey = ระบุ event ให้เกิดตาม key — ใช้ใน dev test) -----
 export function rollEvent(c, forceKey = null) {
   const perks = petPerks(c);
+  const cperks = classPerks(c); // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙
   // น้ำหนัก event ปรับตาม pet ที่ active (นกฮูกเจอมอนสเตอร์ถี่ขึ้น / มังกรน้อยเจอสมบัติถี่ขึ้น / ยูนิคอร์นเจอศาลเจ้าถี่ขึ้น / แมวซนเจอกับดักถี่ขึ้น)
+  // + คลาส: นักรบกลางวันเจอมอนสเตอร์ถี่ขึ้น · โจรกลางคืนเจอสมบัติถี่ขึ้น · นักบวชกลางวันเจอศาลเจ้าถี่ขึ้น / โจรกลางคืนเจอกับดักถี่ขึ้น
   const wOf = (e) => {
     let w = e.weight;
-    if (e.key === 'monster') w *= perks.monster;
-    if (e.key === 'treasure') w *= perks.treasure;
-    if (e.key === 'shrine') w *= perks.shrine;
-    if (e.key === 'trap') w *= perks.trap;
+    if (e.key === 'monster') w *= perks.monster * cperks.monsterW;
+    if (e.key === 'treasure') w *= perks.treasure * cperks.treasure;
+    if (e.key === 'shrine') w *= perks.shrine * cperks.shrine;
+    if (e.key === 'trap') w *= perks.trap * cperks.trap;
     return w;
   };
   let ev;
@@ -534,6 +578,29 @@ export function rollEvent(c, forceKey = null) {
   // เก็บ pet ที่ active ไว้ใช้ท้ายสุด (ให้ XP + ค่าพิเศษ) — event ที่สุ่มได้จริงเท่านั้น
   const activePet = perks.active;
   const applyPetRewards = (result) => {
+    // ค่าพิเศษคลาสตามช่วงเวลา: ☀️/🌙 คูณ XP/ทองจากเหตุการณ์ (เช่น เวทย์กลางคืน XP +25% / โจรกลางคืนทอง +30%)
+    if (result.gold > 0 && cperks.gold !== 1) {
+      const bonus = Math.round(result.gold * (cperks.gold - 1));
+      if (bonus > 0) {
+        c.gold += bonus;
+        result.gold += bonus;
+        result.detail += ` (${cperks.night ? '🌙' : '☀️'} ${CLASS_PERKS[c.class]?.icon || ''} +${bonus} ทอง)`;
+      }
+    }
+    if (result.xp > 0 && cperks.xp !== 1) {
+      const bonus = Math.round(result.xp * (cperks.xp - 1));
+      if (bonus > 0) {
+        result.ups = (result.ups || 0) + gainXp(c, bonus);
+        result.xp += bonus;
+        result.detail += ` (${cperks.night ? '🌙' : '☀️'} ${CLASS_PERKS[c.class]?.icon || ''} +${bonus} XP)`;
+      } else if (bonus < 0) {
+        const before = c.xp;
+        c.xp = Math.max(0, c.xp + bonus); // กัน XP ติดลบ (พลังจันทราเสื่อม — ไม่ทำให้เลเวลลด)
+        const actual = c.xp - before;
+        result.xp += actual;
+        result.detail += ` (${cperks.night ? '🌙' : '☀️'} ${CLASS_PERKS[c.class]?.icon || ''} ${actual} XP)`;
+      }
+    }
     // ค่าพิเศษ pet: คูณ XP/ทองจากเหตุการณ์ (เฉพาะ pet ที่ active)
     if (activePet && result.gold > 0 && perks.gold > 1) {
       const bonus = Math.round(result.gold * (perks.gold - 1));
@@ -664,13 +731,15 @@ export function rollEvent(c, forceKey = null) {
 
   if (ev.key === 'shrine') {
     const stats = computeStats(c);
+    // นักบวชกลางวัน: ศรัทธาแรง — รางวัลศาลเจ้า (XP/MP) +25%
+    const sr = classPerks(c).shrineReward;
     if (Math.random() < 0.5 || c.mp >= stats.maxMp) {
-      const xp = Math.round((rand(20, 40) + c.level) * exploreRewardMult(c));
+      const xp = Math.round((rand(20, 40) + c.level) * exploreRewardMult(c) * sr);
       base.ups = gainXp(c, xp);
       base.xp = xp;
       base.detail = `สวดมนต์ที่ศาลเจ้า ได้แรงบันดาลใจ (+${xp} XP)`;
     } else {
-      const mp = Math.round(stats.maxMp * 0.4);
+      const mp = Math.round(stats.maxMp * 0.4 * sr);
       c.mp = clamp(c.mp + mp, 0, stats.maxMp);
       base.mpChange = mp;
       base.detail = `พลังศักดิ์สิทธิ์หลั่งไหลเข้าใส่ (+${mp} MP)`;
@@ -784,6 +853,9 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
   const stats = computeStats(c);
   const log = [];
   let outcome = null; // null = ยังสู้, 'win' | 'lose'
+  // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา: ☀️/🌙 คูณดาเมจที่ทำกับบอส
+  // (นักรบกลางวัน/เวทย์กลางคืน/โจรกลางคืน/นักบวชกลางวัน +10% · นักรบกลางคืน/เวทย์กลางวัน -10%)
+  const atkMult = classPerks(c).bossAtk;
 
   // ดาเมจที่บอสได้รับ — ถ้าบอสใช้ "เกราะแข็ง" (ลดดาเมจ) ให้ลดก่อน · "เงามายา" (หลบโจมตี) มีโอกาสไม่โดนเลย
   // poison = ดาเมจพิษ (โดนแน่นอน ไม่โดนหลบ — พิษเป็นดาเมจต่อเนื่องไม่ใช่การโจมตี)
@@ -819,7 +891,7 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
     const buff = fight.buffAtk || 1; // อวยพร: โจมตีเทิร์นนี้ x1.5
     if (fight.buffAtk) { fight.buffAtk = null; log.push(`🙏 พลังอวยพรยังคุกรุ่น — โจมตี x${buff}!`); }
     const crit = isCrit(stats.crit);
-    let dmg = attackDamage(stats.atk * buff, fight.boss.def);
+    let dmg = attackDamage(stats.atk * buff * atkMult, fight.boss.def);
     if (crit) dmg = Math.round(dmg * 1.7);
     const dealt = bossHit(dmg);
     log.push(`⚔️ ${c.name} โจมตี${crit ? ' — คริติคอล!!' : ''} โดน ${dealt} ดาเมจ`);
@@ -834,12 +906,12 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
     // โจมตีหลายครั้ง (วายุระบำ / สายฟ้าแลบ)
     if (skill.hits) {
       for (let h = 0; h < skill.hits; h++) {
-        const dmg = attackDamage(stats.atk * (skill.dmg || 1) * buff, fight.boss.def);
+        const dmg = attackDamage(stats.atk * (skill.dmg || 1) * buff * atkMult, fight.boss.def);
         const dealt = bossHit(dmg);
         log.push(`${skill.icon} ${skill.name} ครั้งที่ ${h + 1}: โดน ${dealt} ดาเมจ`);
       }
     } else if (skill.dmg) {
-      let dmg = attackDamage(stats.atk * skill.dmg * buff, fight.boss.def);
+      let dmg = attackDamage(stats.atk * skill.dmg * buff * atkMult, fight.boss.def);
       const crit = isCrit(skill.critChance != null ? skill.critChance * 100 : stats.crit);
       if (crit) dmg = Math.round(dmg * (skill.critMult || 1.7));
       const dealt = bossHit(dmg);

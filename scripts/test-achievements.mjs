@@ -1,3 +1,5 @@
+process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษคลาส (ทดสอบเฉพาะใน test-class-perks)
+
 // ทดสอบเงื่อนไขตราลับทั้งหมดแบบ deterministic (ใช้ DB แยก ไม่แตะของจริง)
 process.env.POMOQUEST_DB = `/tmp/pq-test-${Date.now()}.db`;
 

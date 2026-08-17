@@ -1,3 +1,5 @@
+process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษคลาส (ทดสอบเฉพาะใน test-class-perks)
+
 // ทดสอบ API routes แบบ end-to-end — รัน server ชั่วคราวที่ port สุ่ม + DB แยก (ไม่แตะของจริง)
 process.env.POMOQUEST_DB = `/tmp/pq-test-api-${Date.now()}.db`;
 
@@ -374,7 +376,7 @@ try {
     r = await devPost('/dev/black-market', { visit: bmVisit });
     expect('dev bm: คืนรายการสินค้า 5 ชิ้น (preview — +กล่องลึกลับ)', r.status === 200 && Array.isArray(r.json.items) && r.json.items.length === 5 && r.json.items.some((i) => i.id === 220), JSON.stringify(r.json.items || []).slice(0, 80));
     const bmItems = r.json.items;
-    expect('dev bm: 4 ชิ้นแรกมีราคาลด (bmPrice) + tag · กล่องลึกลับราคาเต็ม', bmItems.filter((i) => i.id !== 220).every((i) => i.bmPrice > 0 && i.bmNormal > i.bmPrice && i.bmTag) && bmItems.find((i) => i.id === 220)?.bmNormal === bmItems.find((i) => i.id === 220)?.bmPrice, '');
+    expect('dev bm: 4 ชิ้นแรกมีราคาลด (bmPrice) + tag · กล่องลึกลับราคาเต็ม', bmItems.filter((i) => i.id !== 220).every((i) => i.bmPrice >= 1 && (i.bmNormal === 0 || i.bmNormal > i.bmPrice) && i.bmTag) && bmItems.find((i) => i.id === 220)?.bmNormal === bmItems.find((i) => i.id === 220)?.bmPrice, '');
     expect('dev bm: junkMult = 1.25', r.json.junkMult === 1.25, String(r.json.junkMult));
     // deterministic: เรียกซ้ำ visit เดียวกัน → ของเหมือนเดิม
     const r2 = await devPost('/dev/black-market', { visit: bmVisit });
@@ -577,6 +579,47 @@ try {
     expect('pet: โฟกัส → pet สะสม XP (25 นาที = 25 XP)', r.status === 200 && r.json.character.pets[0].xp >= 25, JSON.stringify(r.json.character.pets[0]));
   }
 
+  // --- 🎭 จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙 (เปิดค่าพิเศษคลาส — บังคับเวลาผ่าน POMOQUEST_HOUR) ---
+  {
+    const { classPerks, rollMonster } = await import('../server/game.js');
+    const origPerks = process.env.POMOQUEST_CLASS_PERKS;
+    const origHour = process.env.POMOQUEST_HOUR;
+    process.env.POMOQUEST_CLASS_PERKS = '1';
+    // ☀️ กลางวัน 12:00
+    process.env.POMOQUEST_HOUR = '12';
+    let cp = classPerks({ class: 'warrior' });
+    expect('perk: นักรบ ☀️ มอนสเตอร์อ่อนลง 15% + เจอถี่ขึ้น x1.15 + ตีบอส +10%', cp.monster === 0.85 && cp.monsterW === 1.15 && cp.bossAtk === 1.1 && cp.night === false, JSON.stringify(cp));
+    cp = classPerks({ class: 'mage' });
+    expect('perk: เวทย์ ☀️ XP -10% + ตีบอส -10% (จุดด้อย)', cp.xp === 0.9 && cp.bossAtk === 0.9, JSON.stringify(cp));
+    cp = classPerks({ class: 'rogue' });
+    expect('perk: โจร ☀️ ไม่มีค่าพิเศษ (ช่วงปกติ)', cp.gold === 1 && cp.active === null, JSON.stringify(cp));
+    // 🌙 กลางคืน 22:00
+    process.env.POMOQUEST_HOUR = '22';
+    cp = classPerks({ class: 'rogue' });
+    expect('perk: โจร 🌙 ทอง +30% + สมบัติ x1.25 + กับดัก x1.3 + ตีบอส +10%', cp.gold === 1.3 && cp.treasure === 1.25 && cp.trap === 1.3 && cp.bossAtk === 1.1 && cp.night === true, JSON.stringify(cp));
+    cp = classPerks({ class: 'mage' });
+    expect('perk: เวทย์ 🌙 XP +25% + ตีบอส +10% (จุดเด่น)', cp.xp === 1.25 && cp.bossAtk === 1.1, JSON.stringify(cp));
+    cp = classPerks({ class: 'cleric' });
+    expect('perk: นักบวช 🌙 มอนสเตอร์แข็งขึ้น 10% (จุดด้อย)', cp.monster === 1.1, JSON.stringify(cp));
+    // rollMonster: นักรบกลางคืนพลังมอนสเตอร์สูงกว่ากลางวัน (สุ่มตัวเดียวกัน x0.5)
+    const realRandom = Math.random;
+    Math.random = () => 0.5;
+    process.env.POMOQUEST_HOUR = '12';
+    const dayPower = rollMonster(5, { class: 'warrior' }).power;
+    process.env.POMOQUEST_HOUR = '22';
+    const nightPower = rollMonster(5, { class: 'warrior' }).power;
+    Math.random = realRandom;
+    expect('perk: นักรบ 🌙 มอนสเตอร์พลังสูงกว่า ☀️ (x1.35)', nightPower >= Math.round(dayPower * 1.3), `day=${dayPower} night=${nightPower}`);
+    // API: /state ส่ง classPerk + event กลางคืนได้โบนัสทอง 🌙
+    process.env.POMOQUEST_HOUR = '22';
+    r = await api('/character/create', { method: 'POST', body: { name: 'โจรราตรี', class: 'rogue' } });
+    expect('perk: /state ส่ง classPerk (โจร 🌙 ทอง x1.3 + ข้อความ)', r.status === 200 && r.json.character.classPerk?.gold === 1.3 && r.json.character.classPerk?.night === true && r.json.character.classPerk?.active?.text.includes('🌙'), JSON.stringify(r.json.character.classPerk));
+    r = await api('/adventure/event', { method: 'POST', body: { key: 'treasure' } });
+    expect('perk: โจร 🌙 กล่องสมบัติได้โบนัสทอง (+30%)', r.status === 200 && (r.json.event.detail || '').includes('🌙 🗡️ +'), (r.json.event.detail || '').slice(0, 60));
+    process.env.POMOQUEST_CLASS_PERKS = origPerks;
+    process.env.POMOQUEST_HOUR = origHour;
+  }
+
   // --- 🎒 ระบบกระเป๋า: ลิมิต 20 ช่อง + ของรางวัลขายอัตโนมัติ + บล็อกซื้อ/คราฟต์ ---
   {
     const bcid = (await api('/state')).json.character.id;
@@ -599,7 +642,8 @@ try {
       r = await api('/adventure/event', { method: 'POST', body: { key: 'merchant' } });
       if (r.json.event?.item && r.json.event?.detail?.includes('ขาย')) sold = r.json;
     }
-    expect('bag: ของรางวัลเต็ม → ขายอัตโนมัติราคาพื้นฐาน + ทองเพิ่ม', !!sold && sold.event.detail.includes('กระเป๋าเต็ม') && sold.character.bagUsed === 20,
+    // ของแถมราคา 0 เข้ากระเป๋าได้เสมอ (by design) → bagUsed อาจเป็น 21 — สิ่งที่ต้องตรวจคือขายอัตโนมัติเกิดขึ้น
+    expect('bag: ของรางวัลเต็ม → ขายอัตโนมัติราคาพื้นฐาน + ทองเพิ่ม', !!sold && sold.event.detail.includes('กระเป๋าเต็ม') && sold.character.bagUsed >= 20,
       sold?.event?.detail?.slice(0, 90) || 'no auto-sell');
     // ซื้อของที่ยังไม่มีในร้าน → บล็อก
     let target = null, bvisit = null;

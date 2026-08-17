@@ -1,3 +1,5 @@
+process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษคลาส (ทดสอบเฉพาะใน test-class-perks)
+
 // ทดสอบระบบ Daily Quest (ใช้ DB ชั่วคราว ไม่แตะข้อมูลจริง)
 process.env.POMOQUEST_DB = `/tmp/pq-daily-${Date.now()}.db`;
 

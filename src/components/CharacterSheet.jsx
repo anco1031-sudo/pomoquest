@@ -5,6 +5,7 @@ import { Panel, StatRow } from './ui.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
 import { CLASS_WEIGHTS, AUTO_KEYS, gearAdjustedWeights, allocatePoints, equipGoals, allocateWithGoals } from '../alloc.js';
 import { petMoodOf, petPerkLabel } from '../meta.js';
+import { CLASS_PERKS } from '../../server/data.js';
 
 export function StatAllocator({ onDone }) {
   const { character, inventory, post } = useGame();
@@ -348,6 +349,24 @@ export default function CharacterSheet() {
         <StatRow label="คริติคอล" value={`${character.crit}%`} bonus={eqBonus.crit} icon="🎯" />
         {/* สูตรเดียวกับ server/game.js dodgeChance — SPD สูง หลบโจมตีบอสได้บ่อย (สูงสุด 20%) */}
         <StatRow label="หลบหลีก" value={`${Math.min(20, Math.round(character.spd * 0.8))}%`} icon="💨" />
+        {/* จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙 — ไฮไลต์ช่วงเวลาปัจจุบัน */}
+        {(() => {
+          const cperk = character.classPerk;
+          if (!cperk) return null;
+          const def = CLASS_PERKS[character.class];
+          const lines = def?.perkText ? [def.perkText.day, def.perkText.night].filter(Boolean) : [];
+          if (!lines.length) return null;
+          return (
+            <div className={`sheet-perk ${cperk.night ? 'night' : 'day'}`}>
+              <div className="sheet-perk-title">🎭 คลาสตอนนี้: {cperk.night ? '🌙 กลางคืน' : '☀️ กลางวัน'}</div>
+              {lines.map((t, i) => {
+                const isCurrent = (t.startsWith('☀️') && !cperk.night) || (t.startsWith('🌙') && cperk.night);
+                return <div key={i} className={`sheet-perk-line ${isCurrent ? 'current' : ''}`}>{t}</div>;
+              })}
+              <p className="hint" style={{ margin: '6px 0 0' }}>เปลี่ยนไปตามเวลาจริงของเครื่อง (กลางคืน = 18:00–05:59)</p>
+            </div>
+          );
+        })()}
       </Panel>
 
       <Panel title={`⚡ สกิล (${(character.skills || []).length})`}>

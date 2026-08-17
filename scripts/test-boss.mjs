@@ -1,3 +1,5 @@
+process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษคลาส (ทดสอบเฉพาะใน test-class-perks)
+
 // ทดสอบระบบต่อสู้บอสใหม่ — ตั้งรับ (guard) / โกรธจัด (rage) / ชาร์จท่าไม้ตาย (charge) / สุดทน (fury) / สเกลตามเมือง
 // + smoke test API ว่า /boss และ /boss/act ส่ง fight state (rage/fury/charging) กลับมา
 process.env.POMOQUEST_DB = `/tmp/pq-test-boss-${Date.now()}.db`;
