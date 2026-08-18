@@ -1354,7 +1354,12 @@ function applyBossLoss(c, fight) {
     const inv = getInventory(c.id).filter((i) => i.qty > 0 && i.type !== 'scroll');
     let lostItem = '';
     if (inv.length > 0) {
-      const victim = inv[Math.floor(Math.random() * inv.length)];
+      // 🐉 มังกรทองเลือกของมีค่าที่สุด 3 ชิ้น แล้วสุ่ม 1 ในนั้น (ของถูก/ของถังรอดไปได้ — มังกรไม่สนใจขยะ)
+      const valuable = inv
+        .map((i) => ({ ...i, val: ITEM_BY_ID[i.item_id]?.price || 0 }))
+        .sort((a, b) => b.val - a.val)
+        .slice(0, 3);
+      const victim = valuable[Math.floor(Math.random() * valuable.length)];
       db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, victim.item_id);
       lostItem = ` ของหาย: ${victim.icon} ${victim.name}`;
     }

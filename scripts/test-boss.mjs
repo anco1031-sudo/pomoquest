@@ -331,6 +331,22 @@ try {
     expect('dragon: แพ้ (หนี) → คอมโบโฟกัสหาย (streak=0)', streakAfter === 0, `streak=${streakAfter}`);
     const losesAfter = db.prepare('SELECT dragon_boss_loses FROM progress WHERE character_id = ?').get(rcid).dragon_boss_loses;
     expect('dragon: แพ้ (หนี) → นับ dragon_boss_loses (สถิติ)', losesAfter === 1, `dragon_boss_loses=${losesAfter}`);
+    // 🐉 มังกรเลือกของมีค่าที่สุด 3 ชิ้น — ของถูก/ของถังไม่โดน (กระเป๋ามี 4 ชิ้น: ขยะ + ของมีค่า 3)
+    r = await api('/character/create', { method: 'POST', body: { name: 'มังกรมีค่า', class: 'rogue' } });
+    const vcid = r.json.character.id;
+    db.prepare('UPDATE character SET gold = 500, hp = 500, max_hp = 500 WHERE id = ?').run(vcid);
+    db.prepare('UPDATE progress SET streak = 3 WHERE character_id = ?').run(vcid);
+    addItem(vcid, 45, 1);  // 🦴 กระดูก 12 ท (ของถูก)
+    addItem(vcid, 190, 1); // 🏆 500 ท
+    addItem(vcid, 191, 1); // 💛 650 ท
+    addItem(vcid, 192, 1); // 👑 800 ท
+    r = await api('/boss');
+    expect('dragon-top3: เจอมังกรทอง', r.json.boss?.isDragon === true, r.json.boss?.name);
+    r = await api('/boss/retreat', { method: 'POST' });
+    const vInv = (await api('/state')).json.inventory || [];
+    const vLost = [192, 191, 190].filter((id) => !vInv.some((x) => x.item_id === id));
+    expect('dragon-top3: เสีย 1 ใน 3 ของมีค่าที่สุด (192/191/190)', vLost.length === 1, `lost=[${vLost}]`);
+    expect('dragon-top3: ของถูก (🦴 45) รอด — มังกรไม่สนใจขยะ', vInv.some((x) => x.item_id === 45), JSON.stringify(vInv.map((x) => x.item_id)));
     // 💀 ถูกโค่นล้มผ่าน API (HP ถึง 0) — มังกร: server ลงโทษทันทีเหมือนกดหนี + เคลียร์ไฟต์
     r = await api('/character/create', { method: 'POST', body: { name: 'มังกรโค่น', class: 'warrior' } });
     const kcid = r.json.character.id;
@@ -379,6 +395,26 @@ try {
     expect('ko-api: บอสปกติ — ทองไม่หาย (500 เท่าเดิม)', !!nko && nChar.gold === 500, `gold=${nChar.gold}`);
     expect('ko-api: บอสปกติ — ของไม่หาย + คอมโบไม่หาย (streak=3)', !!nko && nInv.some((x) => x.item_id === 45) && nStreak === 3, `streak=${nStreak}`);
     expect('ko-api: บอสปกติ — ไม่นับสถิติมังกร (dragon_boss_loses=0)', !!nko && (nko?.progress?.dragon_boss_loses || 0) === 0, JSON.stringify(nko?.progress || {}));
+  }
+
+  // --- 🏠 รอบการสำรวจ: แพ้บอสแล้ว รอบต้องไม่ reset และไม่เพิ่ม (สมมุติอยู่รอบ 2 → แพ้ → ยังเป็น 2) ---
+  {
+    r = await api('/character/create', { method: 'POST', body: { name: 'รอบเทส', class: 'warrior' } });
+    const rcid3 = r.json.character.id;
+    db.prepare('UPDATE character SET city_rounds = 2, hp = 50, max_hp = 100, atk = 1, spd = 0 WHERE id = ?').run(rcid3);
+    r = await api('/boss');
+    expect('รอบ: สู้บอสที่รอบ 2 (cityRound=2 + บอสตามรอบ)', r.json.character?.cityRound === 2 && r.json.boss?.maxHp > 0,
+      `round=${r.json.character?.cityRound} maxHp=${r.json.boss?.maxHp}`);
+    let rko = null;
+    for (let i = 0; i < 20 && !rko; i++) {
+      const act = await api('/boss/act', { method: 'POST', body: { action: 'attack' } });
+      if (act.json.outcome === 'lose') rko = act.json;
+    }
+    r = await api('/state');
+    expect('รอบ: แพ้แล้วรอบยังเป็น 2 (ไม่ reset/ไม่เพิ่ม)', !!rko && r.json.character?.cityRound === 2, `round=${r.json.character?.cityRound}`);
+    // เจอบอสใหม่หลังแพ้ → รอบยังเป็น 2 (เริ่มสำรวจใหม่แบบเดิม)
+    r = await api('/boss');
+    expect('รอบ: เจอบอสใหม่หลังแพ้ รอบยังเป็น 2', r.json.character?.cityRound === 2, `round=${r.json.character?.cityRound}`);
   }
 
   // --- reset: หมุน "world epoch" — session ที่พักค้างใน localStorage (โลกเก่า) ถูกทิ้งอัตโนมัติ ---
