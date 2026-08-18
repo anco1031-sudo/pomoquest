@@ -247,6 +247,14 @@ try {
     const stockAllLearned = bmStockFor(bmVisit, { id: cid });
     expect('black market: เรียนคัมภีร์ครบ 6 เล่ม → ไม่มีคัมภีร์ขาย (ช่องแรกเป็นแบบแปลน/ของหายาก)', !stockAllLearned.some((x) => x.type === 'scroll') && ['blueprint', 'junk'].includes(stockAllLearned[0].type), JSON.stringify(stockAllLearned.map((x) => [x.name, x.type])));
     for (const sid of scrollIds) db.prepare('DELETE FROM character_skill WHERE character_id = ? AND skill_id = ?').run(cid, ITEM_BY_ID[sid].learn_skill); // คืนสภาพ — เทสต์อื่นไม่เห็นสกิลคัมภีร์
+
+    // เรียนสูตรคราฟต์ครบ 4 สูตร → ตลาดมืดไม่ขายแบบแปลนอีก (กันช่องตาย — เรียนซ้ำไม่ได้) — ช่องนั้นเป็นของหายากแทน
+    const blueprintIds = [210, 211, 212, 213];
+    const recipeIns = db.prepare('INSERT OR IGNORE INTO character_recipe (character_id, recipe_id) VALUES (?, ?)');
+    for (const bid of blueprintIds) recipeIns.run(cid, ITEM_BY_ID[bid].learn_recipe);
+    const stockRecipesLearned = bmStockFor(bmNoScrollVisit, { id: cid });
+    expect('black market: เรียนสูตรคราฟต์ครบ 4 สูตร → ไม่มีแบบแปลนขาย (ช่องแรกเป็นของหายาก)', !stockRecipesLearned.some((x) => x.type === 'blueprint') && stockRecipesLearned[0].type === 'junk', JSON.stringify(stockRecipesLearned.map((x) => [x.name, x.type])));
+    for (const bid of blueprintIds) db.prepare('DELETE FROM character_recipe WHERE character_id = ? AND recipe_id = ?').run(cid, ITEM_BY_ID[bid].learn_recipe); // คืนสภาพ — เทสต์อื่นไม่เห็นสูตรคราฟต์
   }
 
   // --- ของแถม (พ่อค้า/ตลาดมืดไม่อยากได้ — ราคา 0) — สุ่มรายค่ายพัก deterministic จาก visit ---

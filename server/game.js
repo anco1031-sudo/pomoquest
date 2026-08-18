@@ -1,5 +1,5 @@
 import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, GOLDEN_DRAGON_BOSS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
-import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
+import { today, getSkillRows, getSkillRow, upsertSkillRow, getLearnedRecipes, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -65,7 +65,7 @@ const mulberry32 = (a) => () => {
 // ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
 // เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส → โอกาสเจอตลาดมืดเพิ่มขึ้น (+10% ต่อรอบ สูงสุด +35%)
 // รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%), ของพิเศษ exclusive (ลด 10%)
-// คัมภีร์ไม่การันตี — มีโอกาส ~45% ต่อตลาดมืด (BM_SCROLL_CHANCE) · ไม่เจอ → แบบแปลน 📋 / ของหายากแทน · เรียนครบ 6 เล่มแล้วไม่ขายคัมภีร์อีก (กันช่องตาย)
+// คัมภีร์ไม่การันตี — มีโอกาส ~45% ต่อตลาดมืด (BM_SCROLL_CHANCE) · ไม่เจอ → แบบแปลน 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้วไม่ขายคัมภีร์อีก / เรียนสูตรคราฟต์ครบ 4 สูตรแล้วไม่ขายแบบแปลนอีก (กันช่องตาย)
 export const BM_OPEN_CHANCE = 0.25;
 export const BM_JUNK_MULT = 1.25;
 export const BM_SCROLL_CHANCE = 0.45;
@@ -80,11 +80,15 @@ export function bmStockFor(visit, c = null) {
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   // ช่องคัมภีร์ — ไม่การันตีแล้ว: มีโอกาส ~45% ที่ตลาดมืดจะเอาคัมภีร์มาขาย (เทียบกล่องสมบัติ ~0.36% ต่อกล่อง ยังคุ้มกว่าเยอะ)
   // ไม่เจอคัมภีร์ → สุ่มเป็นแบบแปลนสูตรคราฟต์ 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้ว → ไม่ขายคัมภีร์อีกเลย (กันช่องตาย — เรียนซ้ำไม่ได้)
+  // แบบแปลนก็เหมือนกัน: เรียนสูตรคราฟต์ครบ 4 สูตรแล้ว → ไม่ขายแบบแปลนอีก (ช่องนั้นเป็นของหายากแทน)
   const learnedSkills = new Set((c?.id ? getSkillRows(c.id) : []).map((s) => s.skill_id));
   const allScrollsLearned = SCROLL_ITEMS.every((id) => learnedSkills.has(ITEM_BY_ID[id].learn_skill));
+  const learnedRecipes = new Set(c?.id ? getLearnedRecipes(c.id) : []);
+  const allRecipesLearned = BLUEPRINT_ITEMS.every((id) => learnedRecipes.has(ITEM_BY_ID[id].learn_recipe));
   let scroll = null;
   if (!allScrollsLearned && rng() < BM_SCROLL_CHANCE) scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
-  const scrollAlt = scroll ?? ITEM_BY_ID[pick([...BLUEPRINT_ITEMS, ...RARE_JUNK])];
+  const scrollAltPool = allRecipesLearned ? RARE_JUNK : [...BLUEPRINT_ITEMS, ...RARE_JUNK];
+  const scrollAlt = scroll ?? ITEM_BY_ID[pick(scrollAltPool)];
   const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
   const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery');
   const spec = pick(specPool);
