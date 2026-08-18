@@ -3,15 +3,14 @@ import { useGame } from '../context.jsx';
 import { Panel } from './ui.jsx';
 
 export const TYPE_ICON = {
-  battle_win: '🗡️', battle_lose: '💨', treasure: '🎁', shrine: '⛩️', merchant: '🧙', trap: '⚠️',
-  session_done: '✅', session_summary: '📋', abort: '💨', shop: '🛒', equip: '🔧', rest: '🔥',
+  session_done: '✅', session_summary: '📋', abort: '💨', rest: '🔥',
   quest_win: '📜', quest_fail: '📜', boss_win: '🏆', boss_lose: '💨', system: '🎒',
   achievement: '🏅', llm_tale: '📖',
 };
 
 // เหตุการณ์สุ่มระหว่าง session (battle/treasure/shrine/merchant/trap/egg) — ไม่โชว์ในบันทึกการผจญภัย
 // เพราะสรุปอยู่ใน session_summary แล้ว (ดูรายละเอียดรายอันได้ที่แท็บ Session) — กัน log รก
-const HIDDEN_EVENT_TYPES = new Set(['battle_win', 'battle_lose', 'treasure', 'shrine', 'merchant', 'trap', 'egg']);
+const HIDDEN_EVENT_TYPES = new Set(['battle_win', 'battle_lose', 'treasure', 'shrine', 'merchant', 'trap', 'egg', 'shop', 'equip', 'unequip']);
 
 export function fmtLogTime(iso) {
   // server เก็บเวลาแบบ localtime (ไม่มี Z) — ถ้ามี Z แปลว่า UTC
