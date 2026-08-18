@@ -9,6 +9,10 @@ export const TYPE_ICON = {
   achievement: '🏅', llm_tale: '📖',
 };
 
+// เหตุการณ์สุ่มระหว่าง session (battle/treasure/shrine/merchant/trap/egg) — ไม่โชว์ในบันทึกการผจญภัย
+// เพราะสรุปอยู่ใน session_summary แล้ว (ดูรายละเอียดรายอันได้ที่แท็บ Session) — กัน log รก
+const HIDDEN_EVENT_TYPES = new Set(['battle_win', 'battle_lose', 'treasure', 'shrine', 'merchant', 'trap', 'egg']);
+
 export function fmtLogTime(iso) {
   // server เก็บเวลาแบบ localtime (ไม่มี Z) — ถ้ามี Z แปลว่า UTC
   const d = iso.endsWith('Z') ? new Date(iso) : new Date(iso.replace(' ', 'T'));
@@ -27,10 +31,12 @@ export default function AdventureLog({ limit = 20 }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
-  const items = [...(log || [])].sort((a, b) => b.id - a.id).slice(0, limit); // ล่าสุดก่อนเสมอ
+  // กรองเหตุการณ์สุ่มออก (สรุปอยู่ใน session_summary แล้ว) — เหลือเฉพาะสรุป session/เรื่องราว/ธุรกรรมอื่น ๆ
+  const visibleLog = (log || []).filter((l) => !HIDDEN_EVENT_TYPES.has(l.type));
+  const items = [...visibleLog].sort((a, b) => b.id - a.id).slice(0, limit); // ล่าสุดก่อนเสมอ
 
   return (
-    <Panel title={`📜 บันทึกการผจญภัย (${(log || []).length})`}>
+    <Panel title={`📜 บันทึกการผจญภัย (${visibleLog.length})`}>
       {items.length === 0 ? (
         <p className="hint">ยังไม่มีบันทึก — เริ่มผจญภัยได้เลย!</p>
       ) : (
