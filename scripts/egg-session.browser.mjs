@@ -104,6 +104,30 @@ const petBox = await evalJs(`(() => {
 })()`);
 expect('session-pet: ฟอง pet ขึ้น (🥚 ยังไม่มีตัว) + ป้าย "กำลังฟัก"', !!petBox && petBox.bubble.includes('🥚') && petBox.badge.includes('กำลังฟัก') && !petBox.hasLv, JSON.stringify(petBox));
 
+// ---- 1.5) บังคับเข้าค่ายพัก (short_break) → ฟอง 🥚 + ป้ายฟักขึ้นบน Camp ด้วย ----
+const forcedCamp1 = await evalJs(`(() => {
+  const key = Object.keys(localStorage).find((k) => k.startsWith('pomoquest-timer-'));
+  if (!key) return false;
+  const t = {
+    phase: 'short_break', sessionIdx: 1, remain: 60, running: true, elapsed: 0,
+    nextEventIn: 90, sessionEvents: [], sessionKey: null, breakVisit: 'camp-pet-test',
+    awaitingBreak: false, breakOver: false, overrun: 0, breakExtends: 0,
+    breakStartedAt: Date.now(), pausedAtHome: false, pauseStartedAt: null, pauseAccumSec: 0,
+    expiresAt: Date.now() + 60000,
+  };
+  localStorage.setItem(key, JSON.stringify(t));
+  location.reload();
+  return true;
+})()`);
+expect('session-pet: บังคับเข้าค่ายพักได้ (ก่อนฟัก)', forcedCamp1 === true);
+await sleep(2500);
+const campPet1 = await evalJs(`(() => {
+  const bubble = document.querySelector('.camp-pet .companion-bubble')?.textContent?.trim() || '';
+  const chip = document.querySelector('.camp-header-right .hatch-chip')?.textContent?.trim() || '';
+  return { bubble, chip, hasLv: !!document.querySelector('.camp-pet .pet-lv-tag') };
+})()`);
+expect('session-pet: Camp — ฟอง 🥚 + ป้าย "กำลังฟัก" (ยังไม่มี pet)', !!campPet1 && campPet1.bubble.includes('🥚') && campPet1.chip.includes('กำลังฟัก') && !campPet1.hasLv, JSON.stringify(campPet1));
+
 // ---- 2) จบ session → ไข่ฟักได้ pet + active ----
 r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 60, events: [] } });
 expect('session-pet: จบ session → ไข่ฟัก (มี pet + active)', r.status === 200 && r.json.hatch && !r.json.hatch.waiting && r.json.character.pets.some((p) => p.active), r.json.error || JSON.stringify(r.json.hatch));
@@ -134,6 +158,36 @@ const petBox2 = await evalJs(`(() => {
   };
 })()`);
 expect('session-pet: ฟอง pet แสดง pet + Lv + อารมณ์ (ป้ายฟักหาย)', !!petBox2 && !petBox2.bubble.includes('🥚') && petBox2.hasLv && petBox2.hasMood && !petBox2.badge, JSON.stringify(petBox2));
+
+// ---- 5) บังคับเข้าค่ายพักอีกครั้ง → ฟอง pet ขึ้นบน Camp (pet + Lv + อารมณ์, ป้ายฟักหาย) ----
+const forcedCamp2 = await evalJs(`(() => {
+  const key = Object.keys(localStorage).find((k) => k.startsWith('pomoquest-timer-'));
+  if (!key) return false;
+  const t = {
+    phase: 'short_break', sessionIdx: 1, remain: 60, running: true, elapsed: 0,
+    nextEventIn: 90, sessionEvents: [], sessionKey: null, breakVisit: 'camp-pet-test2',
+    awaitingBreak: false, breakOver: false, overrun: 0, breakExtends: 0,
+    breakStartedAt: Date.now(), pausedAtHome: false, pauseStartedAt: null, pauseAccumSec: 0,
+    expiresAt: Date.now() + 60000,
+  };
+  localStorage.setItem(key, JSON.stringify(t));
+  location.reload();
+  return true;
+})()`);
+expect('session-pet: บังคับเข้าค่ายพักได้ (หลังฟัก)', forcedCamp2 === true);
+await sleep(2500);
+const campPet2 = await evalJs(`(() => {
+  const el = document.querySelector('.camp-pet .companion-bubble');
+  if (!el) return null;
+  return {
+    bubble: el.textContent?.trim() || '',
+    hasLv: !!document.querySelector('.camp-pet .pet-lv-tag'),
+    hasMood: !!document.querySelector('.camp-pet .pet-mood-emoji'),
+    chip: document.querySelector('.camp-header-right .hatch-chip')?.textContent?.trim() || '',
+    moodClass: el.className || '',
+  };
+})()`);
+expect('session-pet: Camp — ฟอง pet แสดง pet + Lv + อารมณ์ (ป้ายฟักหาย)', !!campPet2 && !campPet2.bubble.includes('🥚') && campPet2.hasLv && campPet2.hasMood && !campPet2.chip, JSON.stringify(campPet2));
 
 chrome.kill();
 console.log(`\nผลลัพธ์: ${pass} ผ่าน, ${fail} ตก`);

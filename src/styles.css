@@ -528,6 +528,9 @@ body {
   padding: 14px 4px 12px;
 }
 .camp-header-right { display: flex; align-items: center; gap: 10px; }
+/* ฟอง pet บนหน้า Camp — วางข้างชื่อค่าย (ไม่ absolute ทับมุม เหมือนบนหน้าโฟกัสที่เกาะไอคอนเมือง) */
+.camp-title-block { display: flex; align-items: center; gap: 12px; }
+.camp-pet .companion-bubble { position: relative; bottom: auto; right: auto; }
 .camp-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
 /* สถานะ HP/MP ระหว่างพักแคมป์ */

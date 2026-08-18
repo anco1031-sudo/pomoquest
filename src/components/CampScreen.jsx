@@ -5,6 +5,7 @@ import { fmtTime } from './ui.jsx';
 import CharacterSheet from './CharacterSheet.jsx';
 import ItemStatChips, { itemReqMissing } from './ItemStats.jsx';
 import ItemCompare from './ItemCompare.jsx';
+import { petMoodOf, petPerkLabel } from '../meta.js';
 
 const TABS = [
   { key: 'shop', label: 'ร้านค้า', icon: '🛒' },
@@ -16,7 +17,7 @@ const TABS = [
 ];
 
 export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, visit, postBoss = null }) {
-  const { character, get, post, inventory, showToast } = useGame();
+  const { character, progress, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
   const [muted, setMutedState] = useState(isMuted());
   const toggleMute = () => {
@@ -127,18 +128,39 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const isSurvival = character?.challengeMode === 'survival';
 
   if (!character) return null;
+  // 🐾 สัตว์เลี้ยงที่ใช้งาน — ฟองข้างชื่อค่าย (เหมือนฟองบนหน้าโฟกัส/Home)
+  const activePet = (character.pets || []).find((p) => p.active) || null;
+  const petMood = activePet ? petMoodOf(activePet, progress?.last_focus_date) : null;
 
   return (
     <div className="screen">
       <header className="camp-header">
-        <div>
-          <div className="timer-title">{postBoss ? '🏆 พักหลังชัยชนะ!' : '🔥 ค่ายพัก'}</div>
-          <div className="camp-sub">
-            {breakOver
-              ? `⏰ เลยเวลาพัก ${fmtTime(overrun)} — กด "เริ่มโฟกัส" เมื่อพร้อม`
-              : postBoss
-                ? `${postBoss} — เตรียมตัวให้พร้อมก่อนเริ่มรอบใหม่ ⏳ ${fmtTime(remain)}`
-                : `พักผ่อน เตรียมตัว เตรียมใจ ⏳ ${fmtTime(remain)}`}
+        <div className="camp-title-block">
+          <div className="camp-pet">
+            {activePet ? (
+              <div
+                className={`companion-bubble pet-mood-${petMood.level}`}
+                title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
+              >
+                {activePet.icon}
+                <span className="pet-lv-tag">Lv.{activePet.level}</span>
+                <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
+              </div>
+            ) : (
+              <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~4%) แล้วใช้ฟักดูสิ!">
+                🥚
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="timer-title">{postBoss ? '🏆 พักหลังชัยชนะ!' : '🔥 ค่ายพัก'}</div>
+            <div className="camp-sub">
+              {breakOver
+                ? `⏰ เลยเวลาพัก ${fmtTime(overrun)} — กด "เริ่มโฟกัส" เมื่อพร้อม`
+                : postBoss
+                  ? `${postBoss} — เตรียมตัวให้พร้อมก่อนเริ่มรอบใหม่ ⏳ ${fmtTime(remain)}`
+                  : `พักผ่อน เตรียมตัว เตรียมใจ ⏳ ${fmtTime(remain)}`}
+            </div>
           </div>
         </div>
         <div className="camp-header-right">
