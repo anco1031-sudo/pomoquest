@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, isMuted, setMuted } from '../sound.js';
 import { fmtTime } from './ui.jsx';
+import { petMoodOf, petPerkLabel } from '../meta.js';
 
 // ชื่อพักยาวสำเร็จรูป (ตัวเลือกเร็ว — ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามชื่อได้) · พิมพ์เองก็ได้ที่ช่องอื่น ๆ
 const PAUSE_PRESETS = [
@@ -50,11 +51,36 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
   if (!character) return null;
   const city = character.city;
   const pct = total > 0 ? (remain / total) * 100 : 0;
+  // 🐾 สัตว์เลี้ยงที่ใช้งาน — ฟองข้างไอคอนเมือง (เหมือนฟองบน Home) + ป้าย 🥚 กำลังฟัก
+  const activePet = (character.pets || []).find((p) => p.active) || null;
+  const petMood = activePet ? petMoodOf(activePet, progress?.last_focus_date) : null;
 
   return (
     <div className="timer-screen">
       <div className="timer-city">
-        <span className="city-icon">{city.icon}</span>
+        <div className="timer-pet">
+          <span className="city-icon">{city.icon}</span>
+          {activePet ? (
+            <div
+              className={`companion-bubble pet-mood-${petMood.level}`}
+              title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
+            >
+              {activePet.icon}
+              <span className="pet-lv-tag">Lv.{activePet.level}</span>
+              <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
+            </div>
+          ) : (
+            <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~4%) แล้วใช้ฟักดูสิ!">
+              🥚
+            </div>
+          )}
+          {/* ไข่กำลังฟัก (ใช้ไข่แล้ว — จะฟักหลังจบ 1 session) */}
+          {character.hatchPending && (
+            <div className="hatch-badge" title="🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักออกมาเป็นสัตว์เลี้ยงหลังจบ 1 session โฟกัส">
+              🥚 กำลังฟัก…
+            </div>
+          )}
+        </div>
         <div>
           <div className="timer-title">⚔️ ผจญภัยใน {city.name}</div>
           <div className="timer-sub">
