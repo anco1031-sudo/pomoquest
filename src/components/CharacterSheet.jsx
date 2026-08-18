@@ -187,16 +187,25 @@ function SkillList({ skills }) {
   );
 }
 
-// คอกสัตว์เลี้ยง — ฟักจาก 🥚 ไข่ปริศนา (ดรอปหายากจากสมบัติ/event) · ตัวที่ active เท่านั้นที่ค่าพิเศษมีผล
-// สลับตัวที่ใช้งานได้ฟรี · คอกเต็มต้องปล่อยตัวหนึ่งก่อน (ได้ทองปลอบใจ)
+// สัตว์เลี้ยง — ฟักจาก 🥚 ไข่ปริศนา · ใช้งานได้ครั้งละตัว · เก็บด้วย 👜 กระเป๋าเก็บสัตว์
 function PetStable() {
   const { character, progress, post } = useGame();
   const pets = character.pets || [];
   const lastFocusDate = progress?.last_focus_date;
-  const slots = character.petSlots || 1;
-  const maxSlots = character.petMaxSlots || 4;
+  const bagCapacity = character.petBagCapacity || 0;
   const RARITY_LABEL = { common: 'ทั่วไป', rare: 'หายาก', epic: 'หายากมาก', legend: 'ตำนาน' };
 
+  const activePet = pets.find((p) => p.active) || null;
+  const storedPets = pets.filter((p) => p.stored);
+
+  const storeActive = async () => {
+    sfx.click();
+    await post('/pet/store');
+  };
+  const unstore = async (p) => {
+    sfx.click();
+    await post('/pet/unstore', { petId: p.id });
+  };
   const swap = async (p) => {
     sfx.click();
     await post('/pet/swap', { petId: p.id });
@@ -207,28 +216,66 @@ function PetStable() {
     await post('/pet/release', { petId: p.id });
   };
 
+  const hasBagInInv = (character.inventory || []).some((i) => i.item_id === 173 && i.qty > 0);
+
   return (
-    <Panel title={<span>🐾 คอกสัตว์ ({pets.length}/{slots}){character.hatchPending && <span className="hatch-chip">🥚 กำลังฟัก…</span>}</span>}>
+    <Panel title={<span>🐾 สัตว์เลี้ยง{character.hatchPending && <span className="hatch-chip">🥚 กำลังฟัก…</span>}</span>}>
       <p className="panel-text">
-        ฟักจาก 🥚 ไข่ปริศนา (ดรอปหายากจากกล่องสมบัติ ~2% / event พิเศษ) — ตัวที่ <b>ใช้งาน</b> เท่านั้นที่ค่าพิเศษมีผล ·
-        เลเวล pet เพิ่มขึ้นจากโฟกัส + ร่วมผจญภัย (ค่าพิเศษ +10%/เลเวล) · คอกเต็มใช้ 💳 บัตรขยายคอก (ดรอปหายากมาก + บอสลับการันตีใบแรก)
+        ฟักจาก 🥚 ไข่ปริศนา (ดรอปหายากจากกล่องสมบัติ ~2% / event พิเศษ) — ใช้งานได้ <b>ครั้งละ 1 ตัว</b> ·
+        เลเวล pet เพิ่มขึ้นจากโฟกัส + ร่วมผจญภัย (ค่าพิเศษ +10%/เลเวล) ·
+        เก็บสัตว์เลี้ยงด้วย 👜 กระเป๋าเก็บสัตว์ (ใช้แล้วเก็บ 1 ตัว — หาซื้อจากร้าน / ลุ้นจากกล่องสมบัติ)
       </p>
       {character.hatchPending && (
         <p className="hint">🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักเป็นสัตว์เลี้ยงหลังจบ 1 session โฟกัส (ไข่ไม่สปอยล์ — สุ่มตัวตอนฟักจริง)</p>
       )}
-      {pets.length === 0 ? (
-        <p className="hint">ยังไม่มีสัตว์เลี้ยง — ออกผจญภัยหาความหวังจากกล่องสมบัติสิ! 🥚</p>
-      ) : (
+      {/* สัตว์เลี้ยงที่ใช้งาน */}
+      {activePet ? (
         <div className="pet-list">
-          {pets.map((p) => {
-            const mood = petMoodOf(p, lastFocusDate);
+          {(() => {
+            const mood = petMoodOf(activePet, lastFocusDate);
             return (
-              <div className={`pet-card ${p.active ? 'pet-active' : ''}`} key={p.id}>
+              <div className="pet-card pet-active" key={activePet.id}>
+                <span className="pet-icon">{activePet.icon}</span>
+                <div className="pet-info">
+                  <div className="pet-name">
+                    {activePet.name} <span className={`pet-rarity pet-rarity-${activePet.rarity}`}>{RARITY_LABEL[activePet.rarity] || activePet.rarity}</span>
+                    <span className="chip pet-active-chip">✨ ใช้งาน</span>
+                  </div>
+                  <div className="pet-desc">{activePet.desc}</div>
+                  <div className="pet-perk">📈 {petPerkLabel(activePet)}</div>
+                  <div className="pet-level-row">
+                    <span className="pet-lv">Lv.{activePet.level}</span>
+                    <div className="skill-xp-bar"><div className="skill-xp-fill" style={{ width: `${Math.min(100, (activePet.xp / activePet.xpNext) * 100)}%` }} /></div>
+                    <span className="skill-xp-text">XP {activePet.xp}/{activePet.xpNext}</span>
+                  </div>
+                </div>
+                <div className="pet-actions">
+                  {bagCapacity > storedPets.length ? (
+                    <button className="btn btn-sm" onClick={storeActive} title="เก็บสัตว์เลี้ยงไว้ในกระเป๋า (ใช้ 👜 กระเป๋าเก็บสัตว์ 1 ใบ)">👜 เก็บ</button>
+                  ) : (
+                    <button className="btn btn-sm" disabled title="กระเป๋าเก็บสัตว์เต็ม — หา 👜 กระเป๋าเก็บสัตว์ใบใหม่">👜 เก็บ</button>
+                  )}
+                  <button className="btn btn-sm btn-danger" onClick={() => release(activePet)} title="ปล่อยเป็นอิสระ (ได้ทองปลอบใจ)">🕊️ ปล่อย</button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      ) : (
+        <p className="hint">ยังไม่มีสัตว์เลี้ยงที่ใช้งาน — ออกผจญภัยหา 🥚 ไข่ปริศนาสิ!</p>
+      )}
+      {/* สัตว์เลี้ยงที่เก็บในกระเป๋า */}
+      {storedPets.length > 0 && (
+        <>
+          <p className="panel-text" style={{ marginTop: 12 }}>📤 เก็บในกระเป๋า ({storedPets.length}/{bagCapacity})</p>
+          <div className="pet-list">
+            {storedPets.map((p) => (
+              <div className="pet-card" key={p.id}>
                 <span className="pet-icon">{p.icon}</span>
                 <div className="pet-info">
                   <div className="pet-name">
                     {p.name} <span className={`pet-rarity pet-rarity-${p.rarity}`}>{RARITY_LABEL[p.rarity] || p.rarity}</span>
-                    {p.active && <span className="chip pet-active-chip">✨ ใช้งาน</span>}
+                    <span className="chip" style={{ background: '#374151' }}>📦 เก็บอยู่</span>
                   </div>
                   <div className="pet-desc">{p.desc}</div>
                   <div className="pet-perk">📈 {petPerkLabel(p)}</div>
@@ -239,20 +286,15 @@ function PetStable() {
                   </div>
                 </div>
                 <div className="pet-actions">
-                  {!p.active && (
-                    <button className="btn btn-sm" onClick={() => swap(p)}>สลับใช้</button>
-                  )}
+                  <button className="btn btn-sm" onClick={() => unstore(p)} title="เอาออกจากกระเป๋า — ตั้งเป็นตัวที่ใช้งาน">📤 เอาออก</button>
                   <button className="btn btn-sm btn-danger" onClick={() => release(p)} title="ปล่อยเป็นอิสระ (ได้ทองปลอบใจ)">🕊️ ปล่อย</button>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </>
       )}
-      <p className="hint pet-mood-hint">{pets.length > 0 ? `💬 อารมณ์: ${pets.map((p) => `${p.icon} ${petMoodOf(p, lastFocusDate).msg.split(' ').slice(1).join(' ')}`).join(' · ')}` : ''}</p>
-      {slots < maxSlots && (
-        <p className="hint">💳 คอก {slots}/{maxSlots} — หา 💳 บัตรขยายคอก (ดรอปหายากมากจากสมบัติ / บอสลับการันตีใบแรก) เพื่อขยายช่อง</p>
-      )}
+      <p className="hint pet-mood-hint">{activePet ? `💬 อารมณ์: ${activePet.icon} ${petMoodOf(activePet, lastFocusDate).msg.split(' ').slice(1).join(' ')}` : ''}</p>
     </Panel>
   );
 }
@@ -439,10 +481,10 @@ export default function CharacterSheet() {
                     <button
                       className="btn btn-sm"
                       onClick={() => useItem(i)}
-                      disabled={!!(i.useEgg && character.hatchPending)}
-                      title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : ''}
+                      disabled={!!(i.useEgg && (character.hatchPending || (character.pets || []).some((p) => p.active)))}
+                      title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : i.useEgg && (character.pets || []).some((p) => p.active) ? '🐾 มีสัตว์เลี้ยงอยู่ — ต้องเก็บสัตว์เลี้ยงก่อน (ใช้ 👜 กระเป๋าเก็บสัตว์)' : ''}
                     >
-                      {i.useGift ? '🎁 เปิด' : 'ใช้'}
+                      {i.useGift ? '🎁 เปิด' : i.usePetBag ? '👜 เก็บสัตว์' : 'ใช้'}
                     </button>
                   ) : i.type === 'scroll' ? (
                     <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>

@@ -272,8 +272,8 @@ ensureColumn('progress', 'combo_shield', 'INTEGER DEFAULT 0');
 // กระเป๋า: จำนวนช่องสูงสุด (ของแต่ละชนิด = 1 ช่อง — ไอเทมซ้ำรวมกองกันไม่กินช่องเพิ่ม)
 // เริ่ม 20 ช่อง — กันเก็บของไว้รอขายราคาดีไม่อั้น (เต็มแล้วต้องขาย/รับรางวัลขายอัตโนมัติ)
 ensureColumn('progress', 'bag_size', 'INTEGER DEFAULT 20');
-// คอกสัตว์เลี้ยง: จำนวนช่องที่ขยายแล้ว (เริ่ม 1 — ขยายด้วย 💳 บัตรขยายคอก สูงสุด 4)
-ensureColumn('progress', 'pet_slots', 'INTEGER DEFAULT 1');
+// กระเป๋าเก็บสัตว์: จำนวนช่องเก็บที่ปลดล็อคแล้ว (ใช้ 👜 กระเป๋าเก็บสัตว์ — 1 ช่องต่อ 1 ใบ)
+ensureColumn('progress', 'pet_bag_capacity', 'INTEGER DEFAULT 0');
 // โล่กับดักยูนิคอร์น: 1 = กันกับดักได้อีก 1 ครั้ง (รีเซ็ตทุกครั้งที่ชนะบอส — 1 ครั้ง/รอบ)
 ensureColumn('progress', 'pet_trap_shield', 'INTEGER DEFAULT 0');
 // จำนวนรอบที่เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส — ความยาก/รางวัล/ตลาดมืดเพิ่มตามรอบ (รีเซ็ตเมื่อย้ายเมือง)
@@ -410,7 +410,7 @@ export const getInventory = (charId) => db.prepare(`
   ORDER BY item.type, item.id`).all(charId).map((r) => {
   // ข้อมูล static ในโค้ด (lvl / ข้อจำกัดการสวม / ธง use_*) — merge ให้ client ใช้เช็คได้
   const def = ITEM_BY_ID[r.item_id] || {};
-  return { ...r, lvl: def.lvl || 1, classReq: def.classReq, statReq: def.statReq, useEgg: def.use_egg || 0, useStall: def.use_stall || 0, useGift: def.use_gift || 0 };
+  return { ...r, lvl: def.lvl || 1, classReq: def.classReq, statReq: def.statReq, useEgg: def.use_egg || 0, usePetBag: def.use_pet_bag || 0, useGift: def.use_gift || 0 };
 });
 
 export const getLog = (charId, limit = 30) =>
@@ -456,11 +456,22 @@ export const getTrophies = (charId) =>
   db.prepare('SELECT boss_key, icon, won_at FROM trophy WHERE character_id = ? ORDER BY won_at').all(charId);
 
 // ----- สัตว์เลี้ยง (Pet) — ฟักจากไข่ปริศนา 🥚 -----
+ensureColumn('pet', 'stored', 'INTEGER DEFAULT 0'); // 1 = เก็บในกระเป๋า, 0 = ปกติ
+
+// ดึงสัตว์เลี้ยงทั้งหมด (active + stored)
 export const getPets = (charId) =>
-  db.prepare('SELECT pet_id, level, xp, is_active, acquired_at FROM pet WHERE character_id = ? ORDER BY acquired_at').all(charId);
+  db.prepare('SELECT pet_id, level, xp, is_active, stored, acquired_at FROM pet WHERE character_id = ? ORDER BY stored, acquired_at').all(charId);
+
+// ดึงสัตว์เลี้ยงที่ active (ใช้งานอยู่)
+export const getActivePet = (charId) =>
+  db.prepare('SELECT pet_id, level, xp, is_active, stored, acquired_at FROM pet WHERE character_id = ? AND is_active = 1').get(charId);
+
+// ดึงสัตว์เลี้ยงที่เก็บในกระเป๋า
+export const getStoredPets = (charId) =>
+  db.prepare('SELECT pet_id, level, xp, is_active, stored, acquired_at FROM pet WHERE character_id = ? AND stored = 1 ORDER BY acquired_at').all(charId);
 
 export const getPet = (charId, petId) =>
-  db.prepare('SELECT pet_id, level, xp, is_active, acquired_at FROM pet WHERE character_id = ? AND pet_id = ?').get(charId, petId);
+  db.prepare('SELECT pet_id, level, xp, is_active, stored, acquired_at FROM pet WHERE character_id = ? AND pet_id = ?').get(charId, petId);
 
 // ฟัก pet ใหม่ — คืน 1 ถ้าเพิ่มสำเร็จ / 0 ถ้ามีอยู่แล้ว (ไข่ซ้ำฟักตัวเดิมไม่ได้)
 export const addPet = (charId, petId) =>
@@ -468,16 +479,27 @@ export const addPet = (charId, petId) =>
 
 // สลับ pet ที่ "ใช้งาน" (active) — ค่าพิเศษเฉพาะตัวที่ active เท่านั้นมีผล
 export const setActivePet = (charId, petId) => {
-  db.prepare('UPDATE pet SET is_active = 0 WHERE character_id = ?').run(charId);
+  db.prepare('UPDATE pet SET is_active = 0 WHERE character_id = ? AND stored = 0').run(charId);
   db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
 };
 
-// ปล่อย pet (คอกเต็ม — ต้องปล่อยตัวหนึ่งก่อน) — ลบออกจากคอก
-// ใช้ใน transaction: ลบแถว + รีเซ็ต active ถ้าปล่อยตัวที่ active อยู่
+// เก็บสัตว์เลี้ยงลงกระเป๋า (active → stored)
+export const storePet = (charId, petId) => {
+  db.prepare('UPDATE pet SET is_active = 0, stored = 1 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
+};
+
+// เอาสัตว์เลี้ยงออกจากกระเป๋า (stored → active) — ต้องปล่อย active ตัวเดิมก่อน
+export const unstorePet = (charId, petId) => {
+  db.prepare('UPDATE pet SET stored = 0 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
+  db.prepare('UPDATE pet SET is_active = 0 WHERE character_id = ? AND stored = 0').run(charId);
+  db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
+};
+
+// ปล่อย pet — ลบออกจากคอก
 export const releasePet = (charId, petId) => {
   db.prepare('DELETE FROM pet WHERE character_id = ? AND pet_id = ?').run(charId, petId);
-  // ถ้าปล่อยตัวที่ active → ตัวแรกที่เหลือขึ้นเป็น active
-  const rest = db.prepare('SELECT pet_id FROM pet WHERE character_id = ? ORDER BY acquired_at LIMIT 1').get(charId);
+  // ถ้าปล่อยตัวที่ active → ตัวแรกที่เหลือ (ไม่ใช่ stored) ขึ้นเป็น active
+  const rest = db.prepare('SELECT pet_id FROM pet WHERE character_id = ? AND stored = 0 AND pet_id != ? ORDER BY acquired_at LIMIT 1').get(charId, petId);
   if (rest) db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(charId, rest.pet_id);
 };
 

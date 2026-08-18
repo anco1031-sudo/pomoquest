@@ -1,5 +1,5 @@
-import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, GOLDEN_DRAGON_BOSS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
-import { today, getSkillRows, getSkillRow, upsertSkillRow, getLearnedRecipes, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
+import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, GOLDEN_DRAGON_BOSS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_BAG_ID, petXpToNext } from './data.js';
+import { today, getSkillRows, getSkillRow, upsertSkillRow, getLearnedRecipes, getPets, getActivePet, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -124,8 +124,8 @@ export function mysteryBoxRoll(visit, c) {
   if (roll < 0.05) return ITEM_BY_ID[pick(SCROLL_ITEMS)];
   if (roll < 0.25) return ITEM_BY_ID[pick(RARE_JUNK)];
   if (roll < 0.5) {
-    // ไม่รวมไข่🥚/บัตรขยายคอก — มีช่องทางดรอปเฉพาะ (ไข่จากสมบัติ ~2%) กันดรอปซ้ำซ้อน
-    const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !i.use_stall && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'mystery' && i.type !== 'blueprint' && (!i.classReq || i.classReq.includes(c?.class)) && (i.type === 'consumable' || (i.lvl || 1) <= lvl + 1));
+    // ไม่รวมไข่🥚 — มีช่องทางดรอปเฉพาะ (ไข่จากสมบัติ ~2%) กันดรอปซ้ำซ้อน
+    const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'mystery' && i.type !== 'blueprint' && (!i.classReq || i.classReq.includes(c?.class)) && (i.type === 'consumable' || (i.lvl || 1) <= lvl + 1));
     if (pool.length) return pick(pool);
   }
   const items = [1, 2, 3, 4, 5, 6, 7, 150].map((id) => ITEM_BY_ID[id]).filter(Boolean);
@@ -287,19 +287,17 @@ export function skillPower(skill, level = 1, xp = 0, source = 'class') {
 
 // รวมสกิลทั้งหมดของตัวละคร = สกิลคลาส (เลเวล 1 เสมอ) + สกิลที่เรียนจากคัมภีร์ — พร้อมเลเวล/XP จริง
 // 🥚 ฟักไข่ที่กำลังฟักอยู่ (ใช้ไข่แล้ว → รอจบ 1 session) — สุ่ม pet ตาม rarity ตอนฟักจริง (ไม่สปอยล์)
-// คืน { pet, rarityLabel, dup, gold } หรือ null ถ้าไม่มีไข่กำลังฟัก · waiting = คอกเต็ม รอฟักก่อน
+// คืน { pet, rarityLabel, dup, gold } หรือ null ถ้าไม่มีไข่กำลังฟัก · waiting = มีสัตว์เลี้ยงactiveอยู่ รอเก็บก่อน
 const RARITY_LABEL = { common: 'ทั่วไป', rare: 'หายาก', epic: 'หายากมาก', legend: 'ตำนาน' };
 export function hatchEgg(c) {
   if (!c.hatch_pending) return null;
-  const prog = getProgress(c.id);
-  const slots = prog.pet_slots || 1;
-  const petCount = getPets(c.id).length;
+  const active = getActivePet(c.id);
   c.hatch_pending = 0;
-  // คอกเต็มตอนฟัก (ขยายช่องไม่ทัน) — ไข่ยังฟักไม่ได้ กลับไปรอ (สถานะยังค้างไว้)
-  if (petCount >= slots) {
+  // มีสัตว์เลี้ยง active อยู่ — ยังฟักไม่ได้ ต้องเก็บก่อน
+  if (active) {
     c.hatch_pending = 1;
     updateCharacter(c);
-    return { waiting: true, message: 'คอกสัตว์เต็ม — ไข่รอฟักอยู่ รอจนกว่าจะมีที่ว่าง' };
+    return { waiting: true, message: 'มีสัตว์เลี้ยงอยู่ — ต้องเก็บก่อน (ใช้ 👜 กระเป๋าเก็บสัตว์) แล้วค่อยฟักไข่' };
   }
   const total = PET_RARITY_ROLL.reduce((a, r) => a + r.weight, 0);
   let roll = Math.random() * total;
@@ -312,11 +310,11 @@ export function hatchEgg(c) {
   const pet = pool[Math.floor(Math.random() * pool.length)];
   const result = { pet: { id: pet.id, name: pet.name, icon: pet.icon, rarity: pet.rarity }, rarityLabel: RARITY_LABEL[pet.rarity] };
   if (!addPet(c.id, pet.id)) {
-    // ฟักเจอตัวที่อยู่ในคอกแล้ว → ได้ค่าปลอบใจทอง (ไข่ใบนั้นจบไป)
+    // ฟักเจอตัวที่มีอยู่แล้ว (active หรือ stored) → ได้ค่าปลอบใจทอง
     const gold = 60;
     c.gold += gold;
     updateCharacter(c);
-    addLog(c.id, { type: 'pet_hatch_dup', title: '🥚 ไข่ฟักเป็นตัวเดิม', detail: `${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) มีอยู่ในคอกแล้ว — ได้ค่าปลอบใจ +${gold} ทอง` });
+    addLog(c.id, { type: 'pet_hatch_dup', title: '🥚 ไข่ฟักเป็นตัวเดิม', detail: `${pet.icon} ${pet.name} (${RARITY_LABEL[pet.rarity]}) มีอยู่แล้ว — ได้ค่าปลอบใจ +${gold} ทอง` });
     return { ...result, dup: true, gold };
   }
   setActivePet(c.id, pet.id); // ตัวที่ฟักใหม่ = ตัวที่ใช้งานอัตโนมัติ
@@ -395,7 +393,7 @@ export function serializeCharacter(c) {
       feet: itemOf(c.feet_id),
       accessories: [c.accessory_id, c.accessory_2_id, c.accessory_3_id, c.accessory_4_id].map(itemOf),
     },
-    // สัตว์เลี้ยง (คอก) — ฟักจากไข่ 🥚 · petSlots = จำนวนช่องที่ขยายแล้ว (เริ่ม 1 สูงสุด 4)
+    // สัตว์เลี้ยง — ฟักจากไข่ 🥚 · active = ตัวที่ใช้งาน · stored = เก็บในกระเป๋า
     pets: getPets(c.id).map((p) => {
       const def = PET_BY_ID[p.pet_id] || {};
       return {
@@ -413,12 +411,12 @@ export function serializeCharacter(c) {
         xp: p.xp,
         xpNext: petXpToNext(p.level),
         active: !!p.is_active,
+        stored: !!p.stored,
         acquiredAt: p.acquired_at,
       };
     }),
-    petSlots: getProgress(c.id).pet_slots || 1,
+    petBagCapacity: getProgress(c.id).pet_bag_capacity || 0,
     petTrapShield: getProgress(c.id).pet_trap_shield || 0,
-    petMaxSlots: PET_MAX_SLOTS,
     // กระเป๋า: ช่องที่ใช้ไป / ความจุ (ของแต่ละชนิด = 1 ช่อง)
     bagUsed: bagSlotsUsed(c.id),
     bagSize: bagSlots(c.id),
@@ -790,8 +788,8 @@ export function rollEvent(c, forceKey = null, forceRare = false) {
         item = ITEM_BY_ID[pick(RARE_JUNK)]; // ของขวัญหายาก — ดรอปยาก (ออกทางนี้ทางเดียว)
       } else {
         // เกียร์ที่เจอต้องสวมได้กับคลาสนี้ (ไม่ดรอปของคลาสอื่นให้รกกระเป๋า)
-        // ไม่รวมไข่🥚/บัตรขยายคอก (มีช่องทางดรอปเฉพาะของตัวเอง — ไข่จากสมบัติ ~2% ฯลฯ)
-        const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !i.use_stall && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (!i.classReq || i.classReq.includes(c.class)) && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
+        // ไม่รวมไข่🥚 (มีช่องทางดรอปเฉพาะ — ไข่จากสมบัติ ~2% ฯลฯ)
+        const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (!i.classReq || i.classReq.includes(c.class)) && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
         // น้ำหนัก: ขยะที่วันนี้ขายถูก (พ่อค้าไม่ต้องการ) x4 — ของแพง/เป็นที่ต้องการเจอยากกว่า
         const dayKey = today();
         const weighted = [];

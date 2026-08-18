@@ -7,12 +7,12 @@ import {
   db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
   getSkillRow, learnSkill, getEpoch, rotateEpoch, learnRecipe, getLearnedRecipes, addTrophy, getTrophies,
-  getPets, getPet, setActivePet, releasePet, grantPetXp, setPetTrapShield,
+  getPets, getPet, getActivePet, getStoredPets, setActivePet, storePet, unstorePet, releasePet, grantPetXp, setPetTrapShield,
 } from './db.js';
 import {
   CLASSES, ITEM_BY_ID, CITIES, QUESTS, SHOP_STOCK, SCROLL_SKILL_BY_ID, ALT_BOSSES, altBossAt,
   ACHIEVEMENTS, SECRET_ACHIEVEMENTS, STORY_QUESTS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID,
-  PET_BY_ID, PET_MAX_SLOTS,
+  PET_BY_ID, PET_BAG_ID,
 } from './data.js';
 import {
   computeStats, serializeCharacter, gainXp, rollEvent, generateBoss, bossPlayerTurn, equipBlockReason,
@@ -808,10 +808,8 @@ router.post('/inventory/use', (req, res) => {
 
   // 🥚 ไข่ปริศนา — ใช้แล้วเริ่มฟัก: ยังไม่ฟักทันที ต้องจบ 1 session (adventure/complete) ไข่ถึงจะฟัก (สุ่ม rarity ตอนฟักจริง — ไม่สปอยล์)
   if (item.use_egg) {
-    const prog = getProgress(c.id);
-    const slots = prog.pet_slots || 1;
-    const petCount = getPets(c.id).length;
-    if (petCount >= slots) return res.status(400).json({ error: `🐾 คอกสัตว์เต็ม (${petCount}/${slots}) — ปล่อยตัวหนึ่งก่อน หรือใช้ 💳 บัตรขยายคอก` });
+    const activePet = getActivePet(c.id);
+    if (activePet) return res.status(400).json({ error: '🐾 มีสัตว์เลี้ยงอยู่ — ต้องเก็บสัตว์เลี้ยงก่อน (ใช้ 👜 กระเป๋าเก็บสัตว์) แล้วค่อยฟักไข่' });
     if (c.hatch_pending) return res.status(400).json({ error: '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' });
     c.hatch_pending = 1;
     updateCharacter(c);
@@ -825,18 +823,21 @@ router.post('/inventory/use', (req, res) => {
     });
   }
 
-  // 💳 บัตรขยายคอก — ใช้แล้วขยายช่องเลี้ยงสัตว์ +1 (เริ่ม 1 ช่อง สูงสุด 4)
-  if (item.use_stall) {
+  // 👜 กระเป๋าเก็บสัตว์ — ใช้แล้วเก็บสัตว์เลี้ยงที่ active ไว้ในกระเป๋า (ปลดล็อคช่องเก็บ 1 ช่อง)
+  if (item.use_pet_bag) {
     const prog = getProgress(c.id);
-    const cur = prog.pet_slots || 1;
-    if (cur >= PET_MAX_SLOTS) return res.status(400).json({ error: `คอกสัตว์เต็มที่แล้ว (${PET_MAX_SLOTS} ช่อง) — ใช้บัตรเพิ่มไม่ได้` });
-    prog.pet_slots = cur + 1;
-    db.prepare('UPDATE progress SET pet_slots = ? WHERE id = ?').run(prog.pet_slots, prog.id);
+    const active = getActivePet(c.id);
+    if (!active) return res.status(400).json({ error: '🐾 ไม่มีสัตว์เลี้ยงที่ใช้งานอยู่ — เก็บสัตว์เลี้ยงก่อนไม่ได้' });
+    prog.pet_bag_capacity = (prog.pet_bag_capacity || 0) + 1;
+    db.prepare('UPDATE progress SET pet_bag_capacity = ? WHERE id = ?').run(prog.pet_bag_capacity, prog.id);
+    // เก็บสัตว์เลี้ยงที่ active ลงกระเป๋า
+    storePet(c.id, active.pet_id);
+    const def = PET_BY_ID[active.pet_id];
     db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
-    addLog(c.id, { type: 'pet_stall', title: '💳 ขยายคอกสัตว์', detail: `ขยายคอกสัตว์เป็น ${prog.pet_slots}/${PET_MAX_SLOTS} ช่อง — เลี้ยงสัตว์เลี้ยงได้มากขึ้น!` });
+    addLog(c.id, { type: 'pet_store', title: '👜 เก็บสัตว์เลี้ยง', detail: `เก็บ ${def?.icon || ''} ${def?.name || active.pet_id} (Lv.${active.level}) ไว้ในกระเป๋า — ช่องเก็บ ${prog.pet_bag_capacity} ช่อง` });
     return res.json({
       ...serialize(c), inventory: getInventory(c.id),
-      message: `💳 ขยายคอกสัตว์เป็น ${prog.pet_slots}/${PET_MAX_SLOTS} ช่องแล้ว!`,
+      message: `👜 เก็บ ${def?.icon || ''} ${def?.name || active.pet_id} ไว้ในกระเป๋าแล้ว!`,
       ...dailyPayload(c),
       levelUps: { levels: 0, statPoints: c.stat_points },
     });
@@ -902,22 +903,76 @@ router.post('/inventory/use', (req, res) => {
   });
 });
 
-// ----- สัตว์เลี้ยง: สลับตัวที่ใช้งาน / ปล่อย (คอกเต็มต้องปล่อยก่อน — ได้ทองปลอบใจ) -----
+// ----- สัตว์เลี้ยง: สลับตัว / เก็บ / เอาออก / ปล่อย -----
+// สลับใช้สัตว์เลี้ยง (เก็บตัวเก่า → ใช้ตัวใหม่ — ต้องมีช่องเก็บว่าง)
 router.post('/pet/swap', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const { petId } = req.body || {};
-  if (!getPet(c.id, petId)) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้ในคอก' });
-  setActivePet(c.id, petId);
+  const row = getPet(c.id, petId);
+  if (!row) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้' });
+  if (row.is_active && !row.stored) return res.status(400).json({ error: 'เป็นตัวที่ใช้งานอยู่แล้ว' });
+  const prog = getProgress(c.id);
+  const storedCount = getStoredPets(c.id).length;
+  const capacity = prog.pet_bag_capacity || 0;
+  // ถ้าตัวที่จะสลับมาเป็น stored → ต้องมีช่องเก็บเหลือ (หรือตัวเก่า active จะถูกเก็บอัตโนมัติ)
+  if (row.stored) {
+    const active = getActivePet(c.id);
+    if (active) {
+      // สลับ: active → stored (ใช้ 1 ช่อง), stored → active (คืน 1 ช่อง) = ช่องเท่าเดิม
+      // ต้องมีช่องเก็บว่างอย่างน้อย 1 (สำหรับ active ตัวเดิม)
+      if (storedCount >= capacity) return res.status(400).json({ error: `👜 กระเป๋าเก็บสัตว์เต็ม (${storedCount}/${capacity}) — ใช้ 👜 กระเป๋าเก็บสัตว์เพิ่มช่อง` });
+    }
+  } else {
+    // ตัวที่จะสลับมาเป็น active ตัวเดิม (ไม่ใช่ stored) — ถ้ายังไม่มี active ก็ตั้งได้เลย
+    // ถ้ามี active อยู่แล้ว → ต้องเก็บตัวเดิมก่อน (ไม่สลับอัตโนมัติ)
+    const active = getActivePet(c.id);
+    if (active) return res.status(400).json({ error: '🐾 มีสัตว์เลี้ยงใช้งานอยู่ — เก็บตัวเดิมก่อน (ใช้ 👜 กระเป๋าเก็บสัตว์) แล้วค่อยสลับ' });
+  }
+  // ถ้าตัวที่จะสลับมาเป็น stored ให้สลับอัตโนมัติ (stored ↔ active)
+  if (row.stored) {
+    unstorePet(c.id, petId); // stored → active
+  } else {
+    setActivePet(c.id, petId); // ตั้งเป็น active (ไม่มี active อยู่แล้ว)
+  }
   const def = PET_BY_ID[petId];
   addLog(c.id, { type: 'pet_swap', title: '🐾 สลับสัตว์เลี้ยง', detail: `ตั้ง ${def?.icon || ''} ${def?.name || petId} เป็นตัวที่ใช้งาน — ค่าพิเศษของมันมีผลแล้ว!` });
   res.json({ ...serialize(c), message: `🐾 ตั้ง ${def?.icon || ''} ${def?.name || petId} เป็นตัวที่ใช้งานแล้ว` });
+});
+
+// เก็บสัตว์เลี้ยงที่ active ลงกระเป๋า (ต้องมี 👜 กระเป๋าเก็บสัตว์ในกระเป๋า — consumed)
+router.post('/pet/store', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const active = getActivePet(c.id);
+  if (!active) return res.status(400).json({ error: '🐾 ไม่มีสัตว์เลี้ยงที่ใช้งานอยู่' });
+  // ต้องมี 👜 กระเป๋าเก็บสัตว์ในกระเป๋า
+  const inv = getInventory(c.id).find((i) => i.item_id === PET_BAG_ID);
+  if (!inv || inv.qty < 1) return res.status(400).json({ error: '👜 ไม่มีกระเป๋าเก็บสัตว์ — หาซื้อจากร้านค้าหรือลุ้นจากกล่องสมบัติ' });
+  // เก็บสัตว์เลี้ยง
+  storePet(c.id, active.pet_id);
+  // บริโภคกระเป๋า
+  db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, PET_BAG_ID);
+  const def = PET_BY_ID[active.pet_id];
+  addLog(c.id, { type: 'pet_store', title: '👜 เก็บสัตว์เลี้ยง', detail: `เก็บ ${def?.icon || ''} ${def?.name || active.pet_id} (Lv.${active.level}) ไว้ในกระเป๋า` });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `👜 เก็บ ${def?.icon || ''} ${def?.name || active.pet_id} ไว้ในกระเป๋าแล้ว!` });
+});
+
+// เอาสัตว์เลี้ยงออกจากกระเป๋า (stored → active)
+router.post('/pet/unstore', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const { petId } = req.body || {};
+  const row = getPet(c.id, petId);
+  if (!row || !row.stored) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้ในกระเป๋า' });
+  unstorePet(c.id, petId);
+  const def = PET_BY_ID[petId];
+  addLog(c.id, { type: 'pet_unstore', title: '📤 เอาสัตว์เลี้ยงออกจากกระเป๋า', detail: `${def?.icon || ''} ${def?.name || petId} (Lv.${row.level}) กลับมาใช้งานแล้ว!` });
+  res.json({ ...serialize(c), message: `📤 ${def?.icon || ''} ${def?.name || petId} กลับมาใช้งานแล้ว!` });
 });
 
 router.post('/pet/release', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const { petId } = req.body || {};
   const row = getPet(c.id, petId);
-  if (!row) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้ในคอก' });
+  if (!row) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้' });
   const def = PET_BY_ID[petId];
   const gold = 20 + (row.level - 1) * 10; // ทองปลอบใจตามเลเวล
   releasePet(c.id, petId);
@@ -1270,10 +1325,10 @@ router.post('/boss/act', (req, res) => {
     }
     // 🦄 ยูนิคอร์น — กันกับดัก 1 ครั้ง/รอบ (โล่สะสมใหม่ทุกครั้งที่ชนะบอส)
     if (petPerks(c).trapShield) setPetTrapShield(c.id, 1);
-    // 💳 บอสลับ — การันตีบัตรขยายคอก 1 ใบแรก (ถ้ายังไม่มีเลย) — คอกสัตว์ขยายช่องได้
-    if (fight.boss.isAlt && !getInventory(c.id).some((i) => i.item_id === 171)) {
-      addItem(c.id, 171, 1);
-      lootNote += ' + 💳 บัตรขยายคอก (ของรางวัลบอสลับ — ครั้งแรก)';
+    // 👜 บอสลับ — การันตีกระเป๋าเก็บสัตว์ 1 ใบแรก (ถ้ายังไม่มีเลย)
+    if (fight.boss.isAlt && !getInventory(c.id).some((i) => i.item_id === PET_BAG_ID)) {
+      addItem(c.id, PET_BAG_ID, 1);
+      lootNote += ' + 👜 กระเป๋าเก็บสัตว์ (ของรางวัลบอสลับ — ครั้งแรก)';
     }
     updateCharacter(c);
     addTrophy(c.id, fight.boss.name, fight.boss.icon); // ห้องเก็บถ้วยรางวัล — ชนะบอสครั้งแรกของบอสนั้น (INSERT OR IGNORE)

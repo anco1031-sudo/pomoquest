@@ -277,11 +277,11 @@ export const ITEMS = [
   // ---- กล่องลึกลับตลาดมืด (type: mystery) — ซื้อแล้วเปิดเลย (สุ่มของคุ้ม/เจ๊ง deterministic จากค่ายพัก) ไม่เข้าสู่กระเป๋า ----
   { id: 220, name: 'กล่องลึกลับ', icon: '📦', type: 'mystery', price: 180, desc: '✦ กล่องปริศนาจากตลาดมืด — ซื้อแล้วเปิดดูเลย! (สุ่มของคุ้มหรือเจ๊ง)' },
 
-  // ---- ระบบสัตว์เลี้ยง: ไข่ปริศนา + บัตรขยายคอก (ดรอปหายาก — ไม่ขายในร้าน) ----
+  // ---- ระบบสัตว์เลี้ยง: ไข่ปริศนา + กระเป๋าเก็บสัตว์ ----
   // ไข่ — ใช้แล้วฟักออกมาเป็นสัตว์เลี้ยง (สุ่ม rarity ฝั่ง server ไม่สปอยล์ — hover เห็นแค่ "ไข่ปริศนา")
   { id: 170, name: 'ไข่ปริศนา', icon: '🥚', type: 'consumable', use_egg: 1, price: 0, desc: 'ไข่ปริศนาจากการผจญภัย — ใช้แล้วฟักออกมาเป็นสัตว์เลี้ยง! (อะไรจะฟักออกมา? สุ่มตัวนึง)' },
-  // บัตรขยายคอก — ใช้แล้วขยายช่องเลี้ยงสัตว์ +1 (เริ่ม 1 ช่อง สูงสุด 4)
-  { id: 171, name: 'บัตรขยายคอก', icon: '💳', type: 'consumable', use_stall: 1, price: 0, exclusive: true, desc: '✦ หายากมาก — ใช้แล้วขยายคอกสัตว์เลี้ยง +1 ช่อง (สูงสุด 4)' },
+  // กระเป๋าเก็บสัตว์ — ใช้แล้วเก็บสัตว์เลี้ยงที่ active ไว้ในกระเป๋า (ปลดล็อคช่องเก็บ 1 ช่อง)
+  { id: 173, name: 'กระเป๋าเก็บสัตว์', icon: '👜', type: 'consumable', use_pet_bag: 1, price: 60, desc: 'เก็บสัตว์เลี้ยงไว้ในกระเป๋า — ใช้เพื่อเก็บสัตว์เลี้ยงแล้วสลับตัวอื่นหรือฟักไข่' },
 ];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
@@ -509,7 +509,7 @@ export const PET_RARITY_ROLL = [
 
 // ร้านค้าขายเฉพาะไอเทมธรรมดา — ไอเทม exclusive (พิเศษ) หาซื้อไม่ได้, ของขวัญ (junk) และคัมภีร์ (scroll) ไม่ขายในร้าน
 // (item.type: consumable/weapon/armor/accessory, exclusive = ได้จาก Daily Quest เท่านั้น)
-export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery' && (i.type !== 'consumable' || [1, 2, 3, 4, 150].includes(i.id)));
+export const SHOP_STOCK = ITEMS.filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery' && (i.type !== 'consumable' || [1, 2, 3, 4, 150, 173].includes(i.id)));
 
 // ----- ยศ (Rank) — อัปตามเวลาโฟกัสสะสม (นาที) -----
 export const RANKS = [
@@ -568,7 +568,7 @@ export const PETS = [
   },
 ];
 export const PET_BY_ID = Object.fromEntries(PETS.map((p) => [p.id, p]));
-export const PET_MAX_SLOTS = 4;      // คอกสัตว์สูงสุด 4 ช่อง (เริ่ม 1)
+export const PET_BAG_ID = 173;        // 👜 กระเป๋าเก็บสัตว์ — ใช้แล้วเก็บสัตว์เลี้ยง
 // เลเวล pet — ค่าพิเศษ x(1 + 0.1*(level-1)): Lv.10 = x2
 // XP ที่ต้องใช้เลเวลอัพ (แบบเดียวกับสกิล — เลเวลสูง ยิ่งยาก)
 export const petXpToNext = (level) => 40 * level;

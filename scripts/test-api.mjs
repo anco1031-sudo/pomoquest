@@ -670,12 +670,12 @@ try {
     expect('gift: เปิดแล้ว 🎁 หายจากกระเป๋า', r.status === 200 && !inv2.some((x) => x.item_id === 193), JSON.stringify(inv2.map((x) => x.item_id)));
   }
 
-  // --- 🐾 ระบบสัตว์เลี้ยง: ใช้ไข่ = เริ่มฟัก (รอจบ 1 session) / บัตรขยายคอก / สลับ / ปล่อย ---
+  // --- 🐾 ระบบสัตว์เลี้ยง: ใช้ไข่ = เริ่มฟัก (รอจบ 1 session) / กระเป๋าเก็บสัตว์ / เก็บ / เอาออก / ปล่อย ---
   {
     const petCid = (await api('/state')).json.character.id;
-    // เริ่ม: ยังไม่มี pet, คอก 1 ช่อง
+    // เริ่ม: ยังไม่มี pet, ไม่มีกระเป๋า
     r = await api('/state');
-    expect('pet: เริ่มต้นมีคอก 1 ช่อง ไม่มีสัตว์เลี้ยง', r.json.character.petSlots === 1 && r.json.character.pets.length === 0, JSON.stringify(r.json.character.pets));
+    expect('pet: เริ่มต้นไม่มีสัตว์เลี้ยง', r.json.character.pets.length === 0 && (r.json.character.petBagCapacity || 0) === 0, JSON.stringify(r.json.character.pets));
     // ใช้ไข่ → เริ่มฟัก (ยังไม่ฟักทันที — รอจบ 1 session) + ป้าย hatchPending
     addItem(petCid, 170, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
@@ -691,37 +691,50 @@ try {
     const petId = r.json.character.pets[0].id;
     expect('pet: serialize มีค่าพิเศษ + เลเวล + XP', !!r.json.character.pets[0].desc && r.json.character.pets[0].level === 1 && r.json.character.pets[0].xpNext > 0, JSON.stringify(r.json.character.pets[0]));
     expect('pet: ฟักแล้ว hatchPending กลับเป็น false', r.json.character.hatchPending === false, String(r.json.character.hatchPending));
-    // คอกเต็ม 1/1 → ใช้ไข่ฟองใหม่ไม่ได้ (เช็คตอนเริ่มฟัก)
+    // มีสัตว์เลี้ยง active → ใช้ไข่ไม่ได้
     addItem(petCid, 170, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
-    expect('pet: คอกเต็ม → ใช้ไข่ไม่ได้', r.status === 400 && r.json.error.includes('คอก'), r.json.error || '');
-    // บัตรขยายคอก → 2 ช่อง
-    addItem(petCid, 171, 1);
-    r = await api('/inventory/use', { method: 'POST', body: { itemId: 171 } });
-    expect('pet: บัตรขยายคอก → 2/4 ช่อง', r.status === 200 && r.json.character.petSlots === 2, r.json.message || r.json.error);
-    // ฟักไข่ฟองที่ 2 (ใช้ไข่ → จบ session) — อาจฟักเจอตัวเดิม (ค่าปลอบใจ) หรือตัวใหม่ — ลองจนได้ตัวใหม่
-    let hatched2 = false;
-    for (let attempt = 0; attempt < 10 && !hatched2; attempt++) {
-      addItem(petCid, 170, 1);
-      r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
-      r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
-      hatched2 = r.status === 200 && r.json.character.pets.length === 2;
-    }
-    expect('pet: ฟักไข่ฟองที่ 2 สำเร็จ (2/2)', hatched2, r.json.message || r.json.error || JSON.stringify(r.json.hatch));
-    // สลับตัวที่ใช้งาน
-    const other = r.json.character.pets.find((p) => p.id !== petId);
-    r = await api('/pet/swap', { method: 'POST', body: { petId: other.id } });
-    expect('pet: สลับตัวที่ใช้งานได้', r.status === 200 && r.json.character.pets.find((p) => p.id === other.id).active === true && r.json.character.pets.find((p) => p.id === petId).active === false, r.json.message || r.json.error);
-    // ปล่อย pet → ได้ทองปลอบใจ + ช่องว่าง
+    expect('pet: มีสัตว์เลี้ยง active → ใช้ไข่ไม่ได้', r.status === 400 && r.json.error.includes('สัตว์เลี้ยง'), r.json.error || '');
+    // ไม่มีกระเป๋า → เก็บสัตว์เลี้ยงไม่ได้
+    r = await api('/pet/store', { method: 'POST' });
+    expect('pet: ไม่มีกระเป๋า → เก็บไม่ได้', r.status === 400 && r.json.error.includes('กระเป๋า'), r.json.error || '');
+    // ใช้กระเป๋าเก็บสัตว์ → เก็บสัตว์เลี้ยง + pet_bag_capacity = 1
+    addItem(petCid, 173, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 173 } });
+    expect('pet: ใช้กระเป๋าเก็บสัตว์ → pet เก็บ + capacity = 1', r.status === 200 && r.json.character.pets.some((p) => p.stored) && (r.json.character.petBagCapacity || 0) === 1, r.json.message || r.json.error);
+    // ไม่มี active pet → ใช้ไข่ได้
+    addItem(petCid, 170, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 170 } });
+    expect('pet: ไม่มี active pet → ใช้ไข่ได้', r.status === 200 && r.json.character.hatchPending === true, r.json.message || r.json.error);
+    // จบ session → ไข่ฟองที่ 2 ฟัก (อาจซ้ำ = dup, หรือใหม่ — ทั้งสองก็ได้)
+    r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
+    expect('pet: จบ session → ไข่ฟองที่ 2 ฟัก', r.status === 200 && r.json.hatch && (r.json.hatch.dup || r.json.character.pets.length === 2), r.json.message || r.json.error || JSON.stringify(r.json.hatch));
+    // ทดสอบ /pet/store + /pet/unstore กับสัตว์เลี้ยงที่ active
+    addItem(petCid, 173, 1); // เพิ่มกระเป๋าเก็บสัตว์
+    r = await api('/pet/store', { method: 'POST' });
+    expect('pet: /pet/store → active pet ถูกเก็บ', r.status === 200, r.json.message || r.json.error);
+    // เอาตัว stored ออกจากกระเป๋า (ตัวแรกที่ stored)
+    const storedPet = r.json.character.pets.find((p) => p.stored);
+    expect('pet: มีสัตว์เลี้ยง stored', !!storedPet, JSON.stringify(r.json.character.pets));
+    r = await api('/pet/unstore', { method: 'POST', body: { petId: storedPet.id } });
+    expect('pet: /pet/unstore → กลับมา active', r.status === 200 && r.json.character.pets.find((p) => p.id === storedPet.id)?.active === true, r.json.message || r.json.error);
+    // ปล่อยสัตว์เลี้ยง
     const goldBefore = r.json.character.gold;
-    r = await api('/pet/release', { method: 'POST', body: { petId: petId } });
-    expect('pet: ปล่อย pet → ทองปลอบใจ + เหลือ 1 ตัว', r.status === 200 && r.json.character.pets.length === 1 && r.json.character.gold > goldBefore, r.json.message || r.json.error);
+    r = await api('/pet/release', { method: 'POST', body: { petId: storedPet.id } });
+    expect('pet: ปล่อย pet → ทองปลอบใจ', r.status === 200 && r.json.character.gold > goldBefore, r.json.message || r.json.error);
+    // เอาตัวที่เหลือออกจากกระเป๋า (ถ้ามี) เพื่อทดสอบ event XP
+    const remaining = r.json.character.pets.find((p) => p.stored);
+    if (remaining) {
+      r = await api('/pet/unstore', { method: 'POST', body: { petId: remaining.id } });
+      expect('pet: unstore ตัวที่เหลือ', r.status === 200, r.json.message || r.json.error);
+    }
     // event → pet ได้ XP
     r = await api('/adventure/event', { method: 'POST', body: { key: 'treasure' } });
-    expect('pet: event → pet สะสม XP', r.status === 200 && r.json.character.pets[0].xp > 0, JSON.stringify(r.json.character.pets));
+    expect('pet: event → pet สะสม XP', r.status === 200 && r.json.character.pets.some((p) => p.xp > 0), JSON.stringify(r.json.character.pets));
     // adventure complete → pet ได้ XP จากโฟกัส
     r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
-    expect('pet: โฟกัส → pet สะสม XP (25 นาที = 25 XP)', r.status === 200 && r.json.character.pets[0].xp >= 25, JSON.stringify(r.json.character.pets[0]));
+    const activeP = r.json.character.pets.find((p) => p.active);
+    expect('pet: โฟกัส → pet สะสม XP (25 นาที = 25 XP)', r.status === 200 && activeP && activeP.xp >= 25, JSON.stringify(activeP));
   }
 
   // --- 🎭 จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙 (เปิดค่าพิเศษคลาส — บังคับเวลาผ่าน POMOQUEST_HOUR) ---

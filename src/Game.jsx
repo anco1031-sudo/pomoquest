@@ -351,7 +351,7 @@ export default function Game() {
     }
     // 🥚 ไข่ที่กำลังฟัก — จบ session แล้วไข่ฟัก → เปิด modal ฉลอง (server สุ่มตอนฟักจริง ไม่สปอยล์ก่อนหน้านี้)
     if (res.hatch) {
-      if (res.hatch.waiting) showToast(`🥚 ${res.hatch.message || 'คอกสัตว์เต็ม — ไข่รอฟักอยู่'}`);
+      if (res.hatch.waiting) showToast(`🥚 ${res.hatch.message || 'ต้องเก็บสัตว์เลี้ยงก่อน — ใช้ 👜 กระเป๋าเก็บสัตว์'}`);
       else {
         if (res.hatch.dup) sfx.coin(); // ฟักเป็นตัวเดิม → ได้ค่าปลอบใจทอง
         else sfx.hatch(); // ป๊อป + สายฟ้า — ฉลอง pet ใหม่
@@ -865,7 +865,7 @@ export default function Game() {
             {hatchResult.dup ? (
               <p className="hint">🐾 มี {hatchResult.pet.icon} {hatchResult.pet.name} อยู่ในคอกแล้ว — ไข่ฟักเป็นตัวเดิม ได้ค่าปลอบใจ <b>+{hatchResult.gold} ทอง</b></p>
             ) : (
-              <p className="hint">ยินดีต้อนรับ! {hatchResult.pet.icon} {hatchResult.pet.name} ตั้งเป็นตัวที่ใช้งานแล้ว — ดูค่าพิเศษได้ที่คอกสัตว์ 🐾</p>
+              <p className="hint">ยินดีต้อนรับ! {hatchResult.pet.icon} {hatchResult.pet.name} ตั้งเป็นตัวที่ใช้งานแล้ว — ดูค่าพิเศษได้ที่แท็บสัตว์เลี้ยง 🐾</p>
             )}
             <div className="modal-actions">
               <button className="btn btn-primary btn-big" onClick={() => { sfx.levelup(); setHatchResult(null); }}>

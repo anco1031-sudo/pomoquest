@@ -94,21 +94,14 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
     await post('/inventory/equip', { itemId: i.item_id });
   };
 
-  // ขายของ — ถ้ามีซ้ำมากกว่า 1 ให้ถามจำนวนที่จะขาย (modal เลือกจำนวน)
+  // ขายของ — เปิด modal เลือกจำนวนเสมอ (แม้ 1 ชิ้น)
   const openSell = (i) => {
     sfx.click();
-    if (i.qty > 1) {
-      setSellTarget(i);
-      setSellQty(1);
-    } else {
-      sellItem(i, 1);
-    }
+    setSellTarget(i);
+    setSellQty(1);
   };
 
   const sellItem = async (i, qty) => {
-    const sp = sellPrices[i.item_id] || {};
-    const bmNote = blackMarket && i.type === 'junk' ? ' (ตลาดมืดรับซื้อแพงกว่า +25%!)' : sp.wanted ? ' (พ่อค้าต้องการของชิ้นนี้ — ขายได้แพง!)' : '';
-    if (qty === 1 && !window.confirm(`ขาย ${i.name} x1?${bmNote}`)) return;
     await post('/shop/sell', { itemId: i.item_id, qty, visit }); // server โชว์ toast ยืนยันเองผ่าน d.message
     setSellTarget(null);
   };
@@ -116,6 +109,10 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
   const confirmSell = async () => {
     if (!sellTarget || sellQty < 1) return;
     await sellItem(sellTarget, Math.min(sellQty, sellTarget.qty));
+  };
+  const sellAll = async () => {
+    if (!sellTarget) return;
+    await sellItem(sellTarget, sellTarget.qty);
   };
 
   const twoHandTag = (i) => (i.type === 'weapon' && i.handed === 2 ? <span className="twohand-tag">สองมือ</span> : null);
@@ -381,10 +378,10 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       <button
                         className="btn btn-sm"
                         onClick={() => useItem(i)}
-                        disabled={!!(i.useEgg && character.hatchPending)}
-                        title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : ''}
+                        disabled={!!(i.useEgg && (character.hatchPending || (character.pets || []).some((p) => p.active)))}
+                        title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : i.useEgg && (character.pets || []).some((p) => p.active) ? '🐾 มีสัตว์เลี้ยงอยู่ — ต้องเก็บสัตว์เลี้ยงก่อน (ใช้ 👜 กระเป๋าเก็บสัตว์)' : ''}
                       >
-                        {i.useGift ? '🎁 เปิด' : 'ใช้'}
+                        {i.useGift ? '🎁 เปิด' : i.usePetBag ? '👜 เก็บสัตว์' : 'ใช้'}
                       </button>
                     ) : i.type === 'scroll' ? (
                       <span className="junk-note">📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)</span>
@@ -455,6 +452,11 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
               <button className="btn btn-primary" onClick={confirmSell}>
                 💰 ขาย {sellQty} ชิ้น — {(sellPrices[sellTarget.item_id]?.price ?? Math.round(sellTarget.price * 0.5)) * sellQty} ทอง
               </button>
+              {sellTarget.qty > 1 && (
+                <button className="btn btn-wanted" onClick={sellAll}>
+                  💰 ขายทั้งหมด x{sellTarget.qty} — {(sellPrices[sellTarget.item_id]?.price ?? Math.round(sellTarget.price * 0.5)) * sellTarget.qty} ทอง
+                </button>
+              )}
               <button className="btn" onClick={() => setSellTarget(null)}>ยกเลิก</button>
             </div>
           </div>
