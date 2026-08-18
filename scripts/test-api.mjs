@@ -203,7 +203,8 @@ try {
     r = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
     const bm = r.json.blackMarket;
     // response ใช้ field `price` (ราคาลดแล้ว) + `bmNormal` (ราคาปกติ) — 5 ช่อง: คัมภีร์/ของหายาก/ของเถื่อน/ของพิเศษ exclusive + กล่องลึกลับ (ราคาเต็ม)
-    expect('camp: ตลาดมืด 5 ชิ้น (4 ราคาลด + กล่องลึกลับราคาเต็ม)', !!bm && bm.items.length === 5 && bm.items.filter((i) => i.id !== 220).every((i) => i.price < i.bmNormal) && bm.items.some((i) => i.id === 220 && i.price === i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.price, i.bmNormal])));
+    // junk (ของหายาก/ขยะ) ราคาเต็ม — ตลาดมืดรับซื้อ +25% อยู่แล้ว ไม่ลดซ้ำ (กันปั่นทอง) · ของไม่ใช่ junk ลดพิเศษ
+    expect('camp: ตลาดมืด 5 ชิ้น — junk ราคาเต็ม / ของอื่นลด / กล่องลึกลับราคาเต็ม', !!bm && bm.items.length === 5 && bm.items.filter((i) => i.id !== 220).every((i) => (i.type === 'junk' ? i.price === i.bmNormal : i.price < i.bmNormal)) && bm.items.some((i) => i.id === 220 && i.price === i.bmNormal), JSON.stringify(bm?.items?.map((i) => [i.name, i.type, i.price, i.bmNormal])));
     expect('black market: มีของพิเศษ exclusive หลุดมา (ไม่ใช่ถุงเงินนำโชค 40)', !!bm?.items.some((i) => i.exclusive && i.id !== 40), JSON.stringify(bm?.items?.map((i) => i.name)));
     const r2 = await api(`/camp?visit=${encodeURIComponent(bmVisit)}`);
     expect('black market: เปิดหน้าเดิมซ้ำ ของ/ราคาเหมือนเดิม (deterministic)', JSON.stringify(r.json.shop) === JSON.stringify(r2.json.shop));
@@ -236,6 +237,7 @@ try {
     // (หน่วย: ตรวจ bmStockFor ตรง ๆ — ลำดับสล็อตชัดเจน) + (API: หน้า /camp ตรงกัน)
     const stockNs = bmStockFor(bmNoScrollVisit, { id: cid });
     expect('black market: คืนที่ไม่มีคัมภีร์ → ช่องแรกเป็นแบบแปลน/ของหายากแทน', !stockNs.some((x) => x.type === 'scroll') && ['blueprint', 'junk'].includes(stockNs[0].type), JSON.stringify(stockNs.map((x) => [x.name, x.type])));
+    expect('black market: junk ราคาเต็ม (รับซื้อ +25% อยู่แล้ว) · ของอื่นลดราคา', stockNs.filter((x) => x.type === 'junk').every((x) => x.bmPrice === x.bmNormal) && stockNs.filter((x) => x.type !== 'junk' && x.type !== 'mystery').every((x) => x.bmPrice < x.bmNormal), JSON.stringify(stockNs.map((x) => [x.name, x.type, x.bmPrice, x.bmNormal])));
     r = await api(`/camp?visit=${encodeURIComponent(bmNoScrollVisit)}`);
     const bmNs = r.json.blackMarket;
     expect('black market: หน้า /camp ตรงกัน — ไม่มีคัมภีร์ขาย (มีแบบแปลน/ของหายากแทน)', !!bmNs && !bmNs.items.some((i) => i.type === 'scroll') && bmNs.items.some((i) => ['blueprint', 'junk'].includes(i.type)), JSON.stringify(bmNs?.items?.map((i) => [i.name, i.type])));
@@ -253,7 +255,7 @@ try {
     const recipeIns = db.prepare('INSERT OR IGNORE INTO character_recipe (character_id, recipe_id) VALUES (?, ?)');
     for (const bid of blueprintIds) recipeIns.run(cid, ITEM_BY_ID[bid].learn_recipe);
     const stockRecipesLearned = bmStockFor(bmNoScrollVisit, { id: cid });
-    expect('black market: เรียนสูตรคราฟต์ครบ 4 สูตร → ไม่มีแบบแปลนขาย (ช่องแรกเป็นของหายาก)', !stockRecipesLearned.some((x) => x.type === 'blueprint') && stockRecipesLearned[0].type === 'junk', JSON.stringify(stockRecipesLearned.map((x) => [x.name, x.type])));
+    expect('black market: เรียนสูตรคราฟต์ครบ 4 สูตร → ไม่มีแบบแปลนขาย (ช่องแรกเป็นของหายากราคาเต็ม)', !stockRecipesLearned.some((x) => x.type === 'blueprint') && stockRecipesLearned[0].type === 'junk' && stockRecipesLearned[0].bmPrice === stockRecipesLearned[0].bmNormal, JSON.stringify(stockRecipesLearned.map((x) => [x.name, x.type, x.bmPrice, x.bmNormal])));
     for (const bid of blueprintIds) db.prepare('DELETE FROM character_recipe WHERE character_id = ? AND recipe_id = ?').run(cid, ITEM_BY_ID[bid].learn_recipe); // คืนสภาพ — เทสต์อื่นไม่เห็นสูตรคราฟต์
   }
 
@@ -424,7 +426,7 @@ try {
     r = await devPost('/dev/black-market', { visit: bmVisit });
     expect('dev bm: คืนรายการสินค้า 5 ชิ้น (preview — +กล่องลึกลับ)', r.status === 200 && Array.isArray(r.json.items) && r.json.items.length === 5 && r.json.items.some((i) => i.id === 220), JSON.stringify(r.json.items || []).slice(0, 80));
     const bmItems = r.json.items;
-    expect('dev bm: 4 ชิ้นแรกมีราคาลด (bmPrice) + tag · กล่องลึกลับราคาเต็ม', bmItems.filter((i) => i.id !== 220).every((i) => i.bmPrice >= 1 && (i.bmNormal === 0 || i.bmNormal > i.bmPrice) && i.bmTag) && bmItems.find((i) => i.id === 220)?.bmNormal === bmItems.find((i) => i.id === 220)?.bmPrice, '');
+    expect('dev bm: junk ราคาเต็ม (bmPrice=bmNormal) · ของอื่นลด + tag · กล่องลึกลับราคาเต็ม', bmItems.filter((i) => i.id !== 220).every((i) => i.bmPrice >= 1 && (i.type === 'junk' ? i.bmNormal === i.bmPrice : i.bmNormal > i.bmPrice) && i.bmTag) && bmItems.find((i) => i.id === 220)?.bmNormal === bmItems.find((i) => i.id === 220)?.bmPrice, '');
     expect('dev bm: junkMult = 1.25', r.json.junkMult === 1.25, String(r.json.junkMult));
     // deterministic: เรียกซ้ำ visit เดียวกัน → ของเหมือนเดิม
     const r2 = await devPost('/dev/black-market', { visit: bmVisit });

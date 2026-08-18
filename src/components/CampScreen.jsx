@@ -205,7 +205,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
           <>
             <div className="panel bm-panel">
               <div className="panel-title bm-title">🖤 ตลาดมืด (พ่อค้าเงาลึกลับ)</div>
-              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายาก + ของพิเศษ exclusive (ปกติได้จาก Daily Quest เท่านั้น!) ราคาลดพิเศษ — ซื้อได้ครั้งเดียวต่อค่ายพัก · บางชิ้นตลาดมืดไม่อยากได้ → ยกให้ฟรี 🎁</p>
+              <p className="bm-hint">รับซื้อของขวัญ (junk) แพงกว่าปกติ <b>+25%</b> · ขายของหายาก/แบบแปลน/ของพิเศษ exclusive (ปกติได้จาก Daily Quest เท่านั้น!) ราคาลดพิเศษ — ขยะ/ของหายาก (junk) ราคาเต็ม (รับซื้อ +25% อยู่แล้ว ไม่ลดซ้ำ) — ซื้อได้ครั้งเดียวต่อค่ายพัก · บางชิ้นตลาดมืดไม่อยากได้ → ยกให้ฟรี 🎁</p>
               <div className="shop-list">
                 {blackMarket.items.map((i) => (
                   <div className="shop-row" key={i.id}>
@@ -216,7 +216,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                       </div>
                       <ItemStatChips item={i} character={character} />
                       <div className="inv-desc">{i.desc}</div>
-                      {i.bmNormal > 0 && (
+                      {i.bmNormal > 0 && i.bmNormal !== i.price && (
                         <div className="bm-normal">ปกติ {i.bmNormal} ทอง → {i.free ? <b className="free-price">ฟรี!</b> : <b>{i.price} ทอง</b>}</div>
                       )}
                       <ItemCompare item={i} character={character} />

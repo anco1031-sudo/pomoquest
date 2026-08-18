@@ -66,6 +66,7 @@ const mulberry32 = (a) => () => {
 // เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส → โอกาสเจอตลาดมืดเพิ่มขึ้น (+10% ต่อรอบ สูงสุด +35%)
 // รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%), ของพิเศษ exclusive (ลด 10%)
 // คัมภีร์ไม่การันตี — มีโอกาส ~45% ต่อตลาดมืด (BM_SCROLL_CHANCE) · ไม่เจอ → แบบแปลน 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้วไม่ขายคัมภีร์อีก / เรียนสูตรคราฟต์ครบ 4 สูตรแล้วไม่ขายแบบแปลนอีก (กันช่องตาย)
+// junk (ของหายาก/ขยะ) ขายราคาเต็ม — ตลาดมืดรับซื้อ junk +25% (BM_JUNK_MULT) อยู่แล้ว ถ้าลดราคาขายด้วย = ซื้อลดแล้วขายคืนกำไร (ปั่นทอง)
 export const BM_OPEN_CHANCE = 0.25;
 export const BM_JUNK_MULT = 1.25;
 export const BM_SCROLL_CHANCE = 0.45;
@@ -90,17 +91,20 @@ export function bmStockFor(visit, c = null) {
   const scrollAltPool = allRecipesLearned ? RARE_JUNK : [...BLUEPRINT_ITEMS, ...RARE_JUNK];
   const scrollAlt = scroll ?? ITEM_BY_ID[pick(scrollAltPool)];
   const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
-  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery');
+  // ของเถื่อนเก็งกำไร: เฉพาะเกียร์/ของใช้ (ตัด junk ออก — junk ราคาเต็ม + รับซื้อ +25% อยู่แล้ว กันปั่นทองผ่านช่องนี้)
+  const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery');
   const spec = pick(specPool);
   // ของพิเศษ exclusive หลุดมาจาก daily quest (ยกเว้น ถุงเงินนำโชค id 40 — กันวนซื้อแล้วใช้ +150 ทอง)
   const bmExclusive = pick(ITEMS.filter((i) => i.exclusive && i.id !== 40));
   // กล่องลึกลับ — ซื้อแล้วเปิดเลย (สุ่มของคุ้ม/เจ๊ง deterministic จากค่ายพัก) — ไม่เข้าสู่กระเป๋า
   const box = ITEM_BY_ID[MYSTERY_BOX_ID];
+  // junk (ของหายาก/ขยะ) = ราคาเต็ม (รับซื้อ +25% อยู่แล้ว ไม่ลดซ้ำ) · ของไม่ใช่ junk ได้ส่วนลดตามช่อง
+  const priceOf = (item, mult) => (item.type === 'junk' ? bmDisc(item, 1) : bmDisc(item, mult));
   return [
-    { ...scrollAlt, ...bmDisc(scrollAlt, scroll ? 0.85 : 0.75), bmTag: scroll ? 'คัมภีร์หายาก' : (scrollAlt.type === 'blueprint' ? 'แบบแปลนสูตรคราฟต์' : 'ของหายาก') },
-    { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
+    { ...scrollAlt, ...(scroll ? bmDisc(scroll, 0.85) : priceOf(scrollAlt, 0.75)), bmTag: scroll ? 'คัมภีร์หายาก' : (scrollAlt.type === 'blueprint' ? 'แบบแปลนสูตรคราฟต์' : 'ของหายาก') },
+    { ...rare, ...priceOf(rare, 0.75), bmTag: 'ของหายาก' },
     { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
-    { ...bmExclusive, ...bmDisc(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
+    { ...bmExclusive, ...priceOf(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
     { ...box, ...bmDisc(box, 1), bmTag: 'กล่องลึกลับ (เสี่ยงโชค)' },
   ];
 }
