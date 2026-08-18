@@ -33,8 +33,6 @@ const DEV_KEY = 'pomoquest-dev-token';
 export default function DevPanel({ onClose }) {
   const { showToast } = useGame();
   const [token, setToken] = useState(() => localStorage.getItem(DEV_KEY) || '');
-  const [user, setUser] = useState('');
-  const [pass, setPass] = useState('');
   const [itemId, setItemId] = useState(1);
   const [achieveId, setAchieveId] = useState('first_step');
   const [busy, setBusy] = useState(false);
@@ -42,7 +40,7 @@ export default function DevPanel({ onClose }) {
 
   const toast = (msg) => showToast(msg);
 
-  const login = async (u = user, p = pass) => {
+  const login = async (u = 'admin', p = 'admin') => {
     try {
       const d = await apiDevPost('/dev/login', { user: u, pass: p });
       if (d?.token) {
@@ -144,23 +142,8 @@ export default function DevPanel({ onClose }) {
 
         {!token ? (
           <div className="dev-login">
-            <button className="btn btn-primary btn-big" onClick={() => login('admin', 'admin')} disabled={busy}>⚡ เข้าสู่ระบบเร็ว (admin/admin)</button>
-            <span className="hint">หรือกรอกเอง (DEV_USER / DEV_PASS)</span>
-            <input
-              className="input"
-              placeholder="user (admin)"
-              value={user}
-              onChange={(e) => setUser(e.target.value)}
-            />
-            <input
-              className="input"
-              type="password"
-              placeholder="pass"
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && login()}
-            />
-            <button className="btn btn-big" onClick={login} disabled={busy}>🔓 เข้าสู่ระบบ</button>
+            <button className="btn btn-primary btn-big" onClick={() => login()} disabled={busy}>⚡ เข้าสู่ระบบเร็ว (admin/admin)</button>
+            <p className="hint">💡 ระบบ dev รีสตาร์ท server แล้วต้อง login ใหม่</p>
           </div>
         ) : (
           <>

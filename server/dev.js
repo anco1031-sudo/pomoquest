@@ -1,5 +1,4 @@
 // server/dev.js — ระบบ dev test: เข้าสู่ระบบด้วย admin/admin แล้วทดสอบทุกระบบได้
-// ตั้งค่า user/pass ผ่าน env: DEV_USER, DEV_PASS
 // ⚠️ โหมด "ลองเล่น": ทุก action เขียนลง DB ภายใน transaction แล้ว ROLLBACK ทันที
 //    — แสดงผลเหมือนจริง (เลเวล/ทอง/ไอเทม/ตรา) แต่ไม่บันทึกอะไรลง DB (กันปั๊มเลเวล)
 import { Router } from 'express';
@@ -9,8 +8,9 @@ import { ITEM_BY_ID, CITIES, ACHIEVEMENTS, SECRET_ACHIEVEMENTS, SCROLL_SKILLS, S
 import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSkills, grantSkillXp, bmStockFor, BM_JUNK_MULT, exploreRewardMult } from './game.js';
 import { checkAchievements } from './achievements.js';
 
-const DEV_USER = process.env.DEV_USER || 'admin';
-const DEV_PASS = process.env.DEV_PASS || 'admin';
+// dev เป็นเครื่องมือทดสอบในเครื่อง + โหมดลองเล่นไม่บันทึก — ใช้ admin/admin ตายตัว (ไม่มี env ให้ตั้ง)
+const DEV_USER = 'admin';
+const DEV_PASS = 'admin';
 // token อยู่ในหน่วยความจำ — รีสตาร์ท server แล้วต้อง login ใหม่
 const tokens = new Set();
 
