@@ -1,4 +1,4 @@
-// ตรวจสอบ UI หน้า Session (โฟกัส): ฟอง pet (🐾 ตัวที่ active) + ป้าย 🥚 กำลังฟัก… ข้างไอคอนเมือง
+// ตรวจสอบ UI หน้า Session (โฟกัส): ฟอง pet (🐾 ตัวที่ active — ยังไม่มี pet = ไม่โชว์ฟองไข่หลอก) + ป้าย 🥚 กำลังฟัก… ข้างไอคอนเมือง
 // รัน: ต้องรัน server ที่ :3001 ก่อน (POMOQUEST_DB=ชั่วคราว + dist build แล้ว) แล้วรัน node scripts/egg-session.browser.mjs
 import { spawn } from 'node:child_process';
 import Database from 'better-sqlite3';
@@ -102,7 +102,7 @@ const petBox = await evalJs(`(() => {
     hasLv: !!el.querySelector('.pet-lv-tag'),
   };
 })()`);
-expect('session-pet: ฟอง pet ขึ้น (🥚 ยังไม่มีตัว) + ป้าย "กำลังฟัก"', !!petBox && petBox.bubble.includes('🥚') && petBox.badge.includes('กำลังฟัก') && !petBox.hasLv, JSON.stringify(petBox));
+expect('session-pet: ยังไม่มี pet → ไม่มีฟองไข่หลอก + ป้าย "กำลังฟัก" ขึ้น', !!petBox && petBox.bubble === '' && petBox.badge.includes('กำลังฟัก') && !petBox.hasLv, JSON.stringify(petBox));
 
 // ---- 1.5) บังคับเข้าค่ายพัก (short_break) → ฟอง 🥚 + ป้ายฟักขึ้นบน Camp ด้วย ----
 const forcedCamp1 = await evalJs(`(() => {
@@ -126,7 +126,7 @@ const campPet1 = await evalJs(`(() => {
   const chip = document.querySelector('.camp-header-right .hatch-chip')?.textContent?.trim() || '';
   return { bubble, chip, hasLv: !!document.querySelector('.camp-pet .pet-lv-tag') };
 })()`);
-expect('session-pet: Camp — ฟอง 🥚 + ป้าย "กำลังฟัก" (ยังไม่มี pet)', !!campPet1 && campPet1.bubble.includes('🥚') && campPet1.chip.includes('กำลังฟัก') && !campPet1.hasLv, JSON.stringify(campPet1));
+expect('session-pet: Camp — ไม่มีฟองไข่หลอก + ป้าย "กำลังฟัก" (ยังไม่มี pet)', !!campPet1 && campPet1.bubble === '' && campPet1.chip.includes('กำลังฟัก') && !campPet1.hasLv, JSON.stringify(campPet1));
 
 // ---- 1.6) เปิดแท็บตัวละคร (CharacterSheet) → คอกสัตว์มีป้าย 🥚 กำลังฟัก… ----
 const sheetTab = await evalJs(`(() => {

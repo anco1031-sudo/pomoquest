@@ -55,12 +55,17 @@ await send('Runtime.enable');
 await send('Page.navigate', { url: 'http://127.0.0.1:3001/' });
 await sleep(3500);
 
-// Home: มีฟอง pet (🥚 ถ้ายังไม่มี หรือ pet ที่ active)
+// Home: ฟอง pet แสดงเฉพาะเมื่อมี pet จริง — ยังไม่มี pet = ไม่โชว์ฟองไข่หลอก 🥚
 const bubble = await evalJs(`document.querySelector('.companion-bubble')?.textContent?.trim() || ''`);
-expect('Home: มีฟองสัตว์เลี้ยง (🥚/pet)', bubble.length > 0, `'${bubble}'`);
+const activeId = db.prepare('SELECT active_character_id FROM settings WHERE id = 1').get()?.active_character_id;
+const hasPetNow = activeId && db.prepare('SELECT COUNT(*) AS n FROM pet WHERE character_id = ?').get(activeId).n > 0;
+if (hasPetNow) {
+  expect('Home: มีฟอง pet (ตัวที่ active)', bubble.length > 0, `'${bubble}'`);
+} else {
+  expect('Home: ยังไม่มี pet → ไม่มีฟองไข่หลอก', bubble.length === 0, `'${bubble}'`);
+}
 
 // ให้ตัวละคร active มี pet จริง (ถ้ายังไม่มี — ฟักไข่ผ่าน API; มีแล้วข้าม) แล้วรีโหลดดูฟอง pet + Lv + อารมณ์
-const activeId = db.prepare('SELECT active_character_id FROM settings WHERE id = 1').get()?.active_character_id;
 if (activeId) {
   const hasPet = db.prepare('SELECT COUNT(*) AS n FROM pet WHERE character_id = ?').get(activeId).n > 0;
   if (!hasPet) {

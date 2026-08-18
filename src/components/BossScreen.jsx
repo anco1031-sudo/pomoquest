@@ -122,7 +122,7 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
       <div className="player-card">
         <div className="player-avatar">
           {character.classIcon}
-          {activePet ? (
+          {activePet && (
             <div
               className={`companion-bubble pet-mood-${petMood.level}`}
               title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
@@ -130,10 +130,6 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
               {activePet.icon}
               <span className="pet-lv-tag">Lv.{activePet.level}</span>
               <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
-            </div>
-          ) : (
-            <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~2%) แล้วใช้ฟักดูสิ!">
-              🥚
             </div>
           )}
           {/* ไข่กำลังฟัก (ใช้ไข่แล้ว — จะฟักหลังจบ 1 session) */}

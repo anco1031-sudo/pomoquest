@@ -1,5 +1,5 @@
-// ทดสอบพักยาว 😴 (เบราว์เซอร์จริง): เลือกจาก ⏸️ หรือ 🏠 ได้ · ตั้งชื่อ/เหตุผล (prompt) · พักยาวแยกหมวดสถิติ
-// "พักยาว" (long_pause_sec — ไม่ปนกับพักกลาง session/pause_sec) · กลับมาแล้ว modal ถามโฟกัสต่อ/ทิ้ง ·
+// ทดสอบพักยาว 😴 (เบราว์เซอร์จริง): เลือกจาก ⏸️ หรือ 🏠 ได้ · ต้องเลือกชื่อ/เหตุผลจากตัวเลือก (บังคับ — ไม่งั้นกด 😴 พักยาว ไม่ได้) · พักยาวแยกหมวดสถิติ
+// "พักยาว" (long_pause_sec — ไม่ปนกับพักกลาง session/pause_sec) · กลับมาแล้ว modal ถามโฟกัสต่อ/ทิ้ง (ทิ้งต้องเลือกเหตุผล) ·
 // โหมดมาราธอน: พักยาวแล้วจบ session → ยังเสีย session เหมือนเดิม (streak 0 + log abort)
 // รัน: ต้องรัน server ที่ :3001 ก่อน (POMOQUEST_DB=ชั่วคราว) แล้วรัน node scripts/long-pause.browser.mjs
 import { spawn } from 'node:child_process';
@@ -74,7 +74,7 @@ await send('Runtime.enable');
 await send('Page.navigate', { url: BASE });
 await sleep(2500);
 
-// ---- 1) เริ่ม session → ⏸️ หยุดพัก → เลือก 😴 พักยาว (ไม่มีชื่อ) ----
+// ---- 1) เริ่ม session → ⏸️ หยุดพัก → ต้องเลือกชื่อพักยาวจากตัวเลือกก่อน (ไม่งั้นกด 😴 พักยาว ไม่ได้) → เลือก 😴 พักยาว ----
 const startClicked = await evalJs(`(() => {
   const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('เริ่มผจญภัย'));
   if (!b) return false;
@@ -91,12 +91,27 @@ await evalJs(`(() => {
   return true;
 })()`);
 await sleep(600);
+// ยังไม่เลือกชื่อ/เหตุผล → ปุ่ม 😴 พักยาว ต้องกดไม่ได้ (disabled)
+const longDisabled = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักยาว'));
+  return b ? b.disabled : null;
+})()`);
+expect('พักยาว: ยังไม่เลือกเหตุผล → ปุ่ม 😴 พักยาว กดไม่ได้ (disabled)', longDisabled === true, `disabled=${longDisabled}`);
+// เลือกชื่อจากตัวเลือกสำเร็จรูป (🍚 กินข้าว) ก่อน
+const chip1 = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.pause-preset-chip')].find((x) => x.textContent.includes('กินข้าว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+expect('เลือกชื่อพักยาวจากตัวเลือกสำเร็จรูป (🍚 กินข้าว)', chip1 === true);
+await sleep(300);
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักยาว'));
   if (!b) return false;
   b.click();
   return true;
-})()`); // ไม่ตั้งชื่อ — ปล่อยว่าง
+})()`);
 await sleep(1000);
 let label = await evalJs(`document.querySelector('.timer-label')?.textContent || ''`);
 expect('⏸️ แล้วเลือกพักยาว → label "😴 พักยาว"', label.includes('พักยาว'), label.trim());
@@ -133,11 +148,18 @@ await evalJs(`(() => {
 })()`);
 await sleep(600);
 await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.pause-preset-chip')].find((x) => x.textContent.includes('กินข้าว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // เลือกชื่อพักยาวจากตัวเลือกก่อน
+await sleep(300);
+await evalJs(`(() => {
   const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักยาว'));
   if (!b) return false;
   b.click();
   return true;
-})()`); // พักยาว (ไม่มีชื่อ)
+})()`);
 await sleep(800);
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('กลับหน้าหลัก'));
@@ -170,7 +192,7 @@ await evalJs(`(() => {
 })()`);
 await sleep(500);
 
-// ---- 3.5) ทางลัด "😴 พักยาว" ที่แถบ Home: พักสั้น → กลับหน้าหลัก → กด 😴 พักยาว ตรง ๆ (ไม่ผ่าน modal) ----
+// ---- 3.5) ทางลัด "😴 พักยาว" ที่แถบ Home: พักสั้น → กลับหน้าหลัก → กด 😴 พักยาว → ต้องเลือกเหตุผลก่อน (ไม่งั้นกดยืนยันไม่ได้) ----
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('หยุดพัก'));
   if (!b) return false;
@@ -202,14 +224,35 @@ await evalJs(`(() => {
   if (!b) return false;
   b.click();
   return true;
-})()`); // กดทางลัด 😴 พักยาว ตรง ๆ (ไม่ผ่าน modal)
+})()`); // กดทางลัด 😴 พักยาว → เปิด modal เลือกเหตุผล (ยังไม่เปลี่ยนทันที)
+await sleep(600);
+const lpTitleModal = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
+expect('กดทางลัด 😴 พักยาว → เปิด modal เลือกเหตุผล', lpTitleModal.includes('เลือกเหตุผล') && lpTitleModal.includes('เปลี่ยนเป็นพักยาว'), lpTitleModal.replace(/\n/g, ' ').slice(0, 110));
+const lpConfirmDisabled = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('เปลี่ยนเป็นพักยาว'));
+  return b ? b.disabled : null;
+})()`);
+expect('ทางลัด: ยังไม่เลือกเหตุผล → ปุ่มเปลี่ยนเป็นพักยาว กดไม่ได้ (disabled)', lpConfirmDisabled === true, `disabled=${lpConfirmDisabled}`);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.pause-preset-chip')].find((x) => x.textContent.includes('กินข้าว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // เลือกเหตุผลจากตัวเลือก
+await sleep(300);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('เปลี่ยนเป็นพักยาว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // ยืนยัน → เปลี่ยนเป็นพักยาว
 await sleep(600);
 barState = await evalJs(`(() => ({
   icon: document.querySelector('.resume-bar .resume-icon')?.textContent || '',
   hasShortcut: [...document.querySelectorAll('.resume-bar button')].some((x) => x.textContent.includes('พักยาว')),
   bar: document.querySelector('.resume-bar')?.innerText || '',
 }))()`);
-expect('กด 😴 พักยาว ที่แถบ Home → เปลี่ยนเป็นพักยาวทันที (😴) + ปุ่มทางลัดหาย', barState.icon === '😴' && barState.hasShortcut === false && barState.bar.includes('พักยาว'), barState.bar.replace(/\n/g, ' ').slice(0, 130));
+expect('กด 😴 พักยาว ที่แถบ Home (เลือกเหตุผลแล้ว) → เปลี่ยนเป็นพักยาว (😴) + ปุ่มทางลัดหาย', barState.icon === '😴' && barState.hasShortcut === false && barState.bar.includes('พักยาว'), barState.bar.replace(/\n/g, ' ').slice(0, 130));
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('.resume-bar button')].find((x) => x.textContent.includes('โฟกัสต่อ'));
   if (!b) return false;

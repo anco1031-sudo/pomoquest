@@ -202,7 +202,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                 <button
                   className="btn btn-sm"
                   onClick={onLongPause}
-                  title={'เปลี่ยนเป็นพักยาว 😴 — แยกหมวดสถิติ "พักยาว" (ไม่ถามชื่อ)'}
+                  title={'เปลี่ยนเป็นพักยาว 😴 — แยกหมวดสถิติ "พักยาว" (ต้องเลือกเหตุผลจากตัวเลือกก่อน)'}
                 >
                   😴 พักยาว
                 </button>
@@ -251,7 +251,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
           <div className="hero-top">
             <div className="hero-avatar">
               {character.classIcon}
-              {activePet ? (
+              {activePet && (
                 <div
                   className={`companion-bubble pet-mood-${petMood.level}`}
                   title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
@@ -259,10 +259,6 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                   {activePet.icon}
                   <span className="pet-lv-tag">Lv.{activePet.level}</span>
                   <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
-                </div>
-              ) : (
-                <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~2%) แล้วใช้ฟักดูสิ!">
-                  🥚
                 </div>
               )}
               {/* ไข่กำลังฟัก (ใช้ไข่แล้ว — จะฟักหลังจบ 1 session) */}

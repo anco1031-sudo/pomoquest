@@ -137,7 +137,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
       <header className="camp-header">
         <div className="camp-title-block">
           <div className="camp-pet">
-            {activePet ? (
+            {activePet && (
               <div
                 className={`companion-bubble pet-mood-${petMood.level}`}
                 title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
@@ -145,10 +145,6 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                 {activePet.icon}
                 <span className="pet-lv-tag">Lv.{activePet.level}</span>
                 <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
-              </div>
-            ) : (
-              <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~2%) แล้วใช้ฟักดูสิ!">
-                🥚
               </div>
             )}
           </div>

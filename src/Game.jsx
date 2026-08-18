@@ -6,7 +6,7 @@ import { fmtTime, fmtDuration } from './components/ui.jsx';
 import CharacterCreation from './components/CharacterCreation.jsx';
 import CharacterSelect from './components/CharacterSelect.jsx';
 import HomeScreen from './components/HomeScreen.jsx';
-import TimerScreen from './components/TimerScreen.jsx';
+import TimerScreen, { PAUSE_PRESETS } from './components/TimerScreen.jsx';
 import CampScreen from './components/CampScreen.jsx';
 import BossScreen from './components/BossScreen.jsx';
 import EventModal from './components/EventModal.jsx';
@@ -32,7 +32,7 @@ function loadTimer(charId, epoch) {
   }
 }
 
-// เหตุผลทิ้ง session สำเร็จรูป (ตัวเลือกเร็ว — ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามเหตุผลได้) · พิมพ์เองก็ได้ที่ช่องอื่น ๆ
+// เหตุผลทิ้ง session สำเร็จรูป (ตัวเลือกเดียวเท่านั้น — บังคับเลือกก่อนทิ้ง ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามเหตุผลได้)
 const ABORT_PRESETS = [
   { id: 'call', icon: '📞', label: 'รับสาย/ธุระด่วน', full: '📞 รับสาย/ธุระด่วน' },
   { id: 'tired', icon: '😴', label: 'ง่วง/โฟกัสไม่ไหว', full: '😴 ง่วง/โฟกัสไม่ไหว' },
@@ -43,6 +43,15 @@ const ABORT_PRESETS = [
   { id: 'distracted', icon: '📱', label: 'เผลอไปอย่างอื่น', full: '📱 เผลอไปอย่างอื่น' },
   { id: 'other', icon: '🎲', label: 'อื่น ๆ', full: '🎲 อื่น ๆ' },
 ];
+
+// เกาะชื่อพักยาวมาเป็นเหตุผลเริ่มต้นตอนทิ้งจากพักยาว — หา abort preset ที่ไอคอนตรงกัน (เช่น 🍚 กินข้าว → 🍚 ต้องไปกินข้าว)
+// ไม่ตรงกัน = ปล่อยว่างให้เลือกเอง (พักยาวกับทิ้ง session เป็นคนละระบบ แต่เชื่อมต่อกันตรงนี้)
+const abortPresetFromPause = (pauseTitle) => {
+  const icon = (pauseTitle || '').trim().split(' ')[0];
+  if (!icon) return '';
+  const m = ABORT_PRESETS.find((p) => p.full.startsWith(icon));
+  return m ? m.full : '';
+};
 
 // สุ่มเวลาจนกว่า event ถัดไป: 30–90 วินาที (สุ่ม — ไม่มีการตั้งค่าแล้ว)
 // แต่ห้ามเลยเวลาที่เหลือของ session (เผื่อ 5 วิ) — เหลือ 30 วิ event ต้องเกิดภายใน 25 วิ
@@ -92,7 +101,9 @@ export default function Game() {
   const [postBossNote, setPostBossNote] = useState(null); // ชนะ/หนีบอสแล้ว — อยู่ใน "พักหลังชัยชนะ" (ข้อความสรุปผล) · null = ยังสู้บอสอยู่
   const [hatchResult, setHatchResult] = useState(null); // 🥚 ผลฟักไข่หลังจบ session — เปิด modal ฉลอง (null = ไม่มี)
   const [showAbortReason, setShowAbortReason] = useState(false); // modal ถามเหตุผลก่อนทิ้ง session
-  const [abortReasonInput, setAbortReasonInput] = useState(''); // เหตุผลที่เลือก/พิมพ์ (ส่งไป server + เก็บสถิติ)
+  const [abortReasonInput, setAbortReasonInput] = useState(''); // เหตุผลที่เลือก (ส่งไป server + เก็บสถิติ)
+  const [showLongPauseTitle, setShowLongPauseTitle] = useState(false); // ทางลัด 😴 พักยาว ที่แถบ Home — เลือกชื่อ/เหตุผลก่อนเปลี่ยนเป็นพักยาว
+  const [longPauseTitleInput, setLongPauseTitleInput] = useState(''); // ชื่อพักยาวที่เลือก (บังคับเลือกจากตัวเลือก)
   const abortWasRunningRef = useRef(false); // ก่อนเปิด modal ทิ้ง session — timer รันอยู่ไหม (ปิดแล้วคืนค่าเดิม)
 
   // สรุปรวมของรางวัลจากเหตุการณ์ใน session นี้ (โชว์ตอนจบ session)
@@ -423,21 +434,33 @@ export default function Game() {
   };
 
   // เลือก "ทิ้ง session" ใน modal กลับมาจากพักยาว — ปิด modal นี้ แล้วเปิด modal ถามเหตุผล (ทิ้งจริงต้องเลือกเหตุผล)
-  // เกาะชื่อพักยาวมาเป็นเหตุผลเริ่มต้น (แก้ไขได้) — พักยาวกับทิ้ง session เป็นคนละระบบ แต่เชื่อมต่อกันตรงนี้
+  // เกาะชื่อพักยาวมาเป็นเหตุผลเริ่มต้น (เฉพาะตัวเลือกที่ตรงกัน) — พักยาวกับทิ้ง session เป็นคนละระบบ แต่เชื่อมต่อกันตรงนี้
   const discardFromLongPause = () => {
     setShowLongPauseReturn(false);
-    openAbortModal(pauseTitle);
+    openAbortModal(abortPresetFromPause(pauseTitle));
   };
 
-  // ทางลัด "😴 พักยาว" จากแถบ Home — เปลี่ยนพักสั้นที่ค้างอยู่เป็นพักยาวทันที (ไม่ต้องกลับไปเปิด modal เลือก)
-  // ปิดพักสั้น (นับเวลาส่วนที่พักสั้นไปแล้ว) แล้วเริ่มนับพักยาวใหม่จากตอนนี้ — สถิติแยกหมวดไม่ปนกัน
-  const convertToLongPause = () => {
+  // ทางลัด "😴 พักยาว" จากแถบ Home — ต้องเลือกชื่อ/เหตุผลจากตัวเลือกก่อน (บังคับ — กันพักยาวแบบไม่ระบุ)
+  const openLongPauseTitleModal = () => {
+    setLongPauseTitleInput('');
+    setShowLongPauseTitle(true);
+    sfx.click();
+  };
+
+  const confirmLongPauseTitle = () => {
+    setShowLongPauseTitle(false);
+    convertToLongPause(longPauseTitleInput.trim());
+  };
+
+  // เปลี่ยนพักสั้นที่ค้างอยู่เป็นพักยาวจริง (เลือกชื่อแล้ว) — ปิดพักสั้น (นับเวลาส่วนที่พักสั้นไปแล้ว)
+  // แล้วเริ่มนับพักยาวใหม่จากตอนนี้ — สถิติแยกหมวดไม่ปนกัน
+  const convertToLongPause = (title = '') => {
     if (!pauseStartedAtRef.current || pauseModeRef.current === 'long') return;
     const sec = Math.max(0, Math.round((Date.now() - pauseStartedAtRef.current) / 1000));
     setPauseAccumSec((a) => a + sec);
     setPauseStartedAt(Date.now());
     setPauseMode('long');
-    setPauseTitle('');
+    setPauseTitle(title);
     showToast('😴 เปลี่ยนเป็นพักยาวแล้ว (แยกหมวดสถิติ "พักยาว")');
     sfx.click();
   };
@@ -739,7 +762,7 @@ export default function Game() {
           pauseTitle={pauseTitle}
           pausedTask={focusTask}
           onDiscard={handleDiscardPaused}
-          onLongPause={convertToLongPause}
+          onLongPause={openLongPauseTitleModal}
           onManageCharacters={() => setShowCharSelect(true)}
           breakAtHome={breakAtHome}
           breakRemain={remain}
@@ -995,7 +1018,7 @@ export default function Game() {
                 ? '🛡️ มีโล่โฟกัสติดตั้งอยู่ — คอมโบโฟกัสจะไม่หาย (โล่จะแตก)'
                 : 'คอมโบโฟกัสจะหายไป (เริ่มใหม่จาก 1)'}
               <br />
-              เลือกเหตุผลเพื่อบันทึกเป็นสถิติ — ดูย้อนหลังได้ที่หน้า Stats
+              เลือกเหตุผลจากตัวเลือกด้านล่าง (บังคับเลือก — กดทิ้ง session ยังไม่ได้จนกว่าจะเลือก) เพื่อบันทึกเป็นสถิติ
             </p>
             {settings?.abort_week_limit > 0 && abortsThisWeek >= settings.abort_week_limit && (
               <p className="abort-warning">⚠️ สัปดาห์นี้ทิ้งไปแล้ว {abortsThisWeek} ครั้ง (เกินเกณฑ์ {settings.abort_week_limit}) — ลองพักยาว 😴 แทนการทิ้งดูไหม? คอมโบจะหายทุกครั้งที่ทิ้ง</p>
@@ -1012,19 +1035,41 @@ export default function Game() {
                 </button>
               ))}
             </div>
-            <label className="pause-title-label">
-              💨 เหตุผลที่ทิ้ง (เลือกด้านบน หรือพิมพ์เอง — เว้นว่าง = ไม่ระบุ):
-              <input
-                className="input pause-title-input"
-                value={abortReasonInput}
-                onChange={(e) => setAbortReasonInput(e.target.value)}
-                placeholder="พิมพ์เหตุผล…"
-                maxLength={40}
-              />
-            </label>
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={confirmAbort}>💨 ทิ้ง session</button>
+              <button className="btn btn-primary" disabled={!abortReasonInput} onClick={confirmAbort}>💨 ทิ้ง session</button>
               <button className="btn" onClick={cancelAbort}>ยกเลิก</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ทางลัด 😴 พักยาว จากแถบ Home — เลือกชื่อ/เหตุผลจากตัวเลือกก่อน (บังคับ — กันพักยาวแบบไม่ระบุ) */}
+      {showLongPauseTitle && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>😴 พักยาว — เลือกเหตุผล</h2>
+            <p>
+              พักสั้นที่ค้างอยู่จะเปลี่ยนเป็นพักยาว (แยกหมวดสถิติ "พักยาว" ไม่นับใน "พักกลาง session")
+              <br />
+              ต้องเลือกเหตุผลจากตัวเลือกด้านล่างก่อน (กดเปลี่ยนเป็นพักยาว ยังไม่ได้จนกว่าจะเลือก)
+            </p>
+            <div className="pause-presets">
+              {PAUSE_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`pause-preset-chip${longPauseTitleInput === p.full ? ' active' : ''}`}
+                  onClick={() => setLongPauseTitleInput(p.full)}
+                >
+                  {p.icon} {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-primary" disabled={!longPauseTitleInput} onClick={confirmLongPauseTitle}>
+                😴 เปลี่ยนเป็นพักยาว
+              </button>
+              <button className="btn" onClick={() => setShowLongPauseTitle(false)}>ยกเลิก</button>
             </div>
           </div>
         </div>

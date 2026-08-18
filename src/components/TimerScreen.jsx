@@ -4,8 +4,8 @@ import { sfx, isMuted, setMuted } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import { petMoodOf, petPerkLabel } from '../meta.js';
 
-// ชื่อพักยาวสำเร็จรูป (ตัวเลือกเร็ว — ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามชื่อได้) · พิมพ์เองก็ได้ที่ช่องอื่น ๆ
-const PAUSE_PRESETS = [
+// ชื่อพักยาวสำเร็จรูป (ตัวเลือกเดียวเท่านั้น — บังคับเลือกก่อนกด 😴 พักยาว ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามชื่อได้)
+export const PAUSE_PRESETS = [
   { id: 'eat', icon: '🍚', label: 'กินข้าว', full: '🍚 กินข้าว' },
   { id: 'nap', icon: '😴', label: 'นอนกลางวัน', full: '😴 นอนกลางวัน' },
   { id: 'sleep', icon: '🌙', label: 'นอนกลางคืน', full: '🌙 นอนกลางคืน' },
@@ -60,7 +60,7 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
       <div className="timer-city">
         <div className="timer-pet">
           <span className="city-icon">{city.icon}</span>
-          {activePet ? (
+          {activePet && (
             <div
               className={`companion-bubble pet-mood-${petMood.level}`}
               title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
@@ -68,10 +68,6 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
               {activePet.icon}
               <span className="pet-lv-tag">Lv.{activePet.level}</span>
               <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
-            </div>
-          ) : (
-            <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~2%) แล้วใช้ฟักดูสิ!">
-              🥚
             </div>
           )}
           {/* ไข่กำลังฟัก (ใช้ไข่แล้ว — จะฟักหลังจบ 1 session) */}
@@ -209,12 +205,12 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
               <button className="btn btn-primary" onClick={() => { setShowPauseChoice(false); onPause('short'); if (pauseGoHome) onHome(); }}>
                 ⏸️ พักสั้น (นับเวลา)
               </button>
-              <button className="btn" onClick={() => { setShowPauseChoice(false); onPause('long', pauseTitleInput.trim()); if (pauseGoHome) onHome(); }}>
+              <button className="btn" disabled={!pauseTitleInput.trim()} onClick={() => { setShowPauseChoice(false); onPause('long', pauseTitleInput.trim()); if (pauseGoHome) onHome(); }}>
                 😴 พักยาว (แยกหมวดสถิติ)
               </button>
             </div>
-            {/* ชื่อพักยาว — ไม่บังคับ (กด 😴 พักยาว ได้เลย ไม่ตั้งชื่อก็ได้) */}
-            <p className="pause-name-note">💡 ตั้งชื่อพักยาว (ไม่บังคับ — กด 😴 พักยาว ได้เลย ไม่ตั้งชื่อก็ได้)</p>
+            {/* ชื่อพักยาว — บังคับเลือกจากตัวเลือก (กันพักยาวแบบไม่ระบุ — สถิติแยกตามชื่อต้องตรงกัน) */}
+            <p className="pause-name-note">💡 ต้องเลือกชื่อพักยาวจากตัวเลือกด้านล่างก่อน (กด 😴 พักยาว ยังไม่ได้จนกว่าจะเลือก)</p>
             <div className="pause-presets">
               {PAUSE_PRESETS.map((p) => (
                 <button
@@ -227,17 +223,7 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
                 </button>
               ))}
             </div>
-            <label className="pause-title-label">
-              😴 ชื่อพักยาว (เลือกด้านบน หรือพิมพ์เอง — ดูย้อนหลังใน log + รวมสถิติตามชื่อ):
-              <input
-                className="input pause-title-input"
-                value={pauseTitleInput}
-                onChange={(e) => setPauseTitleInput(e.target.value)}
-                placeholder="พิมพ์ชื่อพักเอง… (ไม่ตั้งก็ได้)"
-                maxLength={40}
-              />
-            </label>
-            <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (ตั้งชื่อหรือไม่ก็ได้)</p>
+            <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (เลือกชื่อจากตัวเลือกเท่านั้น)</p>
             <div className="modal-actions">
               <button className="btn btn-sm" onClick={() => setShowPauseChoice(false)}>ยกเลิก</button>
             </div>
