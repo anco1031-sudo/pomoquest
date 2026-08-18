@@ -651,6 +651,7 @@ export default function Game() {
       drop: d.item || null,
       breaks: d.breaks || 0,      // สลายท่าไม้ตายในไฟต์นี้ — โชว์รางวัลฝีมือตอนชนะ
       furyWin: !!d.furyWin,       // ชนะตอนบอสสุดทน
+      defeatMsg: d.message || null, // 💀 ถูกโค่นล้ม (HP ถึง 0) — server ลงโทษแล้ว → โชว์ข้อความตอนกลับค่าย
     }));
     return d;
   };
@@ -674,6 +675,11 @@ export default function Game() {
     const d = await post('/boss/retreat');
     if (!d) return;
     startPostBossBreak(d.message);
+  };
+
+  // 💀 ถูกโค่นล้ม (HP ถึง 0 ในสู้บอส) — server ลงโทษไปแล้วตอน /boss/act → แค่พากลับค่ายพร้อมข้อความ
+  const bossDefeated = () => {
+    startPostBossBreak(bossState?.defeatMsg || '💀 ถูกโค่นล้ม — กลับไปพักที่ค่าย');
   };
 
   // หลังชนะบอส — เลือก "เดินทางต่อ" (เมืองใหม่) หรือ "สำรวจเมืองเดิมต่อ" → กลับไปพักที่ค่ายก่อนเริ่มโฟกัส
@@ -773,6 +779,7 @@ export default function Game() {
           onAct={bossAct}
           onRetreat={bossRetreat}
           onWinChoice={bossWinChoice}
+          onDefeat={bossDefeated}
         />
       )}
 

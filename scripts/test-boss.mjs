@@ -209,6 +209,24 @@ try {
   expect('bonus: ชนะตอนสุดทน → furyWin=true ใน result', br5.furyWin === true);
   expect('bonus: ชนะตอนสุดทน → log โชว์โบนัสอดทน', br5.log.some((l) => l.includes('อดทน')));
 
+  // --- 💀 ถูกโค่นล้ม: HP ถึง 0 = แพ้ (บังคับหนี — เหมือนกดปุ่มหนี) · หลบ/ตั้งรับ/โล่เวท ช่วยรอดได้ ---
+  // ท่าไม้ตาย (bossCharging) กระแทกจน HP ถึง 0 → แพ้ทันที (HP เหลือ 1 — กันติดลบ UI)
+  const koBoss = generateBoss(50, 0);
+  const koChar = makeChar({ level: 50, atk: 1, max_hp: 100000, hp: 10, def: 0, spd: 0 });
+  const koRes = bossPlayerTurn(koChar, { boss: koBoss, bossCharging: true }, 'attack', null, null);
+  expect('ko: ท่าไม้ตายกระแทกจน HP ถึง 0 → outcome = lose + HP เหลือ 1', koRes.outcome === 'lose' && koChar.hp === 1, `hp=${koChar.hp}`);
+  expect('ko: log บอกถูกโค่นล้ม', koRes.log.some((l) => l.includes('โค่นล้ม')));
+  // ตั้งรับช่วยรอดได้ — ดาเมจท่าไม้ตายหลังลด 60% ≤ 250 < HP 300 (บอสเดียวกัน ดาเมจ ~348 → ~139)
+  const koGuardBoss = generateBoss(50, 0);
+  const koGuardChar = makeChar({ level: 50, atk: 1, max_hp: 100000, hp: 300, def: 0, spd: 0 });
+  const koGuardRes = bossPlayerTurn(koGuardChar, { boss: koGuardBoss, bossCharging: true }, 'guard', null, null);
+  expect('ko: ตั้งรับ 🛡️ ช่วยรอดจากท่าไม้ตาย (HP ยัง > 0 — ไม่แพ้)', koGuardRes.outcome !== 'lose' && koGuardChar.hp > 0, `hp=${koGuardChar.hp}`);
+  // พิษร้าย (สกิลบอส) กัดจน HP ถึง 0 → แพ้เหมือนกัน (พิษโดนแน่นอน — หลบไม่ได้)
+  const koPoisonBoss = generateBoss(5, 0);
+  const koPoisonChar = makeChar({ atk: 1, max_hp: 100000, hp: 10, def: 0, spd: 0 });
+  const koPoisonRes = bossPlayerTurn(koPoisonChar, { boss: koPoisonBoss, playerPoison: { pct: 0.5, turns: 1 } }, 'attack', null, null);
+  expect('ko: พิษร้าย ☠️ กัดจน HP ถึง 0 → แพ้ (HP เหลือ 1)', koPoisonRes.outcome === 'lose' && koPoisonChar.hp === 1, `hp=${koPoisonChar.hp}`);
+
   // --- smoke test API: /boss + /boss/act ส่ง fight state ---
   let r = await api('/character/create', { method: 'POST', body: { name: 'บอสเทสเตอร์', class: 'warrior' } });
   expect('api: สร้างตัวละคร', r.status === 200 && !!r.json.character?.id);
@@ -313,7 +331,54 @@ try {
     expect('dragon: แพ้ (หนี) → คอมโบโฟกัสหาย (streak=0)', streakAfter === 0, `streak=${streakAfter}`);
     const losesAfter = db.prepare('SELECT dragon_boss_loses FROM progress WHERE character_id = ?').get(rcid).dragon_boss_loses;
     expect('dragon: แพ้ (หนี) → นับ dragon_boss_loses (สถิติ)', losesAfter === 1, `dragon_boss_loses=${losesAfter}`);
+    // 💀 ถูกโค่นล้มผ่าน API (HP ถึง 0) — มังกร: server ลงโทษทันทีเหมือนกดหนี + เคลียร์ไฟต์
+    r = await api('/character/create', { method: 'POST', body: { name: 'มังกรโค่น', class: 'warrior' } });
+    const kcid = r.json.character.id;
+    db.prepare('UPDATE character SET gold = 500, hp = 1, max_hp = 500 WHERE id = ?').run(kcid);
+    db.prepare('UPDATE progress SET streak = 3 WHERE character_id = ?').run(kcid);
+    addItem(kcid, 45, 1);
+    r = await api('/boss');
+    expect('ko-api: ตัวละครใหม่เจอมังกรทอง', r.json.boss?.isDragon === true, r.json.boss?.name);
+    let ko = null;
+    for (let i = 0; i < 20 && !ko; i++) {
+      const act = await api('/boss/act', { method: 'POST', body: { action: 'attack' } });
+      if (act.json.outcome === 'lose') ko = act.json;
+    }
+    const koAfter = db.prepare('SELECT gold, hp FROM character WHERE id = ?').get(kcid);
+    const koInv = ko?.inventory || [];
+    const koStreak = db.prepare('SELECT streak FROM progress WHERE character_id = ?').get(kcid).streak;
+    expect('ko-api: HP ถึง 0 → outcome = lose', !!ko && ko.outcome === 'lose');
+    expect('ko-api: มังกร — ลงโทษทันที (ทอง 500 → 450, HP เหลือ 1)', koAfter.gold === 450 && koAfter.hp === 1, `gold=${koAfter.gold} hp=${koAfter.hp}`);
+    expect('ko-api: มังกร — เสียของสุ่ม 1 ชิ้น + คอมโบโฟกัสหาย', !koInv.some((x) => x.item_id === 45) && koStreak === 0, `streak=${koStreak}`);
+    expect('ko-api: มังกร — นับ dragon_boss_loses', (ko?.progress?.dragon_boss_loses || 0) >= 1, `loses=${ko?.progress?.dragon_boss_loses}`);
+    expect('ko-api: response มี message (ข้อความแพ้)', !!ko?.message);
+    r = await api('/boss/act', { method: 'POST', body: { action: 'attack' } });
+    expect('ko-api: ไฟต์ถูกเคลียร์ — สู้ต่อไม่ได้ (ต้องเจอบอสใหม่)', r.status === 400 && !!r.json.error, JSON.stringify(r.json));
     process.env.POMOQUEST_DRAGON = '0';
+  }
+
+  // --- 💀 ถูกโค่นล้มกับบอสปกติ — เสียพลัง 20% เท่านั้น (ไม่แตะทอง/ของ/คอมโบ/สถิติมังกร) ---
+  {
+    r = await api('/character/create', { method: 'POST', body: { name: 'บอสโค่น', class: 'warrior' } });
+    const ncid = r.json.character.id;
+    db.prepare('UPDATE character SET gold = 500, hp = 50, max_hp = 100, atk = 1, spd = 0 WHERE id = ?').run(ncid);
+    db.prepare('UPDATE progress SET streak = 3 WHERE character_id = ?').run(ncid);
+    addItem(ncid, 45, 1);
+    r = await api('/boss');
+    expect('ko-api: เจอบอสเมืองปกติ (ไม่ใช่มังกร)', r.status === 200 && r.json.boss?.isDragon !== true, r.json.boss?.name);
+    let nko = null;
+    for (let i = 0; i < 20 && !nko; i++) {
+      const act = await api('/boss/act', { method: 'POST', body: { action: 'attack' } });
+      if (act.json.outcome === 'lose') nko = act.json;
+    }
+    const nChar = db.prepare('SELECT gold, hp FROM character WHERE id = ?').get(ncid);
+    const nStreak = db.prepare('SELECT streak FROM progress WHERE character_id = ?').get(ncid).streak;
+    const nInv = (await api('/state')).json.inventory || [];
+    // ถูกโค่นล้ม → HP เหลือ 1 (ไม่ได้กดหนีตอนพลังเต็ม — 20% ไม่มีผลแล้ว) แต่บทลงโทษมังกรไม่เกิด: ทอง/ของ/คอมโบไม่หาย
+    expect('ko-api: บอสปกติ — ถูกโค่นล้ม → HP เหลือ 1', !!nko && nChar.hp === 1, `hp=${nChar.hp}`);
+    expect('ko-api: บอสปกติ — ทองไม่หาย (500 เท่าเดิม)', !!nko && nChar.gold === 500, `gold=${nChar.gold}`);
+    expect('ko-api: บอสปกติ — ของไม่หาย + คอมโบไม่หาย (streak=3)', !!nko && nInv.some((x) => x.item_id === 45) && nStreak === 3, `streak=${nStreak}`);
+    expect('ko-api: บอสปกติ — ไม่นับสถิติมังกร (dragon_boss_loses=0)', !!nko && (nko?.progress?.dragon_boss_loses || 0) === 0, JSON.stringify(nko?.progress || {}));
   }
 
   // --- reset: หมุน "world epoch" — session ที่พักค้างใน localStorage (โลกเก่า) ถูกทิ้งอัตโนมัติ ---

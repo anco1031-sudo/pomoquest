@@ -1150,6 +1150,19 @@ body {
 .victory-title { font-size: 24px; font-weight: 900; color: var(--gold); margin-bottom: 6px; }
 .victory-panel p { color: var(--muted); font-size: 13.5px; margin-bottom: 12px; }
 
+/* 💀 ถูกโค่นล้ม — HP ถึง 0 ในสู้บอส = แพ้ (เหมือนกดหนี — เริ่มสำรวจใหม่ ไม่นับรอบ) */
+.defeat-panel {
+  text-align: center;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), var(--panel));
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 12px;
+  animation: fadeUp 0.4s ease;
+}
+.defeat-title { font-size: 24px; font-weight: 900; color: #f87171; margin-bottom: 6px; }
+.defeat-panel p { color: var(--muted); font-size: 13.5px; margin-bottom: 12px; }
+
 /* ฉากชนะจ้าวมังกรทอง 🌟 — cinematic ธีมทอง */
 .victory-panel.dragon-victory {
   background: linear-gradient(135deg, rgba(250, 204, 21, 0.22), rgba(120, 53, 15, 0.25) 60%, var(--panel));

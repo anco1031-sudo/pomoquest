@@ -1288,6 +1288,13 @@ router.post('/boss/act', (req, res) => {
       },
     });
     bumpDaily(c.id, 'boss_wins');
+  } else if (result.outcome === 'lose') {
+    // 💀 ถูกโค่นล้ม (HP ถึง 0) — เหมือนกดหนี: server ลงโทษทันที (มังกรทอง: เสียของ/ทอง/คอมโบ+HP เหลือ 1 · ปกติ: เสียพลัง 20%)
+    // แล้วเริ่มสำรวจใหม่ — ไม่ reset รอบสำรวจ (city_rounds) และไม่เพิ่มรอบ (สู้บอสใหม่ความยากเท่าเดิม)
+    const loss = applyBossLoss(c, fight);
+    fights.delete(c.id);
+    addLog(c.id, { type: 'boss_lose', title: loss.title, detail: `${loss.detail} (ถูกโค่นล้ม — HP ถึง 0)` });
+    result.message = loss.message;
   }
   res.json({
     ...serialize(c),
@@ -1301,6 +1308,7 @@ router.post('/boss/act', (req, res) => {
     achievements: ach.fresh,
     breaks: result.breaks || 0,
     furyWin: !!result.furyWin,
+    message: result.message || null,
     ...dailyPayload(c),
     levelUps: { levels: (result.ups || 0) + ach.ups, statPoints: c.stat_points },
   });
@@ -1337,13 +1345,11 @@ router.post('/boss/after', (req, res) => {
   return res.status(400).json({ error: 'ระบุทางเลือกไม่ถูกต้อง (travel / stay)' });
 });
 
-router.post('/boss/retreat', (req, res) => {
-  const c = requireChar(res); if (!c) return;
-  const fight = fights.get(c.id);
-  fights.delete(c.id);
+// แพ้บอส (กดหนี หรือ HP ถึง 0 = ถูกโค่นล้ม) — บทลงโทษตามชนิดบอส:
+// 🌟 มังกรทอง: เสียของสุ่ม 1 ชิ้น + ทอง 10% + คอมโบโฟกัส + HP เหลือ 1 · บอสปกติ: เสียพลัง 20%
+// ทั้งคู่ = "เริ่มสำรวจใหม่" — ไม่ reset รอบสำรวจ (city_rounds) และไม่เพิ่มรอบ (สู้บอสใหม่ความยากเท่าเดิม)
+function applyBossLoss(c, fight) {
   const stats = computeStats(c);
-  // 🌟 จ้าวมังกรทอง — แพ้ (หนี) บทลงโทษหนัก: เสียของสุ่ม 1 ชิ้น + ทอง 10% + คอมโบโฟกัส + HP เหลือ 1
-  // (มังกรทองไม่ปล่อยง่าย ๆ — แต่ไม่ถึงขั้น "เริ่มเดินทางใหม่" เพราะเจอแบบสุ่ม ~4% กันความโหดร้ายเกินจำเป็น)
   if (fight?.boss?.isDragon) {
     const inv = getInventory(c.id).filter((i) => i.qty > 0 && i.type !== 'scroll');
     let lostItem = '';
@@ -1365,17 +1371,29 @@ router.post('/boss/retreat', (req, res) => {
       db.prepare('UPDATE progress SET dragon_boss_loses=? WHERE id=?').run(prog.dragon_boss_loses, prog.id);
     }
     updateCharacter(c);
-    addLog(c.id, {
-      type: 'boss_lose', title: '🌟 หนีจากจ้าวมังกรทอง!',
+    return {
+      title: '🌟 หนีจากจ้าวมังกรทอง!',
       detail: `สู้มังกรทองไม่ไหว ต้องหนีเอาตัวรอด — HP เหลือ 1, เสียทอง ${goldLoss},${lostItem} และคอมโบโฟกัสหาย (มังกรทองหนีไปแล้ว — ครั้งหน้าเจอบอสปกติจนกว่าจะสุ่มเจออีก)`,
-    });
-    return res.json({ ...serialize(c), message: `🌟 หนีจากจ้าวมังกรทองเอาตัวรอดมาได้ — แต่เสียทอง ${goldLoss}${lostItem} คอมโบหาย และ HP เหลือ 1! (มังกรทองหนีไปแล้ว)` });
+      message: `🌟 หนีจากจ้าวมังกรทองเอาตัวรอดมาได้ — แต่เสียทอง ${goldLoss}${lostItem} คอมโบหาย และ HP เหลือ 1! (มังกรทองหนีไปแล้ว)`,
+    };
   }
-  // บอสปกติ/บอสลับ/บอสเร่ร่อน — ถอยทัพแบบเดิม (เสียพลัง 20% ไม่นับรอบไม่เพิ่มความยาก)
+  // บอสปกติ/บอสลับ/บอสเร่ร่อน — เสียพลัง 20% (ไม่นับรอบไม่เพิ่มความยาก — เริ่มสำรวจใหม่)
   c.hp = Math.max(1, c.hp - Math.round(stats.maxHp * 0.2));
   updateCharacter(c);
-  addLog(c.id, { type: 'boss_lose', title: '💨 ถอยทัพ', detail: 'สู้บอสไม่ไหว ถอยกลับไปสำรวจใหม่ — ไม่นับรอบและไม่เพิ่มความยาก' });
-  res.json({ ...serialize(c), message: 'ถอยกลับไปสำรวจใหม่ (ไม่นับรอบ — ความยากเท่าเดิม)' });
+  return {
+    title: '💨 ถอยทัพ',
+    detail: 'สู้บอสไม่ไหว ถอยกลับไปสำรวจใหม่ — ไม่นับรอบและไม่เพิ่มความยาก',
+    message: 'ถอยกลับไปสำรวจใหม่ (ไม่นับรอบ — ความยากเท่าเดิม)',
+  };
+}
+
+router.post('/boss/retreat', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const fight = fights.get(c.id);
+  fights.delete(c.id);
+  const loss = applyBossLoss(c, fight);
+  addLog(c.id, { type: 'boss_lose', title: loss.title, detail: loss.detail });
+  res.json({ ...serialize(c), message: loss.message });
 });
 
 // ----- สรุปรายสัปดาห์: 7 วันล่าสุด เทียบ 7 วันก่อนหน้า -----

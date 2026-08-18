@@ -935,6 +935,7 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
   const stats = computeStats(c);
   const log = [];
   let outcome = null; // null = ยังสู้, 'win' | 'lose'
+  let knockedOut = false; // HP จะถึง 0 = ถูกโค่นล้ม (แพ้ — routes ลงโทษเหมือนกดหนี)
   // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา: ☀️/🌙 คูณดาเมจที่ทำกับบอส
   // (นักรบกลางวัน/เวทย์กลางคืน/โจรกลางคืน/นักบวชกลางวัน +10% · นักรบกลางคืน/เวทย์กลางวัน -10%)
   const atkMult = classPerks(c).bossAtk;
@@ -1073,11 +1074,16 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       setBossAtk(fight);
       log.push(`😡 ${fight.boss.icon} ${fight.boss.name} โกรธจัด! พลังโจมตีพุ่งขึ้น x1.4 และท่าเด็ดถี่ขึ้น!`);
     }
-    // พิษผู้เล่น (สกิลบอส "พิษร้าย") — ผู้เล่นเสีย HP ก่อนบอสลงมือ
+    // พิษผู้เล่น (สกิลบอส "พิษร้าย") — ผู้เล่นเสีย HP ก่อนบอสลงมือ (HP จะถึง 0 = ถูกโค่นล้ม)
     if (fight.playerPoison) {
       const p = fight.playerPoison;
       const pd = Math.max(1, Math.round(stats.maxHp * p.pct));
-      c.hp = Math.max(1, c.hp - pd);
+      if (c.hp - pd <= 0) {
+        c.hp = 1; // กัน HP ติดลบ (UI) — แต่ถือว่าแพ้
+        knockedOut = true;
+      } else {
+        c.hp -= pd;
+      }
       p.turns -= 1;
       if (p.turns <= 0) fight.playerPoison = null;
       log.push(`☠️ พิษร้ายกัดกินร่าง เสีย ${pd} HP${p.turns > 0 ? ` (เหลือ ${p.turns} เทิร์น)` : ''}`);
@@ -1106,7 +1112,13 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       if (Math.random() * 100 < dodge) return 0; // 💨 หลบได้ — ไม่เสียดาเมจ
       let d = dmg;
       if (fight.playerGuard) { d = Math.max(1, Math.round(d * (1 - fight.playerGuard))); }
-      c.hp = Math.max(1, c.hp - d);
+      // 💀 HP จะถึง 0 = ถูกโค่นล้ม (แพ้ — เหมือนกดหนี เริ่มสำรวจใหม่ ไม่ reset/ไม่เพิ่มรอบ) · หลบ/ตั้งรับ/โล่เวท ช่วยรอดได้
+      if (c.hp - d <= 0) {
+        c.hp = 1; // กัน HP ติดลบ (UI) — แต่ถือว่าแพ้
+        knockedOut = true;
+      } else {
+        c.hp -= d;
+      }
       return d;
     };
     if (fight.boss.hp <= 0) {
@@ -1199,6 +1211,13 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
       }
     }
     fight.playerGuard = null; // โล่เวท/ตั้งรับ คุ้มกันแค่เทิร์นเดียวเท่านั้น
+  }
+
+  // 💀 ถูกโค่นล้ม — HP ถึง 0 = แพ้ (บังคับให้หนี — บทลงโทษตามชนิดบอสที่ routes จัดการ: มังกรทองเสียของ/ทอง/คอมโบ · ปกติเสียพลัง 20%)
+  if (knockedOut) {
+    outcome = 'lose';
+    log.push('💀 คุณถูกโค่นล้ม!... ต้องหนีเอาตัวรอดกลับไปก่อน');
+    return { log, outcome, boss: fight.boss };
   }
 
   if (fight.boss.hp <= 0) {

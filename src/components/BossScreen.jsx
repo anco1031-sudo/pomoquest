@@ -4,7 +4,7 @@ import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import { petMoodOf, petPerkLabel } from '../meta.js';
 
-export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onWinChoice }) {
+export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onWinChoice, onDefeat }) {
   const { character, progress, inventory, cities } = useGame();
   const [potionOpen, setPotionOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
@@ -59,12 +59,14 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
               : `⏳ พักยาวเหลือ ${fmtTime(remain)} — ชนะบอสเพื่อเดินทางต่อ`}
           </div>
         </div>
-        <button
-          className="btn btn-sm"
-          onClick={() => window.confirm(boss.isDragon ? '🩸 หนีจากจ้าวมังกรทอง?! จะเสียของ 1 ชิ้น + ทอง 10% + คอมโบโฟกัส และ HP เหลือ 1 — สู้ต่อดีไหม?' : 'หนีจากบอส? จะเสียพลัง 20%') && onRetreat()}
-        >
-          💨 หนี
-        </button>
+        {!outcome && (
+          <button
+            className="btn btn-sm"
+            onClick={() => window.confirm(boss.isDragon ? '🩸 หนีจากจ้าวมังกรทอง?! จะเสียของ 1 ชิ้น + ทอง 10% + คอมโบโฟกัส และ HP เหลือ 1 — สู้ต่อดีไหม?' : 'หนีจากบอส? จะเสียพลัง 20%') && onRetreat()}
+          >
+            💨 หนี
+          </button>
+        )}
       </header>
 
       {/* boss card */}
@@ -208,6 +210,22 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
           <div key={i} className="battle-line">{l}</div>
         ))}
       </div>
+
+      {/* 💀 ถูกโค่นล้ม — HP ถึง 0 = แพ้ (server ลงโทษแล้วตอน /boss/act: มังกรทองเสียของ/ทอง/คอมโบ · ปกติเสียพลัง 20%) — เริ่มสำรวจใหม่ ไม่นับรอบ */}
+      {outcome === 'lose' && (
+        <div className="defeat-panel">
+          <div className="defeat-title">💀 ถูกโค่นล้ม!</div>
+          <p>
+            HP หมดเกลี้ยง — ต้องหนีเอาตัวรอดกลับไปพักที่ค่าย
+            {boss.isDragon
+              ? ' (เสียของ 1 ชิ้น + ทอง 10% + คอมโบโฟกัส และ HP เหลือ 1 — มังกรทองหนีไปแล้ว ครั้งหน้าเจอบอสปกติ)'
+              : ' (เสียพลัง 20% — เริ่มสำรวจใหม่ ไม่นับรอบ ความยากเท่าเดิม)'}
+          </p>
+          <button className="btn btn-primary btn-big" onClick={() => { sfx.click(); onDefeat(); }}>
+            🏕️ กลับไปพักที่ค่าย
+          </button>
+        </div>
+      )}
 
       {/* victory — เลือก: เดินทางต่อ (เมืองใหม่) หรือสำรวจเมืองเดิมต่อ (ความยาก/รางวัล/ตลาดมืดเพิ่ม) */}
       {outcome === 'win' && (
