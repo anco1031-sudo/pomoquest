@@ -169,6 +169,23 @@ await evalJs(`(() => {
   b.click();
   return true;
 })()`);
+await sleep(800);
+// ทิ้ง session → เดิมทิ้งเลย ตอนนี้เปิด modal ถามเหตุผลก่อน (เลือกเหตุผล + ยืนยัน)
+const reasonModal = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
+expect('ทิ้ง session → modal ถามเหตุผลขึ้น', reasonModal.includes('เหตุผล') && reasonModal.includes('ทิ้งเซสชัน'), reasonModal.replace(/\n/g, ' ').slice(0, 100));
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.pause-preset-chip')].find((x) => x.textContent.includes('ธุระด่วน'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(300);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('ทิ้ง session'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
 await sleep(1000);
 const afterDiscard = await evalJs(`!document.querySelector('.resume-bar') && !document.querySelector('.modal')`);
 expect('ทิ้ง session ใน modal → กลับ Home ว่าง', afterDiscard === true);

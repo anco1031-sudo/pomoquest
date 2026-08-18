@@ -39,6 +39,12 @@ const requireChar = (res) => {
 
 const serialize = (c) => ({ character: serializeCharacter(c) });
 
+// นับ session ที่ทิ้งในสัปดาห์นี้ (จาก log abort — นับเฉพาะสัปดาห์ปัจจุบัน เริ่มวันจันทร์)
+const abortsThisWeekCount = (cid) => db.prepare(`
+  SELECT COUNT(*) n FROM log WHERE character_id = ? AND type = 'abort'
+    AND created_at >= datetime('now', 'localtime', 'weekday 0', '-6 days')
+`).get(cid)?.n || 0;
+
 const charBrief = (c) => ({
   id: c.id, name: c.name, class: c.class,
   classIcon: CLASSES[c.class]?.icon || '❓', className: CLASSES[c.class]?.name || c.class,
@@ -76,6 +82,7 @@ router.get('/state', (req, res) => {
     log: getLog(c.id),
     settings: getSettings(),
     cities: CITIES.map((city, index) => ({ ...city, index })),
+    abortsThisWeek: abortsThisWeekCount(c.id), // ทิ้ง session สัปดาห์นี้ — modal เตือนเมื่อเกินเกณฑ์ (เกณฑ์ = settings.abort_week_limit)
     ...charsPayload(),
     ...dailyPayload(c),
   });
@@ -467,18 +474,25 @@ router.get('/session-history', (req, res) => {
 
 router.post('/adventure/abort', (req, res) => {
   const c = requireChar(res); if (!c) return;
+  // เหตุผลที่ทิ้ง session (เลือกจาก modal — เก็บสถิติ/ดูย้อนหลัง) + โฟกัสไปแล้วกี่วินาที
+  const { reason = '', focusSec = 0 } = req.body || {};
+  const reasonLabel = String(reason || '').trim();
+  const focusSecN = Math.max(0, Math.round(Number(focusSec) || 0));
   const prog = getProgress(c.id);
   // 🛡️ โล่โฟกัส — ถ้ามี ให้กันคอมโบหาย 1 ครั้ง (โล่แตก แล้วคอมโบยังอยู่)
   if (prog.combo_shield > 0) {
     prog.combo_shield = 0;
     db.prepare('UPDATE progress SET combo_shield = 0 WHERE id = ?').run(prog.id);
-    addLog(c.id, { type: 'abort', title: '🛡️ โล่โฟกัสกันคอมโบ!', detail: 'ทิ้งเซสชัน แต่โล่โฟกัสกันคอมโบไว้ได้ (โล่แตก) — คอมโบยังอยู่!' });
-    return res.json({ progress: getProgress(c.id), shieldUsed: true, message: '🛡️ โล่โฟกัสกันคอมโบไว้ได้! คอมโบไม่หาย (โล่แตก)' });
+    addLog(c.id, { type: 'abort', title: '🛡️ โล่โฟกัสกันคอมโบ!', detail: 'ทิ้งเซสชัน แต่โล่โฟกัสกันคอมโบไว้ได้ (โล่แตก) — คอมโบยังอยู่!', focusSec: focusSecN, abortReason: reasonLabel });
+    return res.json({ progress: getProgress(c.id), abortsThisWeek: abortsThisWeekCount(c.id), shieldUsed: true, message: '🛡️ โล่โฟกัสกันคอมโบไว้ได้! คอมโบไม่หาย (โล่แตก)' });
   }
   prog.streak = 0;
   db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
-  addLog(c.id, { type: 'abort', title: '💨 ละทิ้งเซสชัน', detail: 'คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)' });
-  res.json({ progress: getProgress(c.id) });
+  const detail = reasonLabel
+    ? `เหตุผล: ${reasonLabel} · คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)`
+    : 'คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)';
+  addLog(c.id, { type: 'abort', title: '💨 ละทิ้งเซสชัน', detail, focusSec: focusSecN, abortReason: reasonLabel });
+  res.json({ progress: getProgress(c.id), abortsThisWeek: abortsThisWeekCount(c.id) });
 });
 
 // ----- จบพักเบรก — บันทึกสถิติการพัก (ระยะเวลา / เลยเวลา / ต่อเวลากี่ครั้ง) -----
@@ -1456,6 +1470,42 @@ router.get('/stats', (req, res) => {
     GROUP BY title ORDER BY sec DESC LIMIT 12
   `).all(c.id);
 
+  // ทิ้ง session แยกตามเหตุผล (30 วันล่าสุด) — ตัวเลือกสำเร็จรูป + เหตุผลที่พิมพ์เอง — รวมจำนวนครั้ง + เวลาที่โฟกัสไปก่อนทิ้ง
+  const abortReasons = db.prepare(`
+    SELECT COALESCE(NULLIF(abort_reason, ''), '(ไม่ระบุ)') AS reason,
+           COUNT(*) AS times, COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'abort'
+      AND created_at >= datetime('now', 'localtime', '-29 days')
+    GROUP BY reason ORDER BY times DESC LIMIT 12
+  `).all(c.id);
+  const abortsTotal = db.prepare("SELECT COUNT(*) n FROM log WHERE character_id = ? AND type = 'abort'").get(c.id)?.n || 0;
+
+  // ทิ้ง session แยกตามช่วงเวลา (30 วันล่าสุด) — เช้า 05-11 / กลางวัน 12-16 / เย็น 17-21 / ดึก 22-04
+  // (ดูว่าช่วงไหนทิ้งบ่อยที่สุด — นับจากเวลาที่กดทิ้งจริง ๆ ใน log abort)
+  const abortByPeriod = db.prepare(`
+    SELECT
+      CASE
+        WHEN CAST(strftime('%H', created_at) AS INTEGER) BETWEEN 5 AND 11 THEN 'เช้า'
+        WHEN CAST(strftime('%H', created_at) AS INTEGER) BETWEEN 12 AND 16 THEN 'กลางวัน'
+        WHEN CAST(strftime('%H', created_at) AS INTEGER) BETWEEN 17 AND 21 THEN 'เย็น'
+        ELSE 'ดึก'
+      END AS period,
+      COUNT(*) AS times, COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'abort'
+      AND created_at >= datetime('now', 'localtime', '-29 days')
+    GROUP BY period
+  `).all(c.id);
+
+  // ทิ้ง session แยกตามวันในสัปดาห์ (30 วันล่าสุด) — dow 0-6 (อาทิตย์=0) → ฝั่ง client แปลงเป็นชื่อไทย
+  const abortByWeekday = db.prepare(`
+    SELECT CAST(strftime('%w', created_at) AS INTEGER) AS dow, COUNT(*) AS times,
+           COALESCE(SUM(focus_sec), 0) AS focus_sec
+    FROM log WHERE character_id = ? AND type = 'abort'
+      AND created_at >= datetime('now', 'localtime', '-29 days')
+    GROUP BY dow
+  `).all(c.id);
+  const abortsThisWeek = abortsThisWeekCount(c.id);
+
   // heatmap โฟกัส 12 สัปดาห์ (วันละกี่นาที)
   const heatRaw = db.prepare(`
     SELECT date(created_at) AS d, COALESCE(SUM(focus_sec), 0) AS focus_sec
@@ -1478,6 +1528,11 @@ router.get('/stats', (req, res) => {
     heatmap,
     tasks,
     longPauseTitles,
+    abortReasons,
+    abortsTotal,
+    abortByPeriod,
+    abortByWeekday,
+    abortsThisWeek,
     cityLogs,
     bmStats,
     achievements: { unlocked: ach.unlocked, total: ach.total },
@@ -1488,13 +1543,15 @@ router.get('/stats', (req, res) => {
 // ----- ตั้งค่า -----
 router.put('/settings', (req, res) => {
   const s = getSettings();
-  const { work_min, short_break_min, long_break_min, sessions_per_cycle } = req.body || {};
-  db.prepare(`UPDATE settings SET work_min=?, short_break_min=?, long_break_min=?, sessions_per_cycle=? WHERE id=1`)
+  const { work_min, short_break_min, long_break_min, sessions_per_cycle, abort_week_limit } = req.body || {};
+  db.prepare(`UPDATE settings SET work_min=?, short_break_min=?, long_break_min=?, sessions_per_cycle=?, abort_week_limit=? WHERE id=1`)
     .run(
       Math.max(1, Math.min(90, work_min ?? s.work_min)),
       Math.max(1, Math.min(30, short_break_min ?? s.short_break_min)),
       Math.max(1, Math.min(60, long_break_min ?? s.long_break_min)),
       Math.max(1, Math.min(8, sessions_per_cycle ?? s.sessions_per_cycle)),
+      // เกณฑ์เตือนทิ้ง session (ครั้ง/สัปดาห์) — 0 = ปิดเตือน, บังคับ 0-20
+      Math.max(0, Math.min(20, Math.round(abort_week_limit ?? s.abort_week_limit ?? 3))),
     );
   res.json({ settings: getSettings() });
 });

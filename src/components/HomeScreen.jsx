@@ -372,6 +372,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               { key: 'short_break_min', label: '☕ พักสั้น (นาที)', min: 1, max: 30, val: settings.short_break_min },
               { key: 'long_break_min', label: '🏕️ พักยาว (นาที)', min: 1, max: 60, val: settings.long_break_min },
               { key: 'sessions_per_cycle', label: '🔁 sessions ต่อรอบ (ก่อนสู้บอส)', min: 1, max: 8, val: settings.sessions_per_cycle },
+              { key: 'abort_week_limit', label: '⚠️ เกณฑ์เตือนทิ้ง session (ครั้ง/สัปดาห์)', min: 0, max: 20, val: settings.abort_week_limit },
             ].map((s) => (
               <div className="setting-row" key={s.key}>
                 <label>{s.label}</label>
@@ -384,6 +385,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                 />
               </div>
             ))}
+            <p className="hint">⚠️ ทิ้ง session เกินเกณฑ์ใน 1 สัปดาห์ (เริ่มวันจันทร์) → เด้งคำเตือนใน modal + แบนเนอร์ในหน้า Stats · ตั้ง 0 = ปิดการเตือน</p>
             <div className="setting-row">
               <label>🔊 เสียง</label>
               <button className="btn" onClick={toggleMute}>{muted ? 'ปิดอยู่' : 'เปิดอยู่'}</button>

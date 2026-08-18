@@ -92,6 +92,15 @@ await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>
 await sleep(1200);
 const homeClicked = await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('กลับหน้าหลัก')); if(b)b.click(); return !!b; })()`);
 expect('กดกลับหน้าหลัก (พักไว้) ได้', homeClicked === true);
+await sleep(600);
+// กลับหน้าหลัก → เลือกพักแบบไหน? → กดพักสั้น (ถึงจะพัก session ไว้ที่ Home จริง)
+const pauseChosen = await evalJs(`(() => {
+  const m = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักสั้น'));
+  if (!m) return false;
+  m.click();
+  return true;
+})()`);
+expect('เลือก ⏸️ พักสั้น (พักไว้ที่ Home) ได้', pauseChosen === true);
 await sleep(1500);
 
 // แถบ resume อยู่ใน sticky-top (ก่อน hero-card) + มีปุ่มโฟกัสต่อ + โชว์เวลาเหลือ
@@ -136,19 +145,26 @@ expect('เลื่อนแล้วแถบติดตาม topbar (อย
 expect('เลื่อนผ่าน hero → แถบย่อ (collapsed) + ซ่อนข้อความ', sticky.collapsed === true && sticky.infoHidden === true, JSON.stringify(sticky));
 await evalJs(`window.scrollTo(0, 0); true`);
 
-// กดทิ้ง session (ยอมรับ confirm) → แถบหาย + กลับเป็นหน้าเริ่มผจญภัยปกติ
-await evalJs(`window.confirm = () => true; true`);
+// กดทิ้ง session → modal ถามเหตุผลขึ้น → เลือกเหตุผลสำเร็จรูป + ยืนยัน → แถบหาย + กลับเป็นหน้าเริ่มผจญภัยปกติ
 const discarded = await evalJs(`(() => { const b=[...document.querySelectorAll('.resume-bar button')].find(x=>x.textContent.includes('ทิ้ง session')); if(b)b.click(); return !!b; })()`);
 expect('กดทิ้ง session ได้ (จากแถบ)', discarded === true);
+await sleep(600);
+const reasonModal = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
+expect('กดทิ้ง session → modal ถามเหตุผลขึ้น', reasonModal.includes('เหตุผล') && reasonModal.includes('ทิ้งเซสชัน'), reasonModal.replace(/\n/g, ' ').slice(0, 100));
+await evalJs(`(() => { const b=[...document.querySelectorAll('.pause-preset-chip')].find(x=>x.textContent.includes('ธุระด่วน')); if(b)b.click(); return !!b; })()`);
+await sleep(300);
+await evalJs(`(() => { const b=[...document.querySelectorAll('.modal button')].find(x=>x.textContent.includes('ทิ้ง session')); if(b)b.click(); return !!b; })()`);
 await sleep(1500);
 const barAfter = await evalJs(`!!document.querySelector('.resume-bar')`);
 const startBtn = await evalJs(`[...document.querySelectorAll('button')].some((b) => b.textContent.includes('เริ่มผจญภัย'))`);
 expect('ทิ้งแล้วแถบหาย + กลับหน้าเริ่มปกติ', barAfter === false && startBtn === true);
 
-// เริ่ม session ใหม่ → กลับหน้าหลัก → กดโฟกัสต่อ → กลับไปหน้าจอโฟกัส (กำลังโฟกัส)
+// เริ่ม session ใหม่ → กลับหน้าหลัก (เลือกพักสั้น) → กดโฟกัสต่อ → กลับไปหน้าจอโฟกัส (กำลังโฟกัส)
 await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('เริ่มผจญภัย')); if(b)b.click(); return !!b; })()`);
 await sleep(1200);
 await evalJs(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('กลับหน้าหลัก')); if(b)b.click(); return !!b; })()`);
+await sleep(600);
+await evalJs(`(() => { const b=[...document.querySelectorAll('.modal button')].find(x=>x.textContent.includes('พักสั้น')); if(b)b.click(); return !!b; })()`);
 await sleep(1500);
 await evalJs(`(() => { const b=[...document.querySelectorAll('.resume-bar button')].find(x=>x.textContent.includes('โฟกัสต่อ')); if(b)b.click(); return !!b; })()`);
 await sleep(1500);

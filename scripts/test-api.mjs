@@ -526,6 +526,48 @@ try {
     expect('shield: คอมโบไม่หาย (streak เท่าเดิม) + โล่แตก', st.json.progress.streak === streakBefore && st.json.progress.combo_shield === 0, `streak=${st.json.progress.streak} shield=${st.json.progress.combo_shield}`);
   }
 
+  // --- 💨 ทิ้ง session พร้อมเหตุผล — บันทึกสถิติ + ดูย้อนหลัง ---
+  {
+    const aid = (await api('/state')).json.character.id;
+    await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500 } }); // ให้มีคอมโบ (แล้วทิ้งจะได้ streak 0)
+    r = await api('/adventure/abort', { method: 'POST', body: { reason: '📞 รับสาย/ธุระด่วน', focusSec: 600 } });
+    expect('abort: ทิ้ง session พร้อมเหตุผลได้', r.status === 200, r.json.error || '');
+    const al = db.prepare("SELECT abort_reason, focus_sec, detail FROM log WHERE character_id = ? AND type = 'abort' ORDER BY id DESC LIMIT 1").get(aid);
+    expect('abort: บันทึกเหตุผล + เวลาที่โฟกัสไปใน log', al?.abort_reason === '📞 รับสาย/ธุระด่วน' && al?.focus_sec === 600 && (al?.detail || '').includes('📞 รับสาย/ธุระด่วน'), JSON.stringify(al));
+    r = await api('/stats');
+    const myAb = (r.json.abortReasons || []).find((x) => x.reason === '📞 รับสาย/ธุระด่วน');
+    expect('abort: สถิติแยกตามเหตุผลมีรายการ (30 วัน)', !!myAb && myAb.times >= 1, JSON.stringify(r.json.abortReasons));
+    expect('abort: stats นับ session ที่ทิ้งรวม', (r.json.abortsTotal || 0) >= 2, `abortsTotal=${r.json.abortsTotal}`);
+    // ทิ้ง session แยกตามช่วงเวลา — abort ทุกตัวต้องจัดลงช่วงใดช่วงหนึ่ง (เช้า/กลางวัน/เย็น/ดึก) + จำนวนรวมตรงกับ abortsTotal
+    const periodSum = (r.json.abortByPeriod || []).reduce((a, p) => a + p.times, 0);
+    const validPeriods = ['เช้า', 'กลางวัน', 'เย็น', 'ดึก'];
+    expect('abort: สถิติแยกตามช่วงเวลามีรายการ (30 วัน)', (r.json.abortByPeriod || []).length > 0 && (r.json.abortByPeriod || []).every((p) => validPeriods.includes(p.period) && p.times >= 1), JSON.stringify(r.json.abortByPeriod));
+    expect('abort: จำนวนรวมตามช่วงเวลา = session ที่ทิ้งรวม', periodSum === (r.json.abortsTotal || 0), `periodSum=${periodSum} abortsTotal=${r.json.abortsTotal}`);
+    // ทิ้ง session แยกตามวัน (จ-อา) — dow 0-6 (อาทิตย์=0) · รวมทุกวันต้องเท่ากับยอดรวม
+    const dowSum = (r.json.abortByWeekday || []).reduce((a, d) => a + d.times, 0);
+    expect('abort: สถิติแยกตามวันมีรายการ (30 วัน)', (r.json.abortByWeekday || []).length > 0 && (r.json.abortByWeekday || []).every((d) => d.dow >= 0 && d.dow <= 6 && d.times >= 1), JSON.stringify(r.json.abortByWeekday));
+    expect('abort: จำนวนรวมตามวัน = session ที่ทิ้งรวม', dowSum === (r.json.abortsTotal || 0), `dowSum=${dowSum} abortsTotal=${r.json.abortsTotal}`);
+    // เตือนเมื่อทิ้งบ่อยเกิน: /state + /stats ส่ง abortsThisWeek + abortWeekLimit
+    const st = await api('/state');
+    expect('abort: /state ส่ง abortsThisWeek + เกณฑ์เตือน (settings)', (st.json.abortsThisWeek || 0) >= 1 && (st.json.settings?.abort_week_limit ?? 3) >= 1, `thisWeek=${st.json.abortsThisWeek} limit=${st.json.settings?.abort_week_limit}`);
+    expect('abort: /stats ส่ง abortsThisWeek + เกณฑ์เตือนตรงกัน', (r.json.abortsThisWeek || 0) === (st.json.abortsThisWeek || 0) && (r.json.settings?.abort_week_limit ?? 3) === (st.json.settings?.abort_week_limit ?? 3), JSON.stringify({ stats: r.json.abortsThisWeek, state: st.json.abortsThisWeek, limit: r.json.settings?.abort_week_limit }));
+    // ทิ้งเพิ่มจนเกินเกณฑ์ → response บอก abortsThisWeek อัปเดตทันที
+    const before = (st.json.abortsThisWeek || 0);
+    const need = Math.max(0, ((st.json.settings?.abort_week_limit ?? 3)) - before + 1);
+    for (let i = 0; i < need; i++) await api('/adventure/abort', { method: 'POST', body: { reason: '📱 เผลอไปอย่างอื่น' } });
+    const after = await api('/state');
+    expect('abort: ทิ้งเกินเกณฑ์ → abortsThisWeek อัปเดตเกินเกณฑ์', (after.json.abortsThisWeek || 0) >= (after.json.settings?.abort_week_limit ?? 3), `thisWeek=${after.json.abortsThisWeek} limit=${after.json.settings?.abort_week_limit}`);
+    // ตั้งเกณฑ์เตือนเองได้ (หน้า Settings) — 0 = ปิดเตือน · clamp 0-20
+    r = await api('/settings', { method: 'PUT', body: { abort_week_limit: 5 } });
+    expect('abort: ตั้งเกณฑ์เตือนเองได้ (5)', r.status === 200 && r.json.settings.abort_week_limit === 5, JSON.stringify(r.json.settings));
+    r = await api('/settings', { method: 'PUT', body: { abort_week_limit: 99 } });
+    expect('abort: เกณฑ์เกิน 20 → clamp 20', r.json.settings.abort_week_limit === 20, JSON.stringify(r.json.settings));
+    r = await api('/settings', { method: 'PUT', body: { abort_week_limit: -1 } });
+    expect('abort: เกณฑ์ติดลบ → clamp 0 (ปิดเตือน)', r.json.settings.abort_week_limit === 0, JSON.stringify(r.json.settings));
+    r = await api('/settings', { method: 'PUT', body: { abort_week_limit: 3 } });
+    expect('abort: คืนเกณฑ์เป็นค่าเริ่มต้น (3)', r.json.settings.abort_week_limit === 3, JSON.stringify(r.json.settings));
+  }
+
   // --- 📖 เควสต์เนื้อเรื่อง (story quest) ---
   {
     const aid = (await api('/state')).json.character.id;
@@ -667,7 +709,15 @@ try {
     addItem(bcid, 1, 5);
     r = await api('/state');
     expect('bag: ไอเทมซ้ำรวมกอง ไม่กินช่องเพิ่ม', r.json.character.bagUsed === 20, `${r.json.character.bagUsed}/${r.json.character.bagSize}`);
-    // ของรางวัลจาก event (ของชนิดใหม่) → ขายอัตโนมัติราคาพื้นฐานเมื่อเต็ม
+    // 🔄 สลับของในกระเป๋าเป็นชนิดที่พ่อค้าไม่แจก (COMMON_LOOT ถูกถอดออกทั้งหมด) — ทำให้ของแถมจากพ่อค้า
+    // เป็นของชนิดใหม่เสมอ → ขายอัตโนมัติแบบ deterministic (เดิมพึ่งดวง 10% ของขวัญหายาก = เทสต์เด้งบ่อย)
+    // ไม่เอา 23 (เกราะมังกร) — เป็นผลลัพธ์คราฟต์ที่เทสต์ถัดไปต้องบล็อก
+    const refillIds = [2, 11, 13, 16, 22, 51, 61, 62, 71, 81];
+    db.prepare('DELETE FROM inventory WHERE character_id = ? AND item_id IN (1,3,5,6,7,45,46,47,48,49)').run(bcid);
+    for (const id of refillIds) addItem(bcid, id, 1);
+    r = await api('/state');
+    expect('bag: สลับเป็นของที่ไม่ใช่ของแถมพ่อค้า → ยังเต็ม 20/20', r.json.character.bagUsed === 20, `${r.json.character.bagUsed}/${r.json.character.bagSize}`);
+    // ของรางวัลจาก event (ของชนิดใหม่) → ขายอัตโนมัติราคาพื้นฐานเมื่อเต็ม (ของแถมพ่อค้า = ชนิดใหม่เสมอ → ขายแน่นอน)
     let sold = null;
     for (let i = 0; i < 30 && !sold; i++) {
       r = await api('/adventure/event', { method: 'POST', body: { key: 'merchant' } });
@@ -681,7 +731,7 @@ try {
     for (let v = 1; v <= 10 && !target; v++) {
       bvisit = `bag-buy-${v}`;
       r = await api(`/camp?visit=${bvisit}`);
-      target = (r.json.shop || []).filter((s) => !s.bm).find((s) => !fillIds.includes(s.id));
+      target = (r.json.shop || []).filter((s) => !s.bm).find((s) => !fillIds.includes(s.id) && !refillIds.includes(s.id));
     }
     db.prepare('UPDATE character SET gold = 5000 WHERE id = ?').run(bcid);
     r = await api('/shop/buy', { method: 'POST', body: { itemId: target.id, visit: bvisit } });

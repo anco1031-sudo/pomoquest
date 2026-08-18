@@ -236,6 +236,8 @@ ensureColumn('settings', 'active_character_id', 'INTEGER');
 // client เก็บ epoch ไว้กับ timer ที่พักค้างใน localStorage — ถ้าไม่ตรงกับ server แปลว่า session นั้น
 // มาจากโลกเก่า (เช่น reset ผ่าน run.sh ที่ลบ DB แต่ไม่ล้าง browser) → ทิ้ง session นั้นทิ้ง
 ensureColumn('settings', 'epoch', 'TEXT');
+// เกณฑ์เตือน "ทิ้ง session บ่อยเกิน" (ครั้ง/สัปดาห์ — ตั้งค่าได้ที่หน้า Settings · 0 = ปิดเตือน)
+ensureColumn('settings', 'abort_week_limit', 'INTEGER DEFAULT 3');
 ensureColumn('log', 'focus_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'break_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'break_overrun_sec', 'INTEGER DEFAULT 0');
@@ -256,6 +258,8 @@ ensureColumn('log', 'city', 'TEXT');
 ensureColumn('log', 'challenge_mode', "TEXT DEFAULT ''");
 // ชื่องานที่โฟกัสใน session นั้น (ตั้งก่อนเริ่มโฟกัส — ดูสถิติแยกตามงานได้)
 ensureColumn('log', 'focus_task', 'TEXT');
+// เหตุผลที่ทิ้ง session (เลือกจากตัวเลือกสำเร็จรูปหรือพิมพ์เองตอนทิ้ง) — ใช้รวมสถิติทิ้ง session แยกตามเหตุผล
+ensureColumn('log', 'abort_reason', 'TEXT');
 // โล่โฟกัส: 1 = กันคอมโบหาย 1 ครั้ง (ใช้ไอเทม 🛡️ โล่โฟกัสแล้ว) — แตกเมื่อพัก/ทิ้ง session
 ensureColumn('progress', 'combo_shield', 'INTEGER DEFAULT 0');
 // กระเป๋า: จำนวนช่องสูงสุด (ของแต่ละชนิด = 1 ช่อง — ไอเทมซ้ำรวมกองกันไม่กินช่องเพิ่ม)
@@ -405,10 +409,10 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, pauseSec = 0, longPauseSec = 0, longPauseTitle = '', hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null }) {
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, pauseSec = 0, longPauseSec = 0, longPauseTitle = '', hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null, abortReason = null }) {
   // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
-  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, pause_sec, long_pause_sec, long_pause_title, hp_change, mp_change, session_key, city, challenge_mode, focus_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, pauseSec, longPauseSec, longPauseTitle, hpChange, mpChange, sessionKey, city, challengeMode, focusTask).lastInsertRowid;
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, pause_sec, long_pause_sec, long_pause_title, hp_change, mp_change, session_key, city, challenge_mode, focus_task, abort_reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, pauseSec, longPauseSec, longPauseTitle, hpChange, mpChange, sessionKey, city, challengeMode, focusTask, abortReason).lastInsertRowid;
 }
 
 // ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----

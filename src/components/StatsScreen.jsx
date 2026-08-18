@@ -5,6 +5,14 @@ import { MONSTERS, BOSSES, ITEM_BY_ID } from '../../server/data.js';
 
 const DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 
+// ช่วงเวลาของวัน (เรียงตามนาฬิกา) — ใช้นับว่าแต่ละช่วงทิ้ง session กี่ครั้ง
+const DAY_PERIODS = [
+  { id: 'เช้า', icon: '🌅', label: 'เช้า', hint: '05-11' },
+  { id: 'กลางวัน', icon: '☀️', label: 'กลางวัน', hint: '12-16' },
+  { id: 'เย็น', icon: '🌆', label: 'เย็น', hint: '17-21' },
+  { id: 'ดึก', icon: '🌙', label: 'ดึก', hint: '22-04' },
+];
+
 // ระดับความเข้มใน heatmap — แบ่งตามนาทีที่โฟกัสต่อวัน
 const heatLevel = (focusSec) => {
   const m = Math.round((focusSec || 0) / 60);
@@ -80,6 +88,7 @@ export default function StatsScreen() {
           <div className="stat-box"><b>{p.sessions_completed}</b><span>session ทั้งหมด</span></div>
           <div className="stat-box"><b>{p.daily_streak}</b><span>โฟกัสติดต่อ (วัน)</span></div>
           <div className="stat-box"><b>{p.best_streak}</b><span>คอมโบสูงสุด</span></div>
+          <div className="stat-box"><b>{data.abortsTotal || 0}</b><span>session ที่ทิ้ง</span></div>
           <div className="stat-box"><b>{data.achievements.unlocked}/{data.achievements.total}</b><span>ตราที่ปลดล็อก</span></div>
         </div>
       </div>
@@ -319,6 +328,90 @@ export default function StatsScreen() {
           <p className="hint">💡 ตั้งชื่อพักยาวจากตัวเลือกสำเร็จรูป (หรือพิมพ์เอง) — ดูได้ว่าเวลาไปกับอะไรบ้าง</p>
         </Panel>
       )}
+
+      {data.abortReasons && data.abortReasons.length > 0 && (
+        <Panel title="💨 ทิ้ง session แยกตามเหตุผล (30 วัน)">
+          <div className="task-list">
+            {data.abortReasons.map((t) => (
+              <div className="task-row" key={t.reason}>
+                <span className="task-name">{t.reason}</span>
+                <span className="task-val">{fmtDuration(t.focus_sec)}</span>
+                <span className="task-sessions">x{t.times} ครั้ง</span>
+              </div>
+            ))}
+          </div>
+          <p className="hint">💡 เลือกเหตุผลตอนทิ้ง session (ตัวเลือกสำเร็จรูปหรือพิมพ์เอง) — ดูว่าทิ้งเพราะอะไรบ่อยที่สุด (เวลาที่โชว์ = รวมที่โฟกัสไปก่อนทิ้ง)</p>
+        </Panel>
+      )}
+
+      {data.abortByPeriod && data.abortByPeriod.length > 0 && (() => {
+        const byPeriod = Object.fromEntries(data.abortByPeriod.map((r) => [r.period, r]));
+        const maxAbort = Math.max(1, ...data.abortByPeriod.map((r) => r.times));
+        return (
+          <Panel title="💨 ทิ้ง session แยกตามช่วงเวลา (30 วัน)">
+            <div className="chart">
+              {DAY_PERIODS.map((p) => {
+                const row = byPeriod[p.id];
+                const h = Math.max(4, ((row?.times || 0) / maxAbort) * 100);
+                return (
+                  <div
+                    className="chart-col"
+                    key={p.id}
+                    title={row ? `${p.icon} ${p.label} (${p.hint}) — ทิ้ง ${row.times} ครั้ง · โฟกัสไปแล้ว ${fmtDuration(row.focus_sec)}` : `${p.icon} ${p.label} (${p.hint}) — ยังไม่ทิ้ง`}
+                  >
+                    <div className="chart-value">{row?.times > 0 ? `x${row.times}` : ''}</div>
+                    <div className="chart-bar-wrap">
+                      <div className="chart-bar chart-bar-abort" style={{ height: `${h}%` }} />
+                    </div>
+                    <div className="chart-label">{p.icon} {p.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="hint">🌅 เช้า 05-11 · ☀️ กลางวัน 12-16 · 🌆 เย็น 17-21 · 🌙 ดึก 22-04 — ดูว่าช่วงไหนทิ้ง session บ่อยที่สุด (นับจากเวลาที่กดทิ้ง)</p>
+          </Panel>
+        );
+      })()}
+
+      {data.abortByWeekday && data.abortByWeekday.length > 0 && (() => {
+        const byDow = Object.fromEntries(data.abortByWeekday.map((r) => [r.dow, r]));
+        const maxDow = Math.max(1, ...data.abortByWeekday.map((r) => r.times));
+        return (
+          <Panel title="💨 ทิ้ง session แยกตามวัน (30 วัน)">
+            <div className="chart">
+              {DAY_NAMES.map((d, i) => {
+                const row = byDow[i];
+                const h = Math.max(4, ((row?.times || 0) / maxDow) * 100);
+                return (
+                  <div
+                    className="chart-col"
+                    key={i}
+                    title={row ? `วัน${d} — ทิ้ง ${row.times} ครั้ง · โฟกัสไปแล้ว ${fmtDuration(row.focus_sec)}` : `วัน${d} — ยังไม่ทิ้ง`}
+                  >
+                    <div className="chart-value">{row?.times > 0 ? `x${row.times}` : ''}</div>
+                    <div className="chart-bar-wrap">
+                      <div className="chart-bar chart-bar-abort" style={{ height: `${h}%` }} />
+                    </div>
+                    <div className="chart-label">{d}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="hint">ดูว่าทิ้ง session บ่อยวันไหน — ถ้าวันไหนสูงผิดปกติ ลองปรับตารางโฟกัสหรือลดงานในวันนั้น</p>
+          </Panel>
+        );
+      })()}
+
+      {(() => {
+        const limit = data.settings?.abort_week_limit ?? 3;
+        if (limit <= 0 || (data.abortsThisWeek || 0) < limit) return null;
+        return (
+          <div className="panel abort-week-banner">
+            <div className="panel-title">⚠️ ทิ้ง session บ่อยเกินไป</div>
+            <p>สัปดาห์นี้ทิ้ง session ไปแล้ว <b>{data.abortsThisWeek} ครั้ง</b> (เกินเกณฑ์ {limit}) — คอมโบโฟกัสหายทุกครั้งที่ทิ้ง ลองพักยาว 😴 แทนการทิ้งดูไหม (พักยาวนับแยกหมวดสถิติ ไม่เสียคอมโบ · ตั้งเกณฑ์ได้ที่หน้า Settings)</p>
+          </div>
+        );
+      })()}
 
       {(data.bmStats?.buys > 0 || data.bmStats?.sells > 0) && (
         <Panel title="🖤 สถิติตลาดมืด">

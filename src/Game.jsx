@@ -32,6 +32,18 @@ function loadTimer(charId, epoch) {
   }
 }
 
+// เหตุผลทิ้ง session สำเร็จรูป (ตัวเลือกเร็ว — ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามเหตุผลได้) · พิมพ์เองก็ได้ที่ช่องอื่น ๆ
+const ABORT_PRESETS = [
+  { id: 'call', icon: '📞', label: 'รับสาย/ธุระด่วน', full: '📞 รับสาย/ธุระด่วน' },
+  { id: 'tired', icon: '😴', label: 'ง่วง/โฟกัสไม่ไหว', full: '😴 ง่วง/โฟกัสไม่ไหว' },
+  { id: 'hard', icon: '😫', label: 'งานยากเกินไป', full: '😫 งานยากเกินไป' },
+  { id: 'eat', icon: '🍚', label: 'ต้องไปกินข้าว', full: '🍚 ต้องไปกินข้าว' },
+  { id: 'outside', icon: '🚶', label: 'ต้องออกไปข้างนอก', full: '🚶 ต้องออกไปข้างนอก' },
+  { id: 'done', icon: '🏁', label: 'งานจบ/เลิกงาน', full: '🏁 งานจบ/เลิกงาน' },
+  { id: 'distracted', icon: '📱', label: 'เผลอไปอย่างอื่น', full: '📱 เผลอไปอย่างอื่น' },
+  { id: 'other', icon: '🎲', label: 'อื่น ๆ', full: '🎲 อื่น ๆ' },
+];
+
 // สุ่มเวลาจนกว่า event ถัดไป: 30–90 วินาที (สุ่ม — ไม่มีการตั้งค่าแล้ว)
 // แต่ห้ามเลยเวลาที่เหลือของ session (เผื่อ 5 วิ) — เหลือ 30 วิ event ต้องเกิดภายใน 25 วิ
 const EVENT_DELAY_MAX = 90;
@@ -42,7 +54,7 @@ const randomEventDelay = (remainSec) => {
 };
 
 export default function Game() {
-  const { loading, hasCharacter, character, characters, settings, refresh, post, get, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp, epoch } = useGame();
+  const { loading, hasCharacter, character, characters, settings, progress, abortsThisWeek, refresh, post, get, showToast, eventQueue, closeEvent, achieveQueue, closeAchieve, levelUpQueue, dismissLevelUp, epoch } = useGame();
 
   const [phase, setPhase] = useState('idle'); // idle | work | short_break | long_break
   const [sessionIdx, setSessionIdx] = useState(1);
@@ -79,6 +91,9 @@ export default function Game() {
   const [breakAtHome, setBreakAtHome] = useState(false); // กลับหน้าหลักระหว่างพักเบรก — timer ยังนับต่อ (หมดเวลายังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)
   const [postBossNote, setPostBossNote] = useState(null); // ชนะ/หนีบอสแล้ว — อยู่ใน "พักหลังชัยชนะ" (ข้อความสรุปผล) · null = ยังสู้บอสอยู่
   const [hatchResult, setHatchResult] = useState(null); // 🥚 ผลฟักไข่หลังจบ session — เปิด modal ฉลอง (null = ไม่มี)
+  const [showAbortReason, setShowAbortReason] = useState(false); // modal ถามเหตุผลก่อนทิ้ง session
+  const [abortReasonInput, setAbortReasonInput] = useState(''); // เหตุผลที่เลือก/พิมพ์ (ส่งไป server + เก็บสถิติ)
+  const abortWasRunningRef = useRef(false); // ก่อนเปิด modal ทิ้ง session — timer รันอยู่ไหม (ปิดแล้วคืนค่าเดิม)
 
   // สรุปรวมของรางวัลจากเหตุการณ์ใน session นี้ (โชว์ตอนจบ session)
   const sessionSummary = useMemo(() => {
@@ -100,6 +115,7 @@ export default function Game() {
   focusTaskRef.current = focusTask;
   const lastResRef = useRef(null); // response ของ session ล่าสุด (ใช้แชร์สรุป)
   const endedRef = useRef(false);
+  const runningRef = useRef(running);
   const phaseRef = useRef(phase);
   const sessionIdxRef = useRef(sessionIdx);
   const elapsedRef = useRef(elapsed);
@@ -119,6 +135,7 @@ export default function Game() {
   pauseTitleRef.current = pauseTitle;
   longPauseAccumSecRef.current = longPauseAccumSec;
   longPauseTitlesRef.current = longPauseTitles;
+  runningRef.current = running;
   phaseRef.current = phase;
   sessionIdxRef.current = sessionIdx;
   elapsedRef.current = elapsed;
@@ -170,6 +187,8 @@ export default function Game() {
     setBreakAtHome(false);
     setPostBossNote(null);
     setHatchResult(null);
+    setShowAbortReason(false);
+    setAbortReasonInput('');
 
     const t = loadTimer(character.id, epoch);
     if (t) {
@@ -403,10 +422,11 @@ export default function Game() {
     sfx.start();
   };
 
-  // เลือก "ทิ้ง session" ใน modal กลับมาจากพักยาว — ทิ้งเลย (modal นี้คือการยืนยันแล้ว ไม่ถามซ้ำ)
+  // เลือก "ทิ้ง session" ใน modal กลับมาจากพักยาว — ปิด modal นี้ แล้วเปิด modal ถามเหตุผล (ทิ้งจริงต้องเลือกเหตุผล)
+  // เกาะชื่อพักยาวมาเป็นเหตุผลเริ่มต้น (แก้ไขได้) — พักยาวกับทิ้ง session เป็นคนละระบบ แต่เชื่อมต่อกันตรงนี้
   const discardFromLongPause = () => {
     setShowLongPauseReturn(false);
-    abortSession();
+    openAbortModal(pauseTitle);
   };
 
   // แก้ไขชื่องานของ session นี้ (จากหน้าจอโฟกัส) — session ต่อ ๆ ไปในรอบใช้ชื่อใหม่
@@ -555,27 +575,45 @@ export default function Game() {
     setStoryDone(true); // รอครบแล้วก็ไม่เจอ — เลิกคอย
   }, [get]);
 
-  // ทิ้งเซสชันจริง (ไม่มี confirm — เรียกจาก doAbort ที่ถามยืนยัน หรือจาก modal พักยาวที่ตัดสินใจแล้ว)
-  const abortSession = async () => {
-    await post('/adventure/abort'); // ถ้าใช้โล่ กันคอมโบ — server โชว์ toast ยืนยันเองผ่าน d.message (กัน toast ซ้อน)
+  // ทิ้งเซสชันจริง (เรียกจาก modal ถามเหตุผลที่ตัดสินใจแล้วเท่านั้น)
+  const abortSession = async (reason = '') => {
+    // ส่งเหตุผล + โฟกัสไปแล้วกี่วินาที — เก็บสถิติ/ดูย้อนหลัง (ถ้าใช้โล่ กันคอมโบ — server โชว์ toast ยืนยันเองผ่าน d.message กัน toast ซ้อน)
+    await post('/adventure/abort', { reason, focusSec: elapsedRef.current });
     setPhase('idle');
     setRunning(false);
     setPausedAtHome(false);
     setBreakAtHome(false);
     setSessionIdx(1);
     setElapsed(0);
+    setExpiredWork(false); // ปิด modal หมดเวลา (ถ้าเปิดจากตรงนั้น)
     setAwaitingBreak(false);
     resetPause(); // ทิ้งเซสชัน = เลิกนับพักกลาง session
   };
 
-  // ทิ้งเซสชัน (จากหน้าจอโฟกัส หรือจากแถบโฟกัสต่อที่หน้าหลัก) — ถามยืนยันก่อน คอมโบจะหายเว้นแต่มีโล่
-  const doAbort = async (confirmMsg) => {
-    if (!window.confirm(confirmMsg)) return;
-    await abortSession();
+  // เปิด modal ถามเหตุผลก่อนทิ้ง session (แทน window.confirm เดิม) — หยุดนาฬิกาชั่วคราวเหมือนเดิม
+  // (กัน session หมดเวลาค้าง modal เปิดอยู่ → ถ้าปิด modal โดยไม่ทิ้ง จะกลับไปรันต่อ)
+  // initialReason (optional) = เติมเหตุผลเริ่มต้นให้ เช่น เกาะชื่อพักยาวตอนทิ้งจาก modal กลับมาจากพักยาว
+  const openAbortModal = (initialReason = '') => {
+    abortWasRunningRef.current = runningRef.current;
+    setRunning(false);
+    setAbortReasonInput(initialReason);
+    setShowAbortReason(true);
+    sfx.click();
   };
 
-  const handleAbort = () => doAbort('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป');
-  const handleDiscardPaused = () => doAbort('ทิ้ง session ที่พักไว้? คอมโบโฟกัสจะหายไป');
+  const cancelAbort = () => {
+    setShowAbortReason(false);
+    if (abortWasRunningRef.current) setRunning(true); // กลับไปรันต่อเหมือนเดิม
+    sfx.click();
+  };
+
+  const confirmAbort = async () => {
+    setShowAbortReason(false);
+    await abortSession(abortReasonInput.trim());
+  };
+
+  const handleAbort = () => openAbortModal();
+  const handleDiscardPaused = () => openAbortModal();
 
   // แชร์สรุป session — navigator.share (มือถือ) หรือคัดลอกข้อความ
   const shareSummary = async () => {
@@ -920,19 +958,52 @@ export default function Game() {
               >
                 ✅ จบเซสชัน รับรางวัล
               </button>
-              <button
-                className="btn"
-                onClick={async () => {
-                  setExpiredWork(false);
-                  await post('/adventure/abort');
-                  setPhase('idle');
-                  setRunning(false);
-                  setSessionIdx(1);
-                  setElapsed(0);
-                }}
-              >
-                💨 ทิ้งเซสชัน
-              </button>
+              <button className="btn" onClick={openAbortModal}>💨 ทิ้งเซสชัน</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ทิ้ง session — ถามเหตุผล (เลือกสำเร็จรูปหรือพิมพ์เอง) → บันทึกสถิติ + ดูย้อนหลังใน log/Stats */}
+      {showAbortReason && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>💨 ทิ้งเซสชันนี้?</h2>
+            <p>
+              {progress?.combo_shield > 0
+                ? '🛡️ มีโล่โฟกัสติดตั้งอยู่ — คอมโบโฟกัสจะไม่หาย (โล่จะแตก)'
+                : 'คอมโบโฟกัสจะหายไป (เริ่มใหม่จาก 1)'}
+              <br />
+              เลือกเหตุผลเพื่อบันทึกเป็นสถิติ — ดูย้อนหลังได้ที่หน้า Stats
+            </p>
+            {settings?.abort_week_limit > 0 && abortsThisWeek >= settings.abort_week_limit && (
+              <p className="abort-warning">⚠️ สัปดาห์นี้ทิ้งไปแล้ว {abortsThisWeek} ครั้ง (เกินเกณฑ์ {settings.abort_week_limit}) — ลองพักยาว 😴 แทนการทิ้งดูไหม? คอมโบจะหายทุกครั้งที่ทิ้ง</p>
+            )}
+            <div className="pause-presets">
+              {ABORT_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`pause-preset-chip${abortReasonInput === p.full ? ' active' : ''}`}
+                  onClick={() => setAbortReasonInput(p.full)}
+                >
+                  {p.icon} {p.label}
+                </button>
+              ))}
+            </div>
+            <label className="pause-title-label">
+              💨 เหตุผลที่ทิ้ง (เลือกด้านบน หรือพิมพ์เอง — เว้นว่าง = ไม่ระบุ):
+              <input
+                className="input pause-title-input"
+                value={abortReasonInput}
+                onChange={(e) => setAbortReasonInput(e.target.value)}
+                placeholder="พิมพ์เหตุผล…"
+                maxLength={40}
+              />
+            </label>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={confirmAbort}>💨 ทิ้ง session</button>
+              <button className="btn" onClick={cancelAbort}>ยกเลิก</button>
             </div>
           </div>
         </div>
