@@ -124,7 +124,110 @@ await sleep(500);
 label = await evalJs(`document.querySelector('.timer-label')?.textContent || ''`);
 expect('เลือกโฟกัสต่อใน modal → กลับมารัน', label.includes('กำลังโฟกัส'), label.trim());
 
-// ---- 3) กด 🏠 กลับหน้าหลัก → เลือกพักยาว + ตั้งชื่อ "ไปกินข้าว" → ไปพักที่หน้า Home ----
+// ---- 3) พักยาวค้างอยู่ → กด 🏠 กลับหน้าหลัก → ไปตรง ๆ ไม่ถามพักแบบไหนซ้ำ ----
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('หยุดพัก'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(600);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักยาว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // พักยาว (ไม่มีชื่อ)
+await sleep(800);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('กลับหน้าหลัก'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(800);
+const homeDirect = await evalJs(`(() => ({
+  modal: document.querySelector('.modal')?.innerText || '',
+  bar: document.querySelector('.resume-bar')?.innerText || '',
+}))()`);
+expect('พักยาวค้างอยู่ + กดกลับหน้าหลัก → ไปตรง ๆ (ไม่มี modal พักแบบไหน)', !homeDirect.modal.includes('พักแบบไหน'), homeDirect.modal.replace(/\n/g, ' ').slice(0, 60) || '(ไม่มี modal)');
+expect('พักยาวค้างอยู่ + กลับหน้าหลัก → แถบ Home โชว์ 😴 พักยาว', homeDirect.bar.includes('พักยาว'), homeDirect.bar.replace(/\n/g, ' ').slice(0, 120));
+// กลับมาที่หน้าโฟกัส (โฟกัสต่อจากแถบ) — เตรียมเทสต์ข้อ 4 ต่อ
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.resume-bar button')].find((x) => x.textContent.includes('โฟกัสต่อ'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(600);
+returnModal = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
+expect('จากแถบกลับมา → modal "กลับมาจากพักยาว"', returnModal.includes('กลับมาจากพักยาว'), returnModal.replace(/\n/g, ' ').slice(0, 100));
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('โฟกัสต่อ'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(500);
+
+// ---- 3.5) ทางลัด "😴 พักยาว" ที่แถบ Home: พักสั้น → กลับหน้าหลัก → กด 😴 พักยาว ตรง ๆ (ไม่ผ่าน modal) ----
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('หยุดพัก'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(600);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักสั้น'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // เลือกพักสั้น
+await sleep(600);
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('กลับหน้าหลัก'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // พักอยู่แล้ว → ไปหน้า Home ตรง ๆ
+await sleep(800);
+let barState = await evalJs(`(() => ({
+  icon: document.querySelector('.resume-bar .resume-icon')?.textContent || '',
+  hasShortcut: [...document.querySelectorAll('.resume-bar button')].some((x) => x.textContent.includes('พักยาว')),
+}))()`);
+expect('พักสั้นค้างอยู่ + กลับหน้าหลัก → แถบ Home ยังเป็นพักสั้น (⏸️) + มีปุ่มทางลัด "😴 พักยาว"', barState.icon === '⏸️' && barState.hasShortcut === true, JSON.stringify(barState));
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.resume-bar button')].find((x) => x.textContent.includes('พักยาว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`); // กดทางลัด 😴 พักยาว ตรง ๆ (ไม่ผ่าน modal)
+await sleep(600);
+barState = await evalJs(`(() => ({
+  icon: document.querySelector('.resume-bar .resume-icon')?.textContent || '',
+  hasShortcut: [...document.querySelectorAll('.resume-bar button')].some((x) => x.textContent.includes('พักยาว')),
+  bar: document.querySelector('.resume-bar')?.innerText || '',
+}))()`);
+expect('กด 😴 พักยาว ที่แถบ Home → เปลี่ยนเป็นพักยาวทันที (😴) + ปุ่มทางลัดหาย', barState.icon === '😴' && barState.hasShortcut === false && barState.bar.includes('พักยาว'), barState.bar.replace(/\n/g, ' ').slice(0, 130));
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.resume-bar button')].find((x) => x.textContent.includes('โฟกัสต่อ'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(600);
+returnModal = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
+expect('จากแถบโฟกัสต่อหลังเปลี่ยนเป็นพักยาว → modal "กลับมาจากพักยาว"', returnModal.includes('กลับมาจากพักยาว'), returnModal.replace(/\n/g, ' ').slice(0, 100));
+await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('โฟกัสต่อ'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+await sleep(500);
+
+// ---- 4) กด 🏠 กลับหน้าหลัก (ตอนกำลังโฟกัส) → เปิดตัวเลือกพัก (ถามพักสั้น/พักยาว) → เลือกพักยาว + ตั้งชื่อ "ไปกินข้าว" → ไปพักที่หน้า Home ----
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('กลับหน้าหลัก'));
   if (!b) return false;
@@ -133,7 +236,7 @@ await evalJs(`(() => {
 })()`);
 await sleep(600);
 const homeChooser = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
-expect('🏠 กลับหน้าหลัก → เปิดตัวเลือกพัก (ถามพักสั้น/พักยาว)', homeChooser.includes('พักแบบไหน'), homeChooser.replace(/\n/g, ' ').slice(0, 80));
+expect('🏠 กลับหน้าหลัก (กำลังโฟกัส) → เปิดตัวเลือกพัก (ถามพักสั้น/พักยาว)', homeChooser.includes('พักแบบไหน'), homeChooser.replace(/\n/g, ' ').slice(0, 80));
 // เลือกชื่อพักยาวจากตัวเลือกสำเร็จรูป (chip "🍚 กินข้าว") แล้วกดพักยาว
 const chipClicked = await evalJs(`(() => {
   const b = [...document.querySelectorAll('.pause-preset-chip')].find((x) => x.textContent.includes('กินข้าว'));
@@ -153,7 +256,7 @@ await sleep(1000);
 const homeBar = await evalJs(`document.querySelector('.resume-bar')?.innerText || ''`);
 expect('พักยาวจาก 🏠 → แถบ Home โชว์ "😴 พักยาว · 🍚 กินข้าว"', homeBar.includes('พักยาว') && homeBar.includes('กินข้าว'), homeBar.replace(/\n/g, ' ').slice(0, 130));
 
-// ---- 4) กดโฟกัสต่อ (แถบ) → modal โชว์ชื่อพัก → ทิ้ง session (ไม่ถามซ้ำ) → Home ว่าง ----
+// ---- 5) กดโฟกัสต่อ (แถบ) → modal โชว์ชื่อพัก → ทิ้ง session (ไม่ถามซ้ำ) → Home ว่าง ----
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('.resume-bar button')].find((x) => x.textContent.includes('โฟกัสต่อ'));
   if (!b) return false;
@@ -190,7 +293,7 @@ await sleep(1000);
 const afterDiscard = await evalJs(`!document.querySelector('.resume-bar') && !document.querySelector('.modal')`);
 expect('ทิ้ง session ใน modal → กลับ Home ว่าง', afterDiscard === true);
 
-// ---- 5) seed session พักยาวค้าง (ชื่อ "นอนกลางวัน") → รีโหลด → โฟกัสต่อ → จบ session → สถิติแยกหมวด ----
+// ---- 6) seed session พักยาวค้าง (ชื่อ "นอนกลางวัน") → รีโหลด → โฟกัสต่อ → จบ session → สถิติแยกหมวด ----
 await send('Page.navigate', { url: BASE });
 await sleep(1500);
 const timer = {
@@ -238,7 +341,7 @@ expect('จบ session → pause_sec = 0 (พักสั้นไม่ปน)'
 const lpLog = db.prepare("SELECT long_pause_sec, detail FROM log WHERE character_id = ? AND type = 'session_done' ORDER BY id DESC LIMIT 1").get(cid);
 expect('log session_done: long_pause_sec > 0 + detail มีชื่อ "นอนกลางวัน"', (lpLog?.long_pause_sec || 0) > 0 && (lpLog?.detail || '').includes('นอนกลางวัน'), JSON.stringify(lpLog));
 
-// ---- 6) โหมดมาราธอน: พักยาวแล้วจบ session → ยังเสีย session (streak 0 + log abort + ไม่นับ long_pause_sec) ----
+// ---- 7) โหมดมาราธอน: พักยาวแล้วจบ session → ยังเสีย session (streak 0 + log abort + ไม่นับ long_pause_sec) ----
 r = await api('/character/create', { method: 'POST', body: { name: 'มาราธอนยาว', class: 'cleric', challengeMode: 'marathon' } });
 expect('สร้างตัวละครโหมดมาราธอนได้', r.status === 200, r.json.error || '');
 const mcId = r.json.character?.id;

@@ -152,7 +152,16 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
         {!running && (
           <button className="btn btn-danger" onClick={onAbort} title="ทิ้งเซสชันนี้ (คอมโบโฟกัสจะหายไป)">💨 ทิ้ง session</button>
         )}
-        <button className="btn" onClick={() => { setPauseGoHome(true); setPauseTitleInput(''); setShowPauseChoice(true); }}>🏠 กลับหน้าหลัก (พักไว้)</button>
+        <button
+          className="btn"
+          onClick={() => {
+            // พักอยู่แล้ว (พักสั้น/พักยาว) → กลับหน้าหลักตรง ๆ ไม่ต้องถามพักสั้น/ยาวซ้ำ (เลือกไปแล้วตอนพัก)
+            if (!running) { onHome(); return; }
+            setPauseGoHome(true); setPauseTitleInput(''); setShowPauseChoice(true);
+          }}
+        >
+          🏠 กลับหน้าหลัก{running ? ' (พักไว้)' : ''}
+        </button>
         {running && (
           <button className="btn btn-danger" onClick={onAbort}>💨 ทิ้งเซสชัน</button>
         )}
@@ -204,6 +213,8 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
                 😴 พักยาว (แยกหมวดสถิติ)
               </button>
             </div>
+            {/* ชื่อพักยาว — ไม่บังคับ (กด 😴 พักยาว ได้เลย ไม่ตั้งชื่อก็ได้) */}
+            <p className="pause-name-note">💡 ตั้งชื่อพักยาว (ไม่บังคับ — กด 😴 พักยาว ได้เลย ไม่ตั้งชื่อก็ได้)</p>
             <div className="pause-presets">
               {PAUSE_PRESETS.map((p) => (
                 <button
@@ -222,11 +233,11 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
                 className="input pause-title-input"
                 value={pauseTitleInput}
                 onChange={(e) => setPauseTitleInput(e.target.value)}
-                placeholder="พิมพ์ชื่อพักเอง…"
+                placeholder="พิมพ์ชื่อพักเอง… (ไม่ตั้งก็ได้)"
                 maxLength={40}
               />
             </label>
-            <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (ตั้งชื่อได้)</p>
+            <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (ตั้งชื่อหรือไม่ก็ได้)</p>
             <div className="modal-actions">
               <button className="btn btn-sm" onClick={() => setShowPauseChoice(false)}>ยกเลิก</button>
             </div>

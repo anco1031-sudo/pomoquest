@@ -429,6 +429,19 @@ export default function Game() {
     openAbortModal(pauseTitle);
   };
 
+  // ทางลัด "😴 พักยาว" จากแถบ Home — เปลี่ยนพักสั้นที่ค้างอยู่เป็นพักยาวทันที (ไม่ต้องกลับไปเปิด modal เลือก)
+  // ปิดพักสั้น (นับเวลาส่วนที่พักสั้นไปแล้ว) แล้วเริ่มนับพักยาวใหม่จากตอนนี้ — สถิติแยกหมวดไม่ปนกัน
+  const convertToLongPause = () => {
+    if (!pauseStartedAtRef.current || pauseModeRef.current === 'long') return;
+    const sec = Math.max(0, Math.round((Date.now() - pauseStartedAtRef.current) / 1000));
+    setPauseAccumSec((a) => a + sec);
+    setPauseStartedAt(Date.now());
+    setPauseMode('long');
+    setPauseTitle('');
+    showToast('😴 เปลี่ยนเป็นพักยาวแล้ว (แยกหมวดสถิติ "พักยาว")');
+    sfx.click();
+  };
+
   // แก้ไขชื่องานของ session นี้ (จากหน้าจอโฟกัส) — session ต่อ ๆ ไปในรอบใช้ชื่อใหม่
   const editFocusTask = () => {
     const v = window.prompt('📋 ตั้งชื่องานนี้ (เว้นว่างเพื่อลบ)', focusTaskRef.current || '');
@@ -726,6 +739,7 @@ export default function Game() {
           pauseTitle={pauseTitle}
           pausedTask={focusTask}
           onDiscard={handleDiscardPaused}
+          onLongPause={convertToLongPause}
           onManageCharacters={() => setShowCharSelect(true)}
           breakAtHome={breakAtHome}
           breakRemain={remain}

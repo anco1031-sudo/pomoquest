@@ -27,7 +27,7 @@ const TABS = [
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
-export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pauseMode = null, pauseTitle = '', pausedTask = '', onDiscard = null, onManageCharacters, breakAtHome = false, breakRemain = 0, breakOver = false, onBreakBack = null }) {
+export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pauseMode = null, pauseTitle = '', pausedTask = '', onDiscard = null, onLongPause = null, onManageCharacters, breakAtHome = false, breakRemain = 0, breakOver = false, onBreakBack = null }) {
   const { character, progress, settings, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
@@ -197,6 +197,16 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
               </span>
             </div>
             <div className="resume-actions">
+              {/* ทางลัด: พักสั้นที่ค้างอยู่ → กด 😴 พักยาว ได้ตรง ๆ ที่หน้า Home (ไม่ต้องกลับไปเปิด modal เลือก) */}
+              {onLongPause && pauseMode !== 'long' && (
+                <button
+                  className="btn btn-sm"
+                  onClick={onLongPause}
+                  title={'เปลี่ยนเป็นพักยาว 😴 — แยกหมวดสถิติ "พักยาว" (ไม่ถามชื่อ)'}
+                >
+                  😴 พักยาว
+                </button>
+              )}
               {onDiscard && (
                 <button
                   className="btn btn-sm btn-danger-soft"
