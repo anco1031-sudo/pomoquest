@@ -211,8 +211,20 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
 
       {/* victory — เลือก: เดินทางต่อ (เมืองใหม่) หรือสำรวจเมืองเดิมต่อ (ความยาก/รางวัล/ตลาดมืดเพิ่ม) */}
       {outcome === 'win' && (
-        <div className="victory-panel">
-          <div className="victory-title">🏆 ชัยชนะ!</div>
+        <div className={`victory-panel${boss.isDragon ? ' dragon-victory' : ''}`}>
+          {boss.isDragon ? (
+            <div className="dragon-cinematic">
+              <div className="dragon-cinematic-avatar">🌟</div>
+              <div className="dragon-cinematic-title">ตำนานถูกโค่นลง!</div>
+              <p className="dragon-cinematic-text">
+                เสียงคำรามครั้งสุดท้ายก้องกังวานไปทั่วทั้งอาณาจักร — จ้าวมังกรทองในตำนานล้มลงต่อหน้าคุณ!
+                ร่างอันยิ่งใหญ่สลายเป็นแสงสีทอง เหลือเพียง 🎁 ของขวัญ 2 กล่องที่รอการเปิดที่ค่ายพัก
+              </p>
+              <div className="dragon-cinematic-rewards">🎁 ของขวัญ x2 · ✨ XP x1.5 · 💰 ทอง x1.5</div>
+            </div>
+          ) : (
+            <div className="victory-title">🏆 ชัยชนะ!</div>
+          )}
           {(bossState.breaks > 0 || bossState.furyWin) && (
             <div className="master-win-note">
               ✨ รางวัลฝีมือ:{' '}
@@ -223,7 +235,7 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
             </div>
           )}
           <p>
-            กำราบ {boss.name} ได้!{boss.isAlt ? ' (👁️ บอสลับ — ของพิเศษการันตี!)' : ''} — จะเดินทางต่อ หรือสำรวจเมืองเดิมต่อ?
+            กำราบ {boss.name} ได้!{boss.isAlt ? ' (👁️ บอสลับ — ของพิเศษการันตี!)' : ''}{boss.isDragon ? ' (🌟 ของขวัญ 2 กล่องเข้าถุงแล้ว!)' : ''} — จะเดินทางต่อ หรือสำรวจเมืองเดิมต่อ?
           </p>
           <div className="victory-choices">
             <button

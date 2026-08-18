@@ -858,6 +858,10 @@ router.post('/inventory/use', (req, res) => {
       detail = `เปิดของขวัญ เจอถุงทองจ้าวมังกร! (+${gold} ทอง)`;
       message = `🎁 เจอถุงทองจ้าวมังกร! +${gold} ทอง`;
     }
+    // นับจำนวนครั้งที่เปิดของขวัญ (สถิติหน้า Stats)
+    const gProg = getProgress(c.id);
+    gProg.gift_opens = (gProg.gift_opens || 0) + 1;
+    db.prepare('UPDATE progress SET gift_opens=? WHERE id=?').run(gProg.gift_opens, gProg.id);
     updateCharacter(c);
     addLog(c.id, { type: 'gift_open', title: '🎁 เปิดของขวัญจ้าวมังกรทอง', detail, gold });
     const ach = checkAchievements(c, getProgress(c.id));
@@ -1241,11 +1245,12 @@ router.post('/boss/act', (req, res) => {
     // ชนะด้วยฝีมือ (สลายท่าไม้ตาย ≥1 ครั้ง หรืออดทนสู้จนบอสสุดทน) → การันตีของรางวัลบอส (แทนสุ่ม 50%)
     const masterWin = (result.breaks || 0) > 0 || result.furyWin;
     if (fight.boss.isDragon) {
-      // 🌟 จ้าวมังกรทอง — 🎁 ของขวัญการันตี 2 กล่อง (เปิดที่ค่าย) + นับชัยชนะ (ตราลับ "นักล่าตำนาน")
+      // 🌟 จ้าวมังกรทอง — 🎁 ของขวัญการันตี 2 กล่อง (เปิดที่ค่าย) + นับชัยชนะ (ตราลับ "นักล่าตำนาน" + สถิติ)
       lootNote += lootAdd(193, ' และได้ของขวัญจ้าวมังกรทอง');
       lootNote += lootAdd(193, ' 🎁 ของขวัญอีก 1 กล่อง');
       prog.rare_wins = (prog.rare_wins || 0) + 1;
-      db.prepare('UPDATE progress SET rare_wins=? WHERE id=?').run(prog.rare_wins, prog.id);
+      prog.dragon_boss_wins = (prog.dragon_boss_wins || 0) + 1;
+      db.prepare('UPDATE progress SET rare_wins=?, dragon_boss_wins=? WHERE id=?').run(prog.rare_wins, prog.dragon_boss_wins, prog.id);
     } else if (fight.boss.isWander && fight.boss.loot) {
       // บอสเร่ร่อน — ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ (แหล่งหาแบบแปลนที่แน่นอน)
       lootNote += lootAdd(fight.boss.loot, ' และได้ของรางวัลบอสเร่ร่อน');
@@ -1351,9 +1356,13 @@ router.post('/boss/retreat', (req, res) => {
     c.gold = Math.max(0, c.gold - goldLoss);
     c.hp = 1;
     const prog = getProgress(c.id);
+    // นับแพ้บอสจ้าวมังกรทอง (สถิติ) + คอมโบหาย
+    prog.dragon_boss_loses = (prog.dragon_boss_loses || 0) + 1;
     if (prog.streak > 0) {
       prog.streak = 0;
-      db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
+      db.prepare('UPDATE progress SET dragon_boss_loses=?, streak=0 WHERE id=?').run(prog.dragon_boss_loses, prog.id);
+    } else {
+      db.prepare('UPDATE progress SET dragon_boss_loses=? WHERE id=?').run(prog.dragon_boss_loses, prog.id);
     }
     updateCharacter(c);
     addLog(c.id, {

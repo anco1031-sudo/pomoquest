@@ -304,6 +304,18 @@ export default function StatsScreen() {
         </div>
       </Panel>
 
+      <Panel title="🌟 สถิติจ้าวมังกรทอง">
+        <div className="stat-grid">
+          <div className="stat-box"><b>{p.rare_wins || 0}</b><span>ชนะจ้าวมังกรทองรวม</span></div>
+          <div className="stat-box"><b>{Math.max(0, (p.rare_wins || 0) - (p.dragon_boss_wins || 0))}</b><span>ชนะตอนผจญภัย (event)</span></div>
+          <div className="stat-box"><b>{p.dragon_boss_wins || 0}</b><span>ชนะบอสจ้าวมังกรทอง</span></div>
+          <div className="stat-box"><b>{p.dragon_boss_loses || 0}</b><span>แพ้บอสจ้าวมังกรทอง (หนี)</span></div>
+          <div className="stat-box"><b>{p.gift_opens || 0}</b><span>🎁 ของขวัญที่เปิด</span></div>
+          <div className="stat-box"><b>{p.city_wins || 0}</b><span>ชนะมอนสเตอร์ประจำเมือง</span></div>
+        </div>
+        <p className="hint">🌟 จ้าวมังกรทองเจอได้ยากมาก (~1% ของการเจอมอนสเตอร์ · ~4% แทนบอสเมืองตอนสู้บอส) — ชนะแล้วได้ 🎁 ของขวัญ 2 กล่อง (บอส) / 1 กล่อง (event) เปิดที่ค่ายได้ สุ่ม 🏆 500ท / 💛 650ท / 👑 800ท / ถุงทอง 250ท</p>
+      </Panel>
+
       <Panel title="☕ สถิติการพัก">
         <div className="stat-grid">
           <div className="stat-box"><b>{fmtDuration(p.break_sec)}</b><span>เวลาพักเบรกระหว่าง session</span></div>

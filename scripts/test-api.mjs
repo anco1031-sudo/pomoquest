@@ -616,6 +616,9 @@ try {
       else bad++;
     }
     expect('gift: เปิดของขวัญทุกครั้งได้รางวัลถูกต้อง (🏆/💛/👑 หรือ +250 ทอง)', ok === 25 && bad === 0, `ok=${ok} bad=${bad}`);
+    // นับสถิติ gift_opens (หน้า Stats)
+    const opens = (await api('/state')).json.progress?.gift_opens || 0;
+    expect('gift: นับ gift_opens (สถิติหน้า Stats)', opens >= 25, `gift_opens=${opens}`);
     // เปิดแล้ว 🎁 หายจากกระเป๋า
     addItem(gid, 193, 1);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 193 } });

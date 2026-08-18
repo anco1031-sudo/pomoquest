@@ -230,6 +230,10 @@ ensureColumn('progress', 'freebies', 'INTEGER DEFAULT 0');
 // ชนะ 🌟 มอนสเตอร์พิเศษ (จ้าวมังกรทอง) / 🏙️ มอนสเตอร์ประจำเมือง (ตราลับสายนักล่าตำนาน)
 ensureColumn('progress', 'rare_wins', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'city_wins', 'INTEGER DEFAULT 0');
+// สถิติจ้าวมังกรทอง (หน้า Stats): ชนะ/แพ้บอสเวอร์ชัน + เปิดของขวัญ
+ensureColumn('progress', 'dragon_boss_wins', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'dragon_boss_loses', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'gift_opens', 'INTEGER DEFAULT 0');
 // รอบเมืองที่จบในแต่ละโหมดท้าทาย (ตราเฉพาะโหมด — นับตอนชนะบอส)
 ensureColumn('progress', 'hard_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'marathon_cycles', 'INTEGER DEFAULT 0');

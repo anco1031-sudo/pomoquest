@@ -292,6 +292,7 @@ try {
     const giftQty = dInv.find((x) => x.item_id === 193)?.qty || 0;
     expect('dragon: ชนะ → ได้ 🎁 ของขวัญจ้าวมังกรทอง 2 กล่องการันตี', giftQty >= 2, `qty=${giftQty}`);
     expect('dragon: ชนะ → นับ rare_wins (ตราลับ "นักล่าตำนาน")', (dwin?.progress?.rare_wins || 0) >= 1, `rare_wins=${dwin?.progress?.rare_wins}`);
+    expect('dragon: ชนะ → นับ dragon_boss_wins (สถิติ)', (dwin?.progress?.dragon_boss_wins || 0) >= 1, `dragon_boss_wins=${dwin?.progress?.dragon_boss_wins}`);
     const goldAfter = db.prepare('SELECT gold FROM character WHERE id = ?').get(dcid).gold;
     expect('dragon: ชนะ → รางวัล x1.5 (ทองเพิ่มเยอะกว่าบอสปกติ)', goldAfter > goldBefore + 500, `gold ${goldBefore} → ${goldAfter}`);
     // ตัวละครใหม่ → เจอมังกร → ถอยทัพ → บทลงโทษ (เสียของ/ทอง/คอมโบ + HP เหลือ 1)
@@ -310,6 +311,8 @@ try {
     expect('dragon: แพ้ (หนี) → HP เหลือ 1', after.hp === 1, `hp=${after.hp}`);
     expect('dragon: แพ้ (หนี) → เสียของสุ่ม 1 ชิ้นจากกระเป๋า', !invAfter.some((x) => x.item_id === 45), JSON.stringify(invAfter.map((x) => x.item_id)));
     expect('dragon: แพ้ (หนี) → คอมโบโฟกัสหาย (streak=0)', streakAfter === 0, `streak=${streakAfter}`);
+    const losesAfter = db.prepare('SELECT dragon_boss_loses FROM progress WHERE character_id = ?').get(rcid).dragon_boss_loses;
+    expect('dragon: แพ้ (หนี) → นับ dragon_boss_loses (สถิติ)', losesAfter === 1, `dragon_boss_loses=${losesAfter}`);
     process.env.POMOQUEST_DRAGON = '0';
   }
 
