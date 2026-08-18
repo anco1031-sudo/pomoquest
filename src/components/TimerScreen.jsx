@@ -205,9 +205,6 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
               <button className="btn btn-primary" onClick={() => { setShowPauseChoice(false); onPause('short'); if (pauseGoHome) onHome(); }}>
                 ⏸️ พักสั้น (นับเวลา)
               </button>
-              <button className="btn" disabled={!pauseTitleInput.trim()} onClick={() => { setShowPauseChoice(false); onPause('long', pauseTitleInput.trim()); if (pauseGoHome) onHome(); }}>
-                😴 พักยาว (แยกหมวดสถิติ)
-              </button>
             </div>
             {/* ชื่อพักยาว — บังคับเลือกจากตัวเลือก (กันพักยาวแบบไม่ระบุ — สถิติแยกตามชื่อต้องตรงกัน) */}
             <p className="pause-name-note">💡 ต้องเลือกชื่อพักยาวจากตัวเลือกด้านล่างก่อน (กด 😴 พักยาว ยังไม่ได้จนกว่าจะเลือก)</p>
@@ -222,6 +219,11 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
                   {p.icon} {p.label}
                 </button>
               ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn" disabled={!pauseTitleInput.trim()} onClick={() => { setShowPauseChoice(false); onPause('long', pauseTitleInput.trim()); if (pauseGoHome) onHome(); }}>
+                😴 พักยาว (แยกหมวดสถิติ)
+              </button>
             </div>
             <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (เลือกชื่อจากตัวเลือกเท่านั้น)</p>
             <div className="modal-actions">
