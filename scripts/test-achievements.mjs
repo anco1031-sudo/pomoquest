@@ -112,6 +112,17 @@ expect('break_win ไม่สลายไม่ปลดล็อก', checkAch
 expect('fury_win (ชนะตอนบอสสุดทน)', checkAchievements(c, prog, { bossWin: { fury: true } }), ['fury_win']);
 expect('fury_win ปกติไม่ปลดล็อก', checkAchievements(c, prog, { bossWin: { fury: false } }), []);
 
+// --- มอนสเตอร์พิเศษ: ชนะ 🌟 จ้าวมังกรทอง / 🏙️ ตัวประจำเมือง ---
+setProg({ rare_wins: 1 });
+expect('dragon_hunter (ชนะจ้าวมังกรทอง 1 ครั้ง)', checkAchievements(c, prog), ['dragon_hunter']);
+expect('dragon_hunter ชนะ 1 ครั้งไม่ปลด dragon_king', checkAchievements(c, prog), []);
+setProg({ rare_wins: 3 });
+expect('dragon_king (ชนะจ้าวมังกรทอง 3 ครั้ง)', checkAchievements(c, prog), ['dragon_king']);
+setProg({ city_wins: 3 });
+expect('city_hunter (ชนะตัวประจำเมือง 3 ตัว)', checkAchievements(c, prog), ['city_hunter']);
+setProg({ city_wins: 2 });
+expect('city_hunter ชนะ 2 ตัวไม่ปลดล็อก', checkAchievements(c, prog), []);
+
 // --- จ้าวแห่งการโฟกัส (ต้องปลดล็อกตราปกติครบ 25) ---
 for (const a of ACHIEVEMENTS) {
   db.prepare('INSERT OR IGNORE INTO achievement_unlock (character_id, achievement_id) VALUES (?,?)').run(c.id, a.id);
@@ -122,7 +133,7 @@ expect('master (ปลดล็อกตราปกติครบทุกอ�
 const list = getAchievementList(c, prog);
 const secretCount = list.list.filter((a) => a.secret).length;
 const lockedSecret = list.list.filter((a) => a.secret && !a.unlocked);
-const okSecretCount = secretCount === 20 && lockedSecret.length === 0;
+const okSecretCount = secretCount === 23 && lockedSecret.length === 0;
 console.log(`${okSecretCount ? '✅' : '❌'} รายการ UI: ตราลับ ${secretCount} อัน (ปลดล็อกครบ ${list.list.filter((a) => a.secret && a.unlocked).length})`);
 okSecretCount ? pass++ : fail++;
 

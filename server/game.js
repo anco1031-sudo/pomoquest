@@ -1,4 +1,4 @@
-import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
+import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -463,10 +463,32 @@ export const exploreRewardMult = (c) => 1 + 0.2 * exploreRound(c);       // ต�
 // ----- ระบบมอนสเตอร์ / ต่อสู้อัตโนมัติ (ช่วง work session — ไม่รบกวนสมาธิ) -----
 // ค่าพิเศษคลาส: นักรบกลางวันมอนสเตอร์อ่อนลง (พลัง -15%) / กลางคืนแข็งขึ้น · นักบวชกลางคืนแข็งขึ้น
 // (พลังมอนสเตอร์ = โอกาสชนะ + HP ที่เสีย — ต่ำ = สู้ง่าย)
-export function rollMonster(level, c = null) {
-  const m = pick(MONSTERS);
+// 🌟 มอนสเตอร์พิเศษ (rare) — เจอได้ยากมาก: ~1% ของการเจอมอนสเตอร์
+// 🏙️ มอนสเตอร์ประจำเมือง (CITY_MONSTERS) — เจอได้ยาก: ~2% ของการเจอมอนสเตอร์ (เฉพาะเมืองที่ตัวละครอยู่)
+// forceRare: true/'legend' = บังคับเจอจ้าวมังกรทอง · 'city' = บังคับเจอตัวประจำเมือง (ใช้ใน dev/test)
+export const RARE_MONSTER_CHANCE = 0.01;
+export const CITY_MONSTER_CHANCE = 0.02;
+export function rollMonster(level, c = null, forceRare = false) {
+  let m;
+  let cityRare = false;
+  if (forceRare === true || forceRare === 'legend') {
+    m = MONSTERS.find((x) => x.rare);
+  } else if (forceRare === 'city') {
+    m = CITY_MONSTERS[(c?.city_index || 0) % CITY_MONSTERS.length];
+    cityRare = true;
+  } else {
+    const r = Math.random();
+    if (r < RARE_MONSTER_CHANCE) {
+      m = MONSTERS.find((x) => x.rare);
+    } else if (r < RARE_MONSTER_CHANCE + CITY_MONSTER_CHANCE) {
+      m = CITY_MONSTERS[(c?.city_index || 0) % CITY_MONSTERS.length];
+      cityRare = true;
+    } else {
+      m = pick(MONSTERS.filter((x) => !x.rare));
+    }
+  }
   const power = Math.round((12 + 5 * level) * m.power * enemyMult(c) * exploreMult(c) * classPerks(c).monster);
-  return { ...m, power };
+  return { ...m, power, rare: !!m.rare, cityRare };
 }
 
 // ----- โหมดท้าทาย (challenge mode) -----
@@ -521,7 +543,7 @@ export function resolveCombat(c, monster) {
   let detail = '';
   if (win) {
     xp = Math.round((monster.xp + rand(0, 8) + c.level) * rMult);
-    gold = Math.round((monster.gold + rand(0, 6)) * rMult);
+    gold = Math.round((monster.gold + rand(0, 4)) * rMult); // balance: ลดทองสุ่มจาก event ลง (เดิม +0-6)
     hpLoss = rand(3, 9);
     detail = `🗡️ กำราบ ${monster.name} ได้สำเร็จ! (+${xp} XP, +${gold} ทอง)`;
   } else {
@@ -586,7 +608,7 @@ export function acquireItem(c, itemId, qty = 1, { fullMode = 'sell', checkOnly =
 // ----- เหตุการณ์สุ่มระหว่าง session (forceKey = ระบุ event ให้เกิดตาม key — ใช้ใน dev test) -----
 // โอกาสฐานที่ตัวละครใช้สกิลอัตโนมัติใน event มอนสเตอร์ — คลาสเวทย์คูณเพิ่ม (CLASS_PERKS.mage.skillUse)
 export const EVENT_SKILL_CHANCE = 0.15;
-export function rollEvent(c, forceKey = null) {
+export function rollEvent(c, forceKey = null, forceRare = false) {
   const perks = petPerks(c);
   const cperks = classPerks(c); // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙
   // น้ำหนัก event ปรับตาม pet ที่ active (นกฮูกเจอมอนสเตอร์ถี่ขึ้น / มังกรน้อยเจอสมบัติถี่ขึ้น / ยูนิคอร์นเจอศาลเจ้าถี่ขึ้น / แมวซนเจอกับดักถี่ขึ้น)
@@ -672,7 +694,7 @@ export function rollEvent(c, forceKey = null) {
   };
 
   if (ev.key === 'monster') {
-    const m = rollMonster(c.level, c);
+    const m = rollMonster(c.level, c, forceRare);
     // มีโอกาสเล็กน้อย (15%) ที่ตัวละครใช้สกิลอัตโนมัติ (รวมสกิลจากคัมภีร์) → ชนะง่ายขึ้น + รางวัลเพิ่ม
     // เวทย์ (นักเวทย์) ได้คูณเพิ่มจาก CLASS_PERKS.mage.skillUse (2.5x = 37.5%) — ใช้สกิลถี่กว่าคลาสอื่น
     const skills = getCharacterSkills(c);
@@ -698,20 +720,24 @@ export function rollEvent(c, forceKey = null) {
       res = resolveCombat(c, m);
     }
     // ชนะ → มีโอกาส ~40% ได้ loot ประจำตัวมอนสเตอร์ (ขยะราคาไม่สูง — ขายได้ที่แคมป์) — โหมดโหดดรอปยากขึ้น
+    // 🌟 มอนสเตอร์พิเศษ (rare) → ได้ 🎁 ของขวัญการันตี (เปิดที่ค่าย) · 🏙️ ตัวประจำเมือง (cityRare) → ดรอปของประจำเมือง ~60%
     let loot = null;
     if (res.win && m.loot) {
-      if (Math.random() < 0.4 * dropMult(c)) {
+      const dropChance = m.rare ? 1 : m.cityRare ? 0.6 : 0.4 * dropMult(c);
+      if (Math.random() < dropChance) {
         loot = ITEM_BY_ID[m.loot];
-        res.detail += ` และได้ ${loot.icon} ${loot.name}!`;
+        res.detail += m.rare
+          ? ` และได้ของขวัญพิเศษ ${loot.icon} ${loot.name}! (เปิดที่ค่ายพักได้)`
+          : ` และได้ ${loot.icon} ${loot.name}!`;
       }
     }
     return applyPetRewards({
       ...base,
-      flavor: ev.flavor.replace('{monster}', `${m.icon} ${m.name} (พลัง ${m.power})`),
+      flavor: (m.flavor || ev.flavor).replace('{monster}', `${m.icon} ${m.name} (พลัง ${m.power})`),
       xp: res.xp, gold: res.gold, hpChange: -res.hpLoss,
       detail: res.detail,
       skill: skillUsed ? { id: skillUsed.id, name: skillUsed.name, icon: skillUsed.icon } : null,
-      monster: { name: m.name, icon: m.icon, win: res.win },
+      monster: { name: m.name, icon: m.icon, win: res.win, rare: m.rare, cityRare: m.cityRare },
       item: loot ? { id: loot.id, name: loot.name, icon: loot.icon, lvl: loot.lvl || 1, type: loot.type } : null,
       logType: res.win ? 'battle_win' : 'battle_lose',
       ups: res.ups,
@@ -721,7 +747,7 @@ export function rollEvent(c, forceKey = null) {
   if (ev.key === 'treasure') {
     const rMult = exploreRewardMult(c); // สำรวจเมืองเดิมต่อ → รางวัลสูงขึ้น
     const xp = Math.round((rand(10, 25) + c.level) * rMult);
-    const gold = Math.round((rand(15, 45) + c.level * 2) * rMult);
+    const gold = Math.round((rand(10, 30) + c.level) * rMult); // balance: ลดทองสมบัติลง (เดิม 15-45 + lvl*2)
     c.gold += gold;
     const ups = gainXp(c, xp);
     base.xp = xp; base.gold = gold;
@@ -796,7 +822,7 @@ export function rollEvent(c, forceKey = null) {
 
   if (ev.key === 'merchant') {
     if (Math.random() < 0.5) {
-      const gold = Math.round(rand(5, 15) * exploreRewardMult(c));
+      const gold = Math.round(rand(4, 10) * exploreRewardMult(c)); // balance: ลดกำไรพ่อค้าเร่ร่อนลง (เดิม 5-15)
       c.gold += gold;
       base.gold = gold;
       base.detail = `ซื้อของที่ระลึกจากพ่อค้าและขายต่อ ได้กำไร ${gold} ทอง`;

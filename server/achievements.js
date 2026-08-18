@@ -55,6 +55,9 @@ export function buildCtx(c, prog, extra = {}) {
     // ระบบต่อสู้บอส: สลายท่าไม้ตายกี่ครั้งในไฟต์นี้ / ชนะตอนบอสสุดทน (30+ เทิร์น) หรือไม่
     bossBreaks: bossWin.breaks ?? 0,
     bossFury: bossWin.fury === true,
+    // มอนสเตอร์พิเศษ: ชนะ 🌟 จ้าวมังกรทอง / 🏙️ ตัวประจำเมืองกี่ครั้ง (ตราลับ "นักล่าตำนาน")
+    rareWins: prog.rare_wins || 0,
+    cityWins: prog.city_wins || 0,
     // โหมดท้าทาย — รอบเมืองที่จบในโหมดนั้น (counter แยกต่อโหมด)
     challengeMode: c.challenge_mode || '',
     challengeCycles: prog[`${c.challenge_mode || 'none'}_cycles`] || 0,

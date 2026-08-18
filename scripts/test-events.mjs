@@ -106,11 +106,13 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
 }
 
 // --- monster loot: ชนะมอนสเตอร์มีโอกาส ~40% ได้ของประจำตัว (ขยะราคาต่ำ) ---
+// (ถ้าเจอ 🌟 มอนสเตอร์พิเศษ / 🏙️ ตัวประจำเมือง — หายาก — จะดรอปของพิเศษแทน ตรวจแยกในเทสต์ถัดไป)
 {
   let wins = 0, dropped = 0, bad = 0;
   for (let i = 0; i < 400; i++) {
     const ev = rollEvent(c, 'monster');
     if (!ev.monster?.win) continue;
+    if (ev.monster.rare || ev.monster.cityRare) continue; // มอนสเตอร์พิเศษ — ข้าม (มีเทสต์เฉพาะของตัวเอง)
     wins++;
     if (ev.item) {
       dropped++;
@@ -122,6 +124,51 @@ expect('forceKey ไม่ได้ระบุ (สุ่ม) → ได้ eve
     }
   }
   expect('monster loot: ดรอปเฉพาะตอนชนะ + เป็นของประจำตัวมอนสเตอร์', wins > 0 && dropped > 0 && bad === 0, `win=${wins}, drop=${dropped}`);
+}
+
+// --- 🌟 มอนสเตอร์พิเศษ (จ้าวมังกรทอง): เจอได้ยากมาก แต่ชนะแล้วได้ 🎁 ของขวัญการันตี (เปิดที่ค่าย) ---
+{
+  const def = MONSTERS.find((x) => x.rare);
+  expect('special: มีมอนสเตอร์พิเศษ (rare) ใน MONSTERS + ดรอป 🎁 ของขวัญ (id 193)', !!def && def.loot === 193 && def.giftContents?.length > 0, def?.name);
+  const m = rollEvent(c, 'monster', true); // forceRare
+  expect('special: rollEvent(forceRare) เจอมอนสเตอร์พิเศษ (rare)', m.monster?.rare === true, m.monster?.name);
+  expect('special: flavor ใช้ข้อความพิเศษของมอนสเตอร์', m.flavor.includes('ในตำนาน'), m.flavor);
+  if (m.monster?.win) {
+    expect('special: ชนะ → ได้ 🎁 ของขวัญจ้าวมังกรทอง (การันตี)', m.item?.id === 193, `item=${m.item?.name}`);
+  } else {
+    expect('special: แพ้/หนี → ไม่ได้ของขวัญ', m.item === null, `item=${m.item?.name}`);
+  }
+  let wins = 0, gotGift = 0, bad = 0;
+  for (let i = 0; i < 300; i++) {
+    const ev = rollEvent(c, 'monster', true);
+    if (!ev.monster?.win) continue;
+    wins++;
+    if (ev.item?.id === 193) gotGift++;
+    else bad++; // ชนะแต่ไม่ได้ของขวัญ = บั๊ก
+  }
+  expect('special: ชนะแล้วได้ 🎁 ของขวัญการันตีทุกครั้ง', wins > 0 && gotGift === wins && bad === 0, `win=${wins}, gift=${gotGift}, bad=${bad}`);
+}
+
+// --- 🏙️ มอนสเตอร์ประจำเมือง: เจอได้ยาก (~2%) เฉพาะเมืองที่อยู่ ชนะ ~60% ได้ของประจำเมือง ---
+{
+  const { CITY_MONSTERS } = await import('../server/data.js');
+  const cityDef = CITY_MONSTERS[0]; // ตัวของเมืองแรก (ตัวละครเทสต์ city_index = 0)
+  const m = rollEvent(c, 'monster', 'city'); // forceRare='city' → ตัวประจำเมืองปัจจุบัน
+  expect('city: forceRare="city" เจอตัวประจำเมือง (cityRare)', m.monster?.cityRare === true && m.monster?.name === cityDef.name, m.monster?.name);
+  expect('city: flavor ใช้ข้อความของตัวประจำเมือง', m.flavor.includes('ปรากฏ') || m.flavor.includes('ขวางทาง'), m.flavor);
+  let wins = 0, dropped = 0, bad = 0;
+  for (let i = 0; i < 300; i++) {
+    const ev = rollEvent(c, 'monster', 'city');
+    if (!ev.monster?.win) continue;
+    wins++;
+    if (ev.item) {
+      // ของที่ดรอปต้องเป็นของประจำเมืองตัวนั้นเท่านั้น (exclusive ขายได้)
+      if (ev.item.id === cityDef.loot) dropped++;
+      else bad++;
+    }
+    // ดรอปไม่การันตี (60%) — แพ้/หนี หรือดรอปพลาด ปล่อยผ่าน
+  }
+  expect('city: ชนะแล้วดรอปของประจำเมือง (ไม่ดรอปของผิดตัว)', wins > 0 && dropped > 0 && bad === 0, `win=${wins}, drop=${dropped}, bad=${bad}`);
 }
 
 // --- dodgeChance (SPD → โอกาสหลบโจมตีบอส) ---

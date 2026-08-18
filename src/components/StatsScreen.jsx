@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { Panel, fmtDuration } from './ui.jsx';
-import { MONSTERS, BOSSES, ITEM_BY_ID } from '../../server/data.js';
+import { MONSTERS, CITY_MONSTERS, BOSSES, ITEM_BY_ID } from '../../server/data.js';
 
 const DAY_NAMES = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 
@@ -434,8 +434,24 @@ export default function StatsScreen() {
           <div className="guide-table-title">🐺 มอนสเตอร์ — ชนะมีโอกาส ~40% ได้ของประจำตัว</div>
           {MONSTERS.map((m) => {
             const loot = ITEM_BY_ID[m.loot];
+            const contents = (m.giftContents || []).map((g) => ITEM_BY_ID[g]).filter(Boolean);
             return (
-              <div className="guide-row-lite" key={m.name}>
+              <div className={`guide-row-lite${m.rare ? ' guide-rare' : ''}`} key={m.name}>
+                <span className="guide-mob">{m.icon} {m.name}{m.rare ? ' 🌟' : ''}</span>
+                <span className="guide-mob-power">{m.rare ? '⭐ หายากมาก' : `พลัง ${m.power}`}</span>
+                <span className="guide-mob-loot">
+                  {m.rare
+                    ? `ชนะ = การันตี 🎁 ของขวัญ (เปิดที่ค่าย: ${contents.map((g) => `${g.icon} ${g.price}ท`).join(' / ')} / 💰 250ท)`
+                    : loot ? `${loot.icon} ${loot.name} (${loot.price} ทอง)` : '—'}
+                </span>
+              </div>
+            );
+          })}
+          <div className="guide-table-title">🏙️ มอนสเตอร์ประจำเมือง — เจอได้ยาก (~2% เฉพาะเมืองนั้น) ชนะ ~60% ได้ของประจำเมือง</div>
+          {CITY_MONSTERS.map((m, i) => {
+            const loot = ITEM_BY_ID[m.loot];
+            return (
+              <div className="guide-row-lite guide-city" key={m.name}>
                 <span className="guide-mob">{m.icon} {m.name}</span>
                 <span className="guide-mob-power">พลัง {m.power}</span>
                 <span className="guide-mob-loot">{loot ? `${loot.icon} ${loot.name} (${loot.price} ทอง)` : '—'}</span>
@@ -455,6 +471,7 @@ export default function StatsScreen() {
           })}
         </div>
         <p className="hint">💡 ของที่ดรอปเป็นของขวัญ (junk) — ขายได้ที่แคมป์ และนับรวมในเควสประจำวัน "คนเก็บขยะ"</p>
+        <p className="hint">🌟 จ้าวมังกรทองเจอได้ยากมาก (~1% ของการเจอมอนสเตอร์) แรงที่สุดในเกม ชนะแล้วได้ 🎁 ของขวัญการันตี — เปิดที่ค่ายพักสุ่มรางวัล (🏆/💛/👑 ขายแพงที่สุดในเกม หรือถุงทอง 250ท) · 🏙️ มอนสเตอร์ประจำเมืองเจอได้ยาก (~2% เฉพาะเมืองที่คุณอยู่) ชนะ ~60% ได้ของประจำเมือง</p>
       </Panel>
 
       {data.cityLogs.length > 0 && (

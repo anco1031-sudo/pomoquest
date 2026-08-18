@@ -388,7 +388,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                         disabled={!!(i.useEgg && character.hatchPending)}
                         title={i.useEgg && character.hatchPending ? '🥚 มีไข่กำลังฟักอยู่แล้ว — รอให้ฟักหลังจบ 1 session ก่อนใช้ใบใหม่' : ''}
                       >
-                        ใช้
+                        {i.useGift ? '🎁 เปิด' : 'ใช้'}
                       </button>
                     ) : i.type === 'scroll' ? (
                       <span className="junk-note">📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)</span>

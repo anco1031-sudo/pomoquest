@@ -620,6 +620,26 @@ body {
 .guide-mob { flex: 1; font-weight: 600; }
 .guide-mob-power { width: 60px; color: var(--muted); font-size: 11.5px; }
 .guide-mob-loot { color: var(--muted); font-size: 11.5px; text-align: right; }
+/* แถวมอนสเตอร์พิเศษ 🌟 (จ้าวมังกรทอง) — ไฮไลต์ทอง */
+.guide-row-lite.guide-rare {
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.12), transparent 70%);
+  border-radius: 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+  margin: 2px 0;
+}
+.guide-row-lite.guide-rare .guide-mob { color: #fde047; }
+.guide-row-lite.guide-rare .guide-mob-loot { color: #fcd34d; }
+/* แถวมอนสเตอร์ประจำเมือง 🏙️ — ไฮไลต์ฟ้า */
+.guide-row-lite.guide-city {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.1), transparent 70%);
+  border-radius: 6px;
+  padding-left: 8px;
+  padding-right: 8px;
+  margin: 1px 0;
+}
+.guide-row-lite.guide-city .guide-mob { color: #7dd3fc; }
+.guide-row-lite.guide-city .guide-mob-loot { color: #a5d8f5; }
 
 /* modal วิธีเล่นครั้งแรก */
 .guide-row {

@@ -227,6 +227,9 @@ ensureColumn('progress', 'charge_breaks', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'wanted_sales', 'INTEGER DEFAULT 0');
 // จำนวนของแถมที่เก็บได้ (ซื้อของราคา 0 จากพ่อค้า/ตลาดมืด — ตรา "นักเก็บของแถม")
 ensureColumn('progress', 'freebies', 'INTEGER DEFAULT 0');
+// ชนะ 🌟 มอนสเตอร์พิเศษ (จ้าวมังกรทอง) / 🏙️ มอนสเตอร์ประจำเมือง (ตราลับสายนักล่าตำนาน)
+ensureColumn('progress', 'rare_wins', 'INTEGER DEFAULT 0');
+ensureColumn('progress', 'city_wins', 'INTEGER DEFAULT 0');
 // รอบเมืองที่จบในแต่ละโหมดท้าทาย (ตราเฉพาะโหมด — นับตอนชนะบอส)
 ensureColumn('progress', 'hard_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'marathon_cycles', 'INTEGER DEFAULT 0');
@@ -403,7 +406,7 @@ export const getInventory = (charId) => db.prepare(`
   ORDER BY item.type, item.id`).all(charId).map((r) => {
   // ข้อมูล static ในโค้ด (lvl / ข้อจำกัดการสวม / ธง use_*) — merge ให้ client ใช้เช็คได้
   const def = ITEM_BY_ID[r.item_id] || {};
-  return { ...r, lvl: def.lvl || 1, classReq: def.classReq, statReq: def.statReq, useEgg: def.use_egg || 0, useStall: def.use_stall || 0 };
+  return { ...r, lvl: def.lvl || 1, classReq: def.classReq, statReq: def.statReq, useEgg: def.use_egg || 0, useStall: def.use_stall || 0, useGift: def.use_gift || 0 };
 });
 
 export const getLog = (charId, limit = 30) =>

@@ -218,6 +218,9 @@ router.post('/adventure/event', (req, res) => {
   const prog = getProgress(c.id);
   const up = (col, val) => db.prepare(`UPDATE progress SET ${col}=? WHERE id=?`).run(val, prog.id);
   if (ev.key === 'monster' && ev.monster?.win) { prog.monsters_slain += 1; up('monsters_slain', prog.monsters_slain); }
+  // 🌟 มอนสเตอร์พิเศษ (จ้าวมังกรทอง) / 🏙️ ตัวประจำเมือง — นับชัยชนะ (ตราลับ "นักล่าตำนาน"/"นักล่าประจำเมือง")
+  if (ev.key === 'monster' && ev.monster?.win && ev.monster?.rare) { prog.rare_wins = (prog.rare_wins || 0) + 1; up('rare_wins', prog.rare_wins); }
+  if (ev.key === 'monster' && ev.monster?.win && ev.monster?.cityRare) { prog.city_wins = (prog.city_wins || 0) + 1; up('city_wins', prog.city_wins); }
   if (ev.key === 'treasure') { prog.treasures_found += 1; up('treasures_found', prog.treasures_found); }
   if (ev.key === 'shrine') { prog.shrines += 1; up('shrines', prog.shrines); }
   if (ev.key === 'trap') { prog.traps += 1; up('traps', prog.traps); }
@@ -834,6 +837,35 @@ router.post('/inventory/use', (req, res) => {
       message: `💳 ขยายคอกสัตว์เป็น ${prog.pet_slots}/${PET_MAX_SLOTS} ช่องแล้ว!`,
       ...dailyPayload(c),
       levelUps: { levels: 0, statPoints: c.stat_points },
+    });
+  }
+
+  // 🎁 ของขวัญจ้าวมังกรทอง — เปิดที่ค่ายพัก: สุ่มรางวัลพิเศษ (🏆 ถ้วย 40% / 💛 หัวใจ 30% / 👑 มงกุฎ 20% / ถุงทอง 10%)
+  if (item.use_gift) {
+    const roll = Math.random();
+    const reward = roll < 0.4 ? ITEM_BY_ID[190] : roll < 0.7 ? ITEM_BY_ID[191] : roll < 0.9 ? ITEM_BY_ID[192] : null;
+    db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+    let detail, message, gold = 0;
+    if (reward) {
+      const got = acquireItem(c, reward.id, 1, { fullMode: 'sell' });
+      const bagNote = got.sold ? ` (🎒 กระเป๋าเต็ม — ขายอัตโนมัติ +${got.gold} ทอง)` : '';
+      detail = `เปิดของขวัญ ได้ ${reward.icon} ${reward.name}! (ขายได้ ${reward.price} ทอง)${bagNote}`;
+      message = `🎁 เปิดของขวัญ ได้ ${reward.icon} ${reward.name}!`;
+    } else {
+      gold = 250;
+      c.gold += gold;
+      detail = `เปิดของขวัญ เจอถุงทองจ้าวมังกร! (+${gold} ทอง)`;
+      message = `🎁 เจอถุงทองจ้าวมังกร! +${gold} ทอง`;
+    }
+    updateCharacter(c);
+    addLog(c.id, { type: 'gift_open', title: '🎁 เปิดของขวัญจ้าวมังกรทอง', detail, gold });
+    const ach = checkAchievements(c, getProgress(c.id));
+    return res.json({
+      ...serialize(c), inventory: getInventory(c.id),
+      message,
+      achievements: ach.fresh,
+      ...dailyPayload(c),
+      levelUps: { levels: ach.ups, statPoints: c.stat_points },
     });
   }
 

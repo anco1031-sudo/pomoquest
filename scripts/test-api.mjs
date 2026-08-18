@@ -426,7 +426,8 @@ try {
       const shopHardRes = await api(`/camp?visit=${sameVisit}`); // ตัวโหมดโหด
       shopHard = shopHardRes.json.shop || [];
       shopNorm = shopNormRes.json.shop || [];
-      shared = shopHard.filter((i) => shopNorm.some((n) => n.id === i.id));
+      // กรองของแถม (ราคา 0 — สุ่มคนละชิ้นต่อตัวละคร) ออก — เทียบราคาเฉพาะของที่ขายจริงทั้ง 2 ร้าน
+      shared = shopHard.filter((i) => i.price > 0 && shopNorm.some((n) => n.id === i.id && n.price > 0));
     }
     expect('challenge: hard ราคาแพงกว่าปกติ (x1.3) — เทียบ item เดียวกัน', shared.length > 0 && shared.every((i) => { const n = shopNorm.find((x) => x.id === i.id); return i.price > n.price; }), `shared=${shared.length} hard=${shared[0]?.price} norm=${shopNorm.find((x) => x.id === shared[0]?.id)?.price}`);
     // กลับไป hard → complete session → XP/ทอง x1.5
@@ -596,6 +597,29 @@ try {
       JSON.stringify({ weekStart: p.weekStart, days: p.days?.length, prev: p.prevWeeks?.length }));
     expect('challenge: นับ session + นาทีโฟกัสของสัปดาห์นี้ได้', p.sessions >= 1 && p.focusSec >= 1500, JSON.stringify({ sessions: p.sessions, focusSec: p.focusSec }));
     expect('challenge: 7 วันเรียงตามสัปดาห์ (จ-อา) มีค่าไม่ติดลบ', p.days.every((d) => d.weekday && d.sessions >= 0 && d.focusSec >= 0), JSON.stringify(p.days));
+  }
+
+  // --- 🎁 ของขวัญจ้าวมังกรทอง: เปิดที่ค่าย (ใช้จากกระเป๋า) → สุ่มรางวัลพิเศษ (🏆/💛/👑 หรือ +250 ทอง) ---
+  {
+    const gid = (await api('/state')).json.character.id;
+    let ok = 0, bad = 0;
+    for (let i = 0; i < 25; i++) {
+      addItem(gid, 193, 1);
+      const before = (await api('/state')).json.character.gold;
+      r = await api('/inventory/use', { method: 'POST', body: { itemId: 193 } });
+      const inv = r.json.inventory || [];
+      const after = (await api('/state')).json.character.gold;
+      const gotItem = inv.some((x) => [190, 191, 192].includes(x.item_id));
+      const gotGold = after >= before + 250;
+      if (r.status === 200 && (gotItem || gotGold) && (r.json.message || '').includes('🎁')) ok++;
+      else bad++;
+    }
+    expect('gift: เปิดของขวัญทุกครั้งได้รางวัลถูกต้อง (🏆/💛/👑 หรือ +250 ทอง)', ok === 25 && bad === 0, `ok=${ok} bad=${bad}`);
+    // เปิดแล้ว 🎁 หายจากกระเป๋า
+    addItem(gid, 193, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 193 } });
+    const inv2 = r.json.inventory || [];
+    expect('gift: เปิดแล้ว 🎁 หายจากกระเป๋า', r.status === 200 && !inv2.some((x) => x.item_id === 193), JSON.stringify(inv2.map((x) => x.item_id)));
   }
 
   // --- 🐾 ระบบสัตว์เลี้ยง: ใช้ไข่ = เริ่มฟัก (รอจบ 1 session) / บัตรขยายคอก / สลับ / ปล่อย ---
