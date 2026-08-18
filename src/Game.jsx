@@ -533,6 +533,12 @@ export default function Game() {
     beginWork(sessionIdxRef.current >= settings.sessions_per_cycle ? 1 : sessionIdxRef.current + 1);
   };
 
+  // กลับหน้าหลักหลังจบรอบ (ไม่สู้บอส ไม่เริ่มโฟกัสต่อ)
+  const goHomeAfterCycle = () => {
+    setAwaitingBreak(false);
+    setPhase('idle');
+  };
+
   // ---- บันทึกสถิติพักเบรก (เวลาพักจริง + เลยเวลา) แล้วรีเซ็ตสถานะพัก — ยังไม่เริ่มโฟกัส ----
   const recordBreak = async () => {
     const startedAt = breakStartedAtRef.current;
@@ -929,12 +935,22 @@ export default function Game() {
               </div>
             )}
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={chooseBreak}>
-                {sessionIdx >= settings.sessions_per_cycle
-                  ? `⚔️ พักใหญ่ (${settings.long_break_min} นาที) — สู้บอส`
-                  : `☕ พักเบรก (${settings.short_break_min} นาที)`}
-              </button>
-              <button className="btn" onClick={skipBreak}>⏭️ ข้ามพัก — เริ่มโฟกัสต่อ</button>
+              {sessionIdx >= settings.sessions_per_cycle ? (
+                <>
+                  <button className="btn btn-primary" onClick={chooseBreak}>
+                    ⚔️ พักใหญ่ ({settings.long_break_min} นาที) — สู้บอส
+                  </button>
+                  <button className="btn" onClick={skipBreak}>⏭️ ข้ามพัก — เริ่มโฟกัสต่อ</button>
+                  <button className="btn" onClick={goHomeAfterCycle}>🏠 กลับหน้าหลัก</button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-primary" onClick={chooseBreak}>
+                    ☕ พักเบรก ({settings.short_break_min} นาที)
+                  </button>
+                  <button className="btn" onClick={skipBreak}>⏭️ ข้ามพัก — เริ่มโฟกัสต่อ</button>
+                </>
+              )}
               <button className="btn btn-sm" onClick={shareSummary}>📤 แชร์สรุป session</button>
             </div>
           </div>

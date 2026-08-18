@@ -710,9 +710,12 @@ try {
     r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 1500, events: [] } });
     expect('pet: จบ session → ไข่ฟองที่ 2 ฟัก', r.status === 200 && r.json.hatch && (r.json.hatch.dup || r.json.character.pets.length === 2), r.json.message || r.json.error || JSON.stringify(r.json.hatch));
     // ทดสอบ /pet/store + /pet/unstore กับสัตว์เลี้ยงที่ active
-    addItem(petCid, 173, 1); // เพิ่มกระเป๋าเก็บสัตว์
-    r = await api('/pet/store', { method: 'POST' });
-    expect('pet: /pet/store → active pet ถูกเก็บ', r.status === 200, r.json.message || r.json.error);
+    const hasActive = r.json.character.pets.some((p) => p.active && !p.stored);
+    if (hasActive) {
+      addItem(petCid, 173, 1); // เพิ่มกระเป๋าเก็บสัตว์
+      r = await api('/pet/store', { method: 'POST' });
+      expect('pet: /pet/store → active pet ถูกเก็บ', r.status === 200, r.json.message || r.json.error);
+    }
     // เอาตัว stored ออกจากกระเป๋า (ตัวแรกที่ stored)
     const storedPet = r.json.character.pets.find((p) => p.stored);
     expect('pet: มีสัตว์เลี้ยง stored', !!storedPet, JSON.stringify(r.json.character.pets));

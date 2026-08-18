@@ -173,6 +173,34 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
         </div>
       </header>
 
+      {/* นาฬิกานับถอยหลังเวลาพัก — แสดงใหญ่ชัดเจน */}
+      {!breakOver && remain > 0 && (
+        <div className="break-timer">
+          <div className="break-timer-ring" style={{ '--pct': total > 0 ? (remain / total) * 100 : 0 }}>
+            <div className="break-timer-time">{fmtTime(remain)}</div>
+            <div className="break-timer-label">
+              {postBoss ? '🏆 เตรียมสู้บอส' : '☕ เวลาพัก'}
+            </div>
+          </div>
+          <div className="break-timer-bar">
+            <div className="break-timer-bar-fill" style={{ width: `${total > 0 ? (remain / total) * 100 : 0}%` }} />
+          </div>
+          <div className="break-timer-sub">
+            {total > 0 && <span>⏱️ เหลือ {Math.ceil(remain / 60)} นาทีจาก {Math.ceil(total / 60)} นาที</span>}
+          </div>
+        </div>
+      )}
+      {/* หมดเวลาพัก — แสดงเตือน */}
+      {breakOver && (
+        <div className="break-timer break-timer-over">
+          <div className="break-timer-over-text">
+            ⏰ หมดเวลาพักแล้ว!
+            {overrun > 0 && <span> — เลยเวลามา <b>{fmtTime(overrun)}</b></span>}
+          </div>
+          <div className="break-timer-sub">กด "จบพักเร็ว" หรือกลับไปค่ายเพื่อเริ่มโฟกัสเมื่อพร้อม</div>
+        </div>
+      )}
+
       {/* สถานะตัวละครระหว่างพัก */}
       <div className="camp-vitals">
         <div className="hp-row"><span>❤️ HP</span><span>{character.hp}/{character.maxHp}</span></div>

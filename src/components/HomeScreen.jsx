@@ -225,16 +225,25 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
 
         {/* ---- แถบพักเบรกค้างที่หน้าหลัก — กดกลับหน้าหลักจากหน้า camp: timer ยังนับต่อ จบเวลายังถามเหมือนเดิม ---- */}
         {breakAtHome && onBreakBack && (
-          <div className={`resume-bar${barCollapsed ? ' collapsed' : ''}`}>
+          <div className={`resume-bar break-bar${barCollapsed ? ' collapsed' : ''}`}>
             <div className="resume-info">
-              <span className="resume-icon">⛺</span>
-              <span>
+              <span className="resume-icon">☕</span>
+              <div className="break-bar-content">
                 {breakOver ? (
-                  <>⏰ พักหมดเวลาแล้ว — กดกลับไปค่ายเพื่อเริ่มโฟกัสเมื่อพร้อม (เวลายังนับต่อ)</>
+                  <>
+                    <div className="break-bar-title">⏰ หมดเวลาพักแล้ว!</div>
+                    <div className="break-bar-sub">กดกลับไปค่ายเพื่อเริ่มโฟกัสเมื่อพร้อม</div>
+                  </>
                 ) : (
-                  <>กำลังพักเบรกอยู่ — เหลือ <b>{fmtTime(breakRemain)}</b> (เวลายังนับต่อ)</>
+                  <>
+                    <div className="break-bar-title">กำลังพักเบรกอยู่</div>
+                    <div className="break-bar-remain">⏱️ เหลือ <b>{fmtTime(breakRemain)}</b></div>
+                    <div className="break-bar-progress">
+                      <div className="break-bar-progress-fill" style={{ width: `${breakRemain > 0 ? Math.min(100, (breakRemain / (25 * 60)) * 100) : 0}%` }} />
+                    </div>
+                  </>
                 )}
-              </span>
+              </div>
             </div>
             <div className="resume-actions">
               <button className="btn btn-primary btn-resume" onClick={onBreakBack} title="กลับไปค่ายพัก — เวลาพักยังนับต่อ">
