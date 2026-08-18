@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
+import { petMoodOf, petPerkLabel } from '../meta.js';
 
 export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onWinChoice }) {
-  const { character, inventory, cities } = useGame();
+  const { character, progress, inventory, cities } = useGame();
   const [potionOpen, setPotionOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const logRef = useRef(null);
@@ -27,6 +28,9 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
   if (!character || !boss) {
     return <div className="screen"><p className="hint">กำลังเรียกบอส…</p></div>;
   }
+  // 🐾 สัตว์เลี้ยงที่ใช้งาน — ฟองเกาะอวตาร์นักสู้ (pet ออกรบด้วย) + ป้าย 🥚 กำลังฟัก
+  const activePet = (character.pets || []).find((p) => p.active) || null;
+  const petMood = activePet ? petMoodOf(activePet, progress?.last_focus_date) : null;
 
   const consumables = inventory.filter((i) => i.type === 'consumable');
   const skills = character.skills || [];
@@ -108,7 +112,29 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
 
       {/* player card */}
       <div className="player-card">
-        <div className="player-avatar">{character.classIcon}</div>
+        <div className="player-avatar">
+          {character.classIcon}
+          {activePet ? (
+            <div
+              className={`companion-bubble pet-mood-${petMood.level}`}
+              title={`🐾 ${activePet.name} (Lv.${activePet.level}) — ${activePet.desc}\n📈 ค่าพิเศษปัจจุบัน: ${petPerkLabel(activePet)}\n${petMood.msg}`}
+            >
+              {activePet.icon}
+              <span className="pet-lv-tag">Lv.{activePet.level}</span>
+              <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
+            </div>
+          ) : (
+            <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~4%) แล้วใช้ฟักดูสิ!">
+              🥚
+            </div>
+          )}
+          {/* ไข่กำลังฟัก (ใช้ไข่แล้ว — จะฟักหลังจบ 1 session) */}
+          {character.hatchPending && (
+            <div className="hatch-badge" title="🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักออกมาเป็นสัตว์เลี้ยงหลังจบ 1 session โฟกัส">
+              🥚 กำลังฟัก…
+            </div>
+          )}
+        </div>
         <div className="player-info">
           <div className="player-name">{character.name} Lv.{character.level}</div>
           <div className="hp-row"><span>❤️ HP</span><span>{character.hp}/{character.maxHp}</span></div>

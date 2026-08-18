@@ -983,7 +983,7 @@ body {
   padding: 14px;
   margin-bottom: 12px;
 }
-.player-avatar { font-size: 38px; }
+.player-avatar { font-size: 38px; position: relative; } /* relative — ให้ฟอง pet เกาะมุมอวตารได้ */
 .player-info { flex: 1; }
 .player-name { font-weight: 700; font-size: 14.5px; margin-bottom: 4px; }
 .danger-text { color: var(--red); font-size: 12.5px; font-weight: 700; margin-top: 6px; }

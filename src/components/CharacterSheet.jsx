@@ -208,11 +208,14 @@ function PetStable() {
   };
 
   return (
-    <Panel title={`🐾 คอกสัตว์ (${pets.length}/${slots})`}>
+    <Panel title={<span>🐾 คอกสัตว์ ({pets.length}/{slots}){character.hatchPending && <span className="hatch-chip">🥚 กำลังฟัก…</span>}</span>}>
       <p className="panel-text">
         ฟักจาก 🥚 ไข่ปริศนา (ดรอปหายากจากกล่องสมบัติ ~4% / event พิเศษ) — ตัวที่ <b>ใช้งาน</b> เท่านั้นที่ค่าพิเศษมีผล ·
         เลเวล pet เพิ่มขึ้นจากโฟกัส + ร่วมผจญภัย (ค่าพิเศษ +10%/เลเวล) · คอกเต็มใช้ 💳 บัตรขยายคอก (ดรอปหายากมาก + บอสลับการันตีใบแรก)
       </p>
+      {character.hatchPending && (
+        <p className="hint">🥚 ไข่ปริศนากำลังฟักอยู่ — จะฟักเป็นสัตว์เลี้ยงหลังจบ 1 session โฟกัส (ไข่ไม่สปอยล์ — สุ่มตัวตอนฟักจริง)</p>
+      )}
       {pets.length === 0 ? (
         <p className="hint">ยังไม่มีสัตว์เลี้ยง — ออกผจญภัยหาความหวังจากกล่องสมบัติสิ! 🥚</p>
       ) : (

@@ -128,6 +128,19 @@ const campPet1 = await evalJs(`(() => {
 })()`);
 expect('session-pet: Camp — ฟอง 🥚 + ป้าย "กำลังฟัก" (ยังไม่มี pet)', !!campPet1 && campPet1.bubble.includes('🥚') && campPet1.chip.includes('กำลังฟัก') && !campPet1.hasLv, JSON.stringify(campPet1));
 
+// ---- 1.6) เปิดแท็บตัวละคร (CharacterSheet) → คอกสัตว์มีป้าย 🥚 กำลังฟัก… ----
+const sheetTab = await evalJs(`(() => {
+  const btns = [...document.querySelectorAll('.tabs button')];
+  const b = btns.find((x) => x.textContent.includes('ตัวละคร'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+expect('session-pet: เปิดแท็บตัวละครในค่ายได้', sheetTab === true);
+await sleep(800);
+const stableChip = await evalJs(`document.querySelector('.panel-title .hatch-chip')?.textContent?.trim() || ''`);
+expect('session-pet: CharacterSheet — คอกสัตว์มีป้าย "🥚 กำลังฟัก…"', stableChip.includes('กำลังฟัก'), `chip='${stableChip}'`);
+
 // ---- 2) จบ session → ไข่ฟักได้ pet + active ----
 r = await api('/adventure/complete', { method: 'POST', body: { focusSec: 60, events: [] } });
 expect('session-pet: จบ session → ไข่ฟัก (มี pet + active)', r.status === 200 && r.json.hatch && !r.json.hatch.waiting && r.json.character.pets.some((p) => p.active), r.json.error || JSON.stringify(r.json.hatch));
@@ -188,6 +201,36 @@ const campPet2 = await evalJs(`(() => {
   };
 })()`);
 expect('session-pet: Camp — ฟอง pet แสดง pet + Lv + อารมณ์ (ป้ายฟักหาย)', !!campPet2 && !campPet2.bubble.includes('🥚') && campPet2.hasLv && campPet2.hasMood && !campPet2.chip, JSON.stringify(campPet2));
+
+// ---- 6) บังคับเข้าหน้าบอส (long_break → fetchBoss) → ฟอง pet เกาะอวตารนักสู้ ----
+const forcedBoss = await evalJs(`(() => {
+  const key = Object.keys(localStorage).find((k) => k.startsWith('pomoquest-timer-'));
+  if (!key) return false;
+  const t = {
+    phase: 'long_break', sessionIdx: 1, remain: 60, running: true, elapsed: 0,
+    nextEventIn: 90, sessionEvents: [], sessionKey: null, breakVisit: null,
+    awaitingBreak: false, breakOver: false, overrun: 0, breakExtends: 0,
+    breakStartedAt: Date.now(), pausedAtHome: false, pauseStartedAt: null, pauseAccumSec: 0,
+    expiresAt: Date.now() + 60000,
+  };
+  localStorage.setItem(key, JSON.stringify(t));
+  location.reload();
+  return true;
+})()`);
+expect('session-pet: บังคับเข้าหน้าบอสได้', forcedBoss === true);
+await sleep(3000);
+const bossPet = await evalJs(`(() => {
+  const el = document.querySelector('.player-avatar .companion-bubble');
+  if (!el) return null;
+  return {
+    onBoss: !!document.querySelector('.boss-screen'),
+    bubble: el.textContent?.trim() || '',
+    hasLv: !!document.querySelector('.player-avatar .pet-lv-tag'),
+    hasMood: !!document.querySelector('.player-avatar .pet-mood-emoji'),
+    moodClass: el.className || '',
+  };
+})()`);
+expect('session-pet: BossScreen — ฟอง pet เกาะอวตารนักสู้ (pet + Lv + อารมณ์)', !!bossPet && bossPet.onBoss && !bossPet.bubble.includes('🥚') && bossPet.hasLv && bossPet.hasMood, JSON.stringify(bossPet));
 
 chrome.kill();
 console.log(`\nผลลัพธ์: ${pass} ผ่าน, ${fail} ตก`);
