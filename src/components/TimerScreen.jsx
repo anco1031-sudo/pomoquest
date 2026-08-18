@@ -14,6 +14,7 @@ export const PAUSE_PRESETS = [
   { id: 'call', icon: '📞', label: 'รับสาย/ประชุม', full: '📞 รับสาย/ประชุม' },
   { id: 'outside', icon: '🚶', label: 'ออกไปข้างนอก', full: '🚶 ออกไปข้างนอก' },
   { id: 'housework', icon: '🧹', label: 'งานบ้าน', full: '🧹 งานบ้าน' },
+  { id: 'restroom', icon: '🚽', label: 'เข้าห้องน้ำ', full: '🚽 เข้าห้องน้ำ' },
   { id: 'rest', icon: '🛌', label: 'พักผ่อน/ไม่สบาย', full: '🛌 พักผ่อน/ไม่สบาย' },
   { id: 'other', icon: '🎲', label: 'ทำอย่างอื่น', full: '🎲 ทำอย่างอื่น' },
 ];
