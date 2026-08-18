@@ -57,6 +57,7 @@ export default function StatsScreen() {
   const totalMonthMinutes = Math.round(monthDays.reduce((a, d) => a + d.focusSec, 0) / 60);
   const maxBreak = Math.max(1, ...data.breakDays.map((d) => d.breakSec));
   const maxPause = Math.max(1, ...data.breakDays.map((d) => d.pauseSec || 0));
+  const maxLongPause = Math.max(1, ...data.breakDays.map((d) => d.longPauseSec || 0));
 
   // heatmap 91 วัน → จัดเป็นคอลัมน์รายสัปดาห์ (ขึ้นต้นวันจันทร์ เติมช่องว่างก่อนหน้าให้เต็มสัปดาห์)
   const heatCells = (() => {
@@ -205,15 +206,18 @@ export default function StatsScreen() {
       <Panel title="☕ เวลาพักย้อนหลัง 7 วัน">
         <div className="chart-legend">
           <span className="legend-item"><i className="legend-dot legend-break" /> พักเบรกระหว่าง session</span>
-          <span className="legend-item"><i className="legend-dot legend-pause" /> พักกลาง session (⏸️ หยุดพัก/กลับหน้าหลัก)</span>
+          <span className="legend-item"><i className="legend-dot legend-pause" /> พักกลาง session (⏸️ พักสั้น)</span>
+          <span className="legend-item"><i className="legend-dot legend-long" /> พักยาว 😴 (นอน/ธุระ)</span>
         </div>
         <div className="chart">
           {data.breakDays.map((d, i) => {
             const breakM = Math.round(d.breakSec / 60);
             const pauseM = Math.round((d.pauseSec || 0) / 60);
-            const totalM = breakM + pauseM;
+            const longM = Math.round((d.longPauseSec || 0) / 60);
+            const totalM = breakM + pauseM + longM;
             const hBreak = Math.max(4, (d.breakSec / maxBreak) * 100);
             const hPause = Math.max(4, ((d.pauseSec || 0) / maxPause) * 100);
+            const hLong = Math.max(4, ((d.longPauseSec || 0) / maxLongPause) * 100);
             const dow = new Date(d.date + 'T12:00:00').getDay();
             return (
               <div className="chart-col" key={d.date}>
@@ -224,6 +228,9 @@ export default function StatsScreen() {
                   </div>
                   <div className="chart-bar-wrap">
                     <div className="chart-bar chart-bar-pause" style={{ height: `${hPause}%` }} />
+                  </div>
+                  <div className="chart-bar-wrap">
+                    <div className="chart-bar chart-bar-long" style={{ height: `${hLong}%` }} />
                   </div>
                 </div>
                 <div className="chart-label">{DAY_NAMES[dow]}</div>
@@ -292,9 +299,10 @@ export default function StatsScreen() {
         <div className="stat-grid">
           <div className="stat-box"><b>{fmtDuration(p.break_sec)}</b><span>เวลาพักเบรกระหว่าง session</span></div>
           <div className="stat-box"><b>{fmtDuration(p.break_overrun_sec)}</b><span>เวลาที่เลยพักทั้งหมด</span></div>
-          <div className="stat-box"><b>{fmtDuration(p.pause_sec || 0)}</b><span>พักกลาง session (⏸️ หยุดพัก/กลับหน้าหลัก)</span></div>
+          <div className="stat-box"><b>{fmtDuration(p.pause_sec || 0)}</b><span>พักกลาง session (⏸️ พักสั้น)</span></div>
+          <div className="stat-box"><b>{fmtDuration(p.long_pause_sec || 0)}</b><span>พักยาว 😴 (นอน/ทานข้าว/ธุระ)</span></div>
         </div>
-        <p className="hint">⏸️ พักกลาง session = เวลาที่กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส จนกว่าจะกดโฟกัสต่อ — นับแยกจากพักเบรก (และไม่สะสม XP ระหว่างพัก)</p>
+        <p className="hint">⏸️ พักสั้น = กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส (นับใน "พักกลาง session") · 😴 พักยาว = เลือกตอนกดพัก ตั้งชื่อเหตุผลได้ (แยกหมวดสถิติ "พักยาว") — ทั้งคู่ไม่สะสม XP ระหว่างพัก</p>
       </Panel>
 
       {(data.bmStats?.buys > 0 || data.bmStats?.sells > 0) && (

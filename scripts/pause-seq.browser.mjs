@@ -92,7 +92,7 @@ const before = (await api('/state')).json.character;
 const xpBeforePause = before.xp;
 const levelBeforePause = before.level;
 
-// กดหยุดพัก → ควรพักทันที (label พักชั่วคราว) และเวลาพักควรนับขึ้น
+// กดหยุดพัก → เลือก "⏸️ พักสั้น" → ควรพักทันที (label พักชั่วคราว) และเวลาพักควรนับขึ้น
 const paused = await evalJs(`(() => {
   const btns = [...document.querySelectorAll('button')];
   const b = btns.find((x) => x.textContent.includes('หยุดพัก'));
@@ -100,7 +100,16 @@ const paused = await evalJs(`(() => {
   b.click();
   return true;
 })()`);
-expect('กดหยุดพักได้', paused === true);
+expect('กดหยุดพักได้ (เปิดตัวเลือก)', paused === true);
+await sleep(600);
+const choseShort = await evalJs(`(() => {
+  const btns = [...document.querySelectorAll('button')];
+  const b = btns.find((x) => x.textContent.includes('พักสั้น'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+expect('เลือกพักสั้นได้', choseShort === true);
 await sleep(1200);
 
 const pausedLabel1 = await evalJs(`document.querySelector('.timer-label')?.textContent || ''`);

@@ -27,7 +27,7 @@ const TABS = [
   { key: 'settings', label: 'ตั้งค่า', icon: '⚙️' },
 ];
 
-export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pausedTask = '', onDiscard = null, onManageCharacters, breakAtHome = false, breakRemain = 0, breakOver = false, onBreakBack = null }) {
+export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pauseMode = null, pauseTitle = '', pausedTask = '', onDiscard = null, onManageCharacters, breakAtHome = false, breakRemain = 0, breakOver = false, onBreakBack = null }) {
   const { character, progress, settings, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
@@ -188,10 +188,12 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
         {hasPausedSession && onContinue && (
           <div className={`resume-bar${barCollapsed ? ' collapsed' : ''}`}>
             <div className="resume-info">
-              <span className="resume-icon">⏸️</span>
+              <span className="resume-icon">{pauseMode === 'long' ? '😴' : '⏸️'}</span>
               <span>
                 มี session พักไว้อยู่{pausedTask && <> · 📋 <b className="resume-task">{pausedTask}</b></>} — เหลือ <b>{fmtTime(pausedRemain)}</b>
-                {pausedSec > 0 && <> · พักไปแล้ว <b>{fmtTime(pausedSec)}</b></>}
+                {pauseMode === 'long'
+                  ? <> · 😴 พักยาว{pauseTitle ? <> · <b>{pauseTitle}</b></> : ''}</>
+                  : pausedSec > 0 && <> · พักไปแล้ว <b>{fmtTime(pausedSec)}</b></>}
               </span>
             </div>
             <div className="resume-actions">

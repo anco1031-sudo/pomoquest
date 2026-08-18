@@ -124,6 +124,25 @@ try {
   expect('session-history: คืน session ที่จบไป (มี session_key)', r.status === 200 && r.json.sessions?.length === 1 && r.json.sessions[0].session_key === 'api-test-key');
   expect('session-history: session มี challenge_mode (ตอนนั้นเล่นโหมดอะไร)', r.status === 200 && r.json.sessions[0].challenge_mode === '', JSON.stringify(r.json.sessions[0]?.challenge_mode));
 
+  // --- พักยาว 😴: แยกหมวดสถิติจากพักสั้น + เก็บชื่อเหตุผลใน log ---
+  // (ใช้ตัวละครแยก — ไม่รบกวน cid ที่เทสต์อื่น ๆ อ้างถึง / เลเวล-relative xp ของ dev test)
+  r = await api('/character/create', { method: 'POST', body: { name: 'พักยาวAPI', class: 'warrior' } });
+  expect('create: สร้างตัวละครสำหรับเทสต์พักยาวได้', r.status === 200, r.json.error || '');
+  const lpId = r.json.character.id;
+  r = await api('/adventure/complete', {
+    method: 'POST',
+    body: { focusSec: 1500, pauseSec: 0, longPauseSec: 900, longPauseTitle: 'ไปกินข้าว', sessionIdx: 1, sessionsPerCycle: 4, sessionKey: 'api-test-long', events: [] },
+  });
+  expect('complete: จบ session หลังพักยาว (longPauseSec 900 วิ)', r.status === 200, r.json.error || '');
+  const lpRow = db.prepare('SELECT pause_sec, long_pause_sec FROM progress WHERE character_id = ?').get(lpId);
+  expect('progress: พักยาวแยกหมวด (long_pause_sec = 900, pause_sec = 0)', lpRow?.long_pause_sec === 900 && (lpRow?.pause_sec || 0) === 0, JSON.stringify(lpRow));
+  const lpLog = db.prepare("SELECT long_pause_sec, detail FROM log WHERE character_id = ? AND type = 'session_done' ORDER BY id DESC LIMIT 1").get(lpId);
+  expect('log session_done: long_pause_sec = 900 + detail มีชื่อพักยาว', lpLog?.long_pause_sec === 900 && (lpLog?.detail || '').includes('ไปกินข้าว'), JSON.stringify(lpLog));
+  r = await api('/stats');
+  const todayLongPause = r.json.breakDays?.find((d) => d.date === today)?.longPauseSec || 0;
+  expect('stats: กราฟ 7 วันมีพักยาว (longPauseSec วันนี้ = 900)', todayLongPause === 900, `longPauseSec วันนี้=${todayLongPause}`);
+  r = await api('/character/select', { method: 'POST', body: { id: cid } }); // กลับไป cid — เทสต์ถัด ๆ ไปใช้ cid เหมือนเดิม
+
   // --- เรื่องราว LLM ในประวัติ session: llm_tale เกาะกลุ่ม session ด้วย session_key (ค้นหา/อ่านได้) ---
   db.prepare("INSERT INTO log (character_id, type, title, detail, session_key, created_at) VALUES (?, 'llm_tale', '📖 เรื่องราวการผจญภัย', 'ทดสอบเรื่องราว: กำราบหมาป่าแล้วพบสมบัติกลางป่า', 'api-test-key', datetime('now','localtime'))").run(cid);
   r = await api('/session-history');

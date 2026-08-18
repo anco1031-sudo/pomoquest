@@ -93,6 +93,10 @@ body {
 .btn-continue { background: linear-gradient(135deg, #15803d, #16a34a); border-color: transparent; color: #fff; box-shadow: 0 4px 18px rgba(34, 197, 94, 0.35); }
 .paused-note { font-size: 12.5px; color: var(--gold); margin-bottom: 8px; }
 
+/* ช่องตั้งชื่อพักยาว 😴 ใน modal เลือกพัก */
+.pause-title-label { display: block; margin: 10px 0 6px; font-size: 12.5px; color: var(--muted); text-align: left; }
+.pause-title-input { margin-top: 6px; padding: 9px 12px; font-size: 14px; }
+
 .input {
   width: 100%;
   background: var(--bg);
@@ -1509,8 +1513,9 @@ body {
 }
 .chart-bar-break { background: linear-gradient(180deg, #60a5fa, #2563eb); }
 .chart-bar-pause { background: linear-gradient(180deg, #f472b6, #be185d); }
+.chart-bar-long { background: linear-gradient(180deg, #a78bfa, #6d28d9); }
 .chart-bar-session { background: linear-gradient(180deg, #fbbf24, #b45309); }
-/* แท่งคู่ (พักเบรก + พักกลาง session) ต่อวัน */
+/* แท่งสาม (พักเบรก + พักกลาง session + พักยาว 😴) ต่อวัน */
 .chart-bar-group {
   display: flex;
   gap: 3px;
@@ -1537,6 +1542,7 @@ body {
 }
 .legend-break { background: linear-gradient(180deg, #60a5fa, #2563eb); }
 .legend-pause { background: linear-gradient(180deg, #f472b6, #be185d); }
+.legend-long { background: linear-gradient(180deg, #a78bfa, #6d28d9); }
 /* สลับมุมมองกราฟ 30 วัน */
 .chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
 .chart-toggle-btn {

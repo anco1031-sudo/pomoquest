@@ -54,10 +54,15 @@ export default function Game() {
   const [pausedAtHome, setPausedAtHome] = useState(false); // กดกลับหน้าหลักกลาง session — พัก timer ไว้ แล้วกลับมากดต่อได้
   const [pauseStartedAt, setPauseStartedAt] = useState(null); // เริ่มพักกลาง session เมื่อไหร่ (ms) — null = ไม่ได้พักอยู่
   const [pauseAccumSec, setPauseAccumSec] = useState(0); // รวมวินาทีที่พักกลาง session นี้ (ยังไม่รวมช่วงที่กำลังพัก)
+  const [pauseMode, setPauseMode] = useState(null); // 'short' = ⏸️ พักสั้น (นับใน "พักกลาง session") · 'long' = 😴 พักยาว (แยกหมวดสถิติ "พักยาว") · null = ไม่ได้พัก
+  const [pauseTitle, setPauseTitle] = useState(''); // ชื่อ/เหตุผลของพักยาวครั้งปัจจุบัน (เช่น "ไปกินข้าว")
+  const [longPauseAccumSec, setLongPauseAccumSec] = useState(0); // รวมวินาทีพักยาวใน session นี้ (แยกจาก pauseAccumSec = พักสั้น)
+  const [longPauseTitles, setLongPauseTitles] = useState([]); // ชื่อพักยาวที่ผ่านมาใน session นี้ (ส่งไป log ตอนจบ session)
   const [pausedTick, setPausedTick] = useState(0); // นาฬิกาจำลองตอนพัก — ให้ UI นับเวลาพักสด ๆ
   const [bossState, setBossState] = useState(null);
   const [mounted, setMounted] = useState(false);
   const [showCharSelect, setShowCharSelect] = useState(false);
+  const [showLongPauseReturn, setShowLongPauseReturn] = useState(false); // กลับมาจากพักยาว 😴 — ถามโฟกัสต่อ/ทิ้ง session
   const [sessionEvents, setSessionEvents] = useState([]); // เหตุการณ์ที่เจอใน session นี้ (ดูย้อนหลังตอนพัก)
   const [sessionKey, setSessionKey] = useState(null); // id ของ session ปัจจุบัน — ใช้จับกลุ่มเหตุการณ์ในหน้าประวัติ session
   const [focusTask, setFocusTask] = useState(''); // ชื่องานที่โฟกัส session นี้ (ตั้งก่อนเริ่ม — สถิติแยกตามงาน)
@@ -104,8 +109,16 @@ export default function Game() {
   const breakStartedAtRef = useRef(breakStartedAt);
   const pauseStartedAtRef = useRef(null);
   const pauseAccumSecRef = useRef(0);
+  const pauseModeRef = useRef(null);
+  const pauseTitleRef = useRef('');
+  const longPauseAccumSecRef = useRef(0);
+  const longPauseTitlesRef = useRef([]);
   pauseStartedAtRef.current = pauseStartedAt;
   pauseAccumSecRef.current = pauseAccumSec;
+  pauseModeRef.current = pauseMode;
+  pauseTitleRef.current = pauseTitle;
+  longPauseAccumSecRef.current = longPauseAccumSec;
+  longPauseTitlesRef.current = longPauseTitles;
   phaseRef.current = phase;
   sessionIdxRef.current = sessionIdx;
   elapsedRef.current = elapsed;
@@ -133,6 +146,11 @@ export default function Game() {
     setPausedAtHome(false);
     setPauseStartedAt(null);
     setPauseAccumSec(0);
+    setPauseMode(null);
+    setPauseTitle('');
+    setLongPauseAccumSec(0);
+    setLongPauseTitles([]);
+    setShowLongPauseReturn(false);
     setPausedTick(0);
     setBossState(null);
     eventBusyRef.current = false;
@@ -174,6 +192,10 @@ export default function Game() {
       setPausedAtHome(t.pausedAtHome || false);
       setPauseStartedAt(t.pauseStartedAt || null);
       setPauseAccumSec(t.pauseAccumSec || 0);
+      setPauseMode(t.pauseMode || null); // timer เก่าที่ยังไม่มี pauseMode = พักสั้น (นับเวลาตามเดิม)
+      setPauseTitle(t.pauseTitle || '');
+      setLongPauseAccumSec(t.longPauseAccumSec || 0);
+      setLongPauseTitles(t.longPauseTitles || []);
       // story ไมไดเก็บไว้ใน localStorage — ถ้ากลับมาค้างที่รอเลือกพัก/ข้าม ให้ข้ามเรื่องไปถามพัก/ข้ามเลย
       if (t.awaitingBreak) setStoryDone(true);
 
@@ -225,13 +247,13 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec,
+      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, pauseMode, pauseTitle, longPauseAccumSec, longPauseTitles,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, focusTask, epoch, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, pauseMode, pauseTitle, longPauseAccumSec, longPauseTitles, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -281,6 +303,8 @@ export default function Game() {
     const res = await post('/adventure/complete', {
       focusSec: elapsedRef.current,
       pauseSec: pauseAccumSecRef.current, // พักกลาง session (กดหยุดพัก/กลับหน้าหลัก) — นับแยกจากพักเบรก
+      longPauseSec: longPauseAccumSecRef.current, // พักยาว 😴 — แยกหมวดสถิติ "พักยาว" (จากพักสั้น)
+      longPauseTitle: longPauseTitlesRef.current.join(' · '), // ชื่อ/เหตุผลของพักยาวใน session นี้ (ลง log จบ session)
       events: sessionEvents,
       sessionIdx: sessionIdxRef.current,
       sessionsPerCycle: settings.sessions_per_cycle,
@@ -311,37 +335,78 @@ export default function Game() {
   };
 
   // ---- พักกลาง session (กดหยุดพัก / กลับหน้าหลัก) — นับเวลาพักแยกจากพักเบรกระหว่าง session ----
-  const startPause = () => {
+  // 'short' = ⏸️ พักสั้น (นับเวลาในสถิติ "พักกลาง session") · 'long' = 😴 พักยาว (ไปนอน/ธุระ — ไม่นับเวลาในสถิติ)
+  const startPause = (mode = 'short', title = '') => {
     if (pauseStartedAtRef.current) return; // พักอยู่แล้ว — ไม่เริ่มซ้ำ
     setPauseStartedAt(Date.now());
+    setPauseMode(mode);
+    setPauseTitle(mode === 'long' ? (title || '').trim() : '');
   };
 
   const endPause = () => {
     const started = pauseStartedAtRef.current;
     if (!started) return; // ไม่ได้พักอยู่
     const sec = Math.max(0, Math.round((Date.now() - started) / 1000));
-    setPauseAccumSec((a) => a + sec);
+    if (pauseModeRef.current === 'long') {
+      // พักยาว 😴 — นับแยกหมวด (long_pause_sec) + เก็บชื่อเหตุผลไว้ลง log ตอนจบ session
+      setLongPauseAccumSec((a) => a + sec);
+      if (pauseTitleRef.current) setLongPauseTitles((t) => [...t, pauseTitleRef.current]);
+    } else {
+      // พักสั้น — นับเวลาพักเข้าสถิติ "พักกลาง session"
+      setPauseAccumSec((a) => a + sec);
+    }
     setPauseStartedAt(null);
+    setPauseMode(null);
+    setPauseTitle('');
   };
 
   const resetPause = () => {
     setPauseStartedAt(null);
     setPauseAccumSec(0);
+    setPauseMode(null);
+    setPauseTitle('');
+    setLongPauseAccumSec(0);
+    setLongPauseTitles([]);
   };
 
   // ---- กลับหน้าหลักกลาง session: พัก timer ไว้ แล้วกลับมากด "ต่อ session" ได้ ----
+  // (ปุ่ม 🏠 ที่หน้าโฟกัสเปิดตัวเลือกพักสั้น/ยาวให้เลือกก่อนแล้ว — ตรงนี้แค่พักไว้ที่หน้า Home
+  //  ไม่เรียก startPause ซ้ำ เพราะ ref ยังไม่ทัน sync หลัง onPause → จะทับ pauseMode/pauseTitle เป็นพักสั้น)
   const handleHome = () => {
-    startPause();
     setRunning(false);
     setPausedAtHome(true);
     sfx.pause();
   };
 
+  // กด "โฟกัสต่อ" (ที่หน้าหลัก หรือหน้าจอโฟกัส) — ถ้าพักยาว 😴 ให้ถามก่อนกลับมา (โชว์เวลาที่ไม่อยู่ + เลือกต่อ/ทิ้ง)
   const handleContinue = () => {
+    if (pauseModeRef.current === 'long') { setShowLongPauseReturn(true); return; }
     endPause();
     setPausedAtHome(false);
     setRunning(true);
     sfx.start();
+  };
+
+  const handleResume = () => {
+    if (pauseModeRef.current === 'long') { setShowLongPauseReturn(true); return; }
+    endPause();
+    setRunning(true);
+    sfx.start();
+  };
+
+  // เลือก "โฟกัสต่อ" ใน modal กลับมาจากพักยาว — จบพัก (ไม่นับเวลา) แล้วกลับมารัน session
+  const resumeFromLongPause = () => {
+    setShowLongPauseReturn(false);
+    endPause();
+    setPausedAtHome(false);
+    setRunning(true);
+    sfx.start();
+  };
+
+  // เลือก "ทิ้ง session" ใน modal กลับมาจากพักยาว — ทิ้งเลย (modal นี้คือการยืนยันแล้ว ไม่ถามซ้ำ)
+  const discardFromLongPause = () => {
+    setShowLongPauseReturn(false);
+    abortSession();
   };
 
   // แก้ไขชื่องานของ session นี้ (จากหน้าจอโฟกัส) — session ต่อ ๆ ไปในรอบใช้ชื่อใหม่
@@ -490,9 +555,8 @@ export default function Game() {
     setStoryDone(true); // รอครบแล้วก็ไม่เจอ — เลิกคอย
   }, [get]);
 
-  // ทิ้งเซสชัน (จากหน้าจอโฟกัส หรือจากแถบโฟกัสต่อที่หน้าหลัก) — ถามยืนยันก่อน คอมโบจะหายเว้นแต่มีโล่
-  const doAbort = async (confirmMsg) => {
-    if (!window.confirm(confirmMsg)) return;
+  // ทิ้งเซสชันจริง (ไม่มี confirm — เรียกจาก doAbort ที่ถามยืนยัน หรือจาก modal พักยาวที่ตัดสินใจแล้ว)
+  const abortSession = async () => {
     await post('/adventure/abort'); // ถ้าใช้โล่ กันคอมโบ — server โชว์ toast ยืนยันเองผ่าน d.message (กัน toast ซ้อน)
     setPhase('idle');
     setRunning(false);
@@ -502,6 +566,12 @@ export default function Game() {
     setElapsed(0);
     setAwaitingBreak(false);
     resetPause(); // ทิ้งเซสชัน = เลิกนับพักกลาง session
+  };
+
+  // ทิ้งเซสชัน (จากหน้าจอโฟกัส หรือจากแถบโฟกัสต่อที่หน้าหลัก) — ถามยืนยันก่อน คอมโบจะหายเว้นแต่มีโล่
+  const doAbort = async (confirmMsg) => {
+    if (!window.confirm(confirmMsg)) return;
+    await abortSession();
   };
 
   const handleAbort = () => doAbort('ทิ้งเซสชันนี้? คอมโบโฟกัสจะหายไป');
@@ -608,6 +678,8 @@ export default function Game() {
           pausedRemain={remain}
           hasPausedSession={pausedAtHome}
           pausedSec={pausedSec}
+          pauseMode={pauseMode}
+          pauseTitle={pauseTitle}
           pausedTask={focusTask}
           onDiscard={handleDiscardPaused}
           onManageCharacters={() => setShowCharSelect(true)}
@@ -626,13 +698,15 @@ export default function Game() {
           sessionIdx={sessionIdx}
           sessionsPerCycle={settings.sessions_per_cycle}
           nextEventIn={nextEventIn}
-          onPause={() => { startPause(); setRunning(false); sfx.pause(); }}
-          onResume={() => { endPause(); setRunning(true); }}
+          onPause={(mode, title) => { startPause(mode, title); setRunning(false); sfx.pause(); }}
+          onResume={handleResume}
           onAbort={handleAbort}
           onHome={handleHome}
           sessionEvents={sessionEvents}
           focusTask={focusTask}
           pausedSec={pausedSec}
+          pauseMode={pauseMode}
+          pauseTitle={pauseTitle}
           onEditTask={editFocusTask}
         />
       )}
@@ -800,6 +874,25 @@ export default function Game() {
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={finishBreak}>▶️ เริ่มโฟกัส</button>
               <button className="btn" onClick={dismissBreakOver}>⏳ ยังพักต่อ (เวลานับต่อไป)</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* กลับมาจากพักยาว 😴 — ถามว่าจะโฟกัสต่อหรือทิ้ง session (เวลาพักยาวไม่นับในสถิติ "พักกลาง session") */}
+      {showLongPauseReturn && phase === 'work' && !running && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>😴 กลับมาจากพักยาว</h2>
+            <p>
+              ไม่อยู่นาน <b>{pauseStartedAt ? fmtDuration(Math.max(0, Math.round((Date.now() - pauseStartedAt) / 1000))) : '—'}</b>
+              {pauseTitle && <> · 😴 <b>{pauseTitle}</b></>}
+              <br />
+              พักยาวนับแยกหมวดในสถิติ "พักยาว" (ไม่ปนกับพักกลาง session) — session ยังค้างอยู่เหมือนเดิม
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={resumeFromLongPause}>▶️ โฟกัสต่อ</button>
+              <button className="btn" onClick={discardFromLongPause}>💨 ทิ้ง session</button>
             </div>
           </div>
         </div>

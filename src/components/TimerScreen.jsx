@@ -13,10 +13,13 @@ function fmtAgo(ms) {
   return new Date(ms).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 }
 
-export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '', pausedSec = 0, onEditTask = null }) {
+export default function TimerScreen({ remain, total, running, sessionIdx, sessionsPerCycle, nextEventIn, onPause, onResume, onAbort, onHome, sessionEvents = [], focusTask = '', pausedSec = 0, pauseMode = null, pauseTitle = '', onEditTask = null }) {
   const { character, progress } = useGame();
   const logRef = useRef(null);
   const [muted, setMutedState] = useState(isMuted());
+  const [showPauseChoice, setShowPauseChoice] = useState(false); // เลือก ⏸️ พักสั้น / 😴 พักยาว
+  const [pauseGoHome, setPauseGoHome] = useState(false); // เลือกพักจากปุ่ม 🏠 กลับหน้าหลัก — หลังเลือกแล้วไปพักที่หน้า Home
+  const [pauseTitleInput, setPauseTitleInput] = useState(''); // ชื่อ/เหตุผลพักยาว (input ใน modal — กัน window.prompt ค้างใน headless)
   const toggleMute = () => {
     const m = !muted;
     setMuted(m);
@@ -57,7 +60,11 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
       <div className="timer-ring" style={{ '--pct': pct }}>
         <div className="timer-time">{fmtTime(remain)}</div>
         <div className="timer-label">
-          {running ? 'กำลังโฟกัส…' : `⏸️ พักชั่วคราว · พักไปแล้ว ${fmtTime(pausedSec)}`}
+          {running
+            ? 'กำลังโฟกัส…'
+            : pauseMode === 'long'
+              ? `😴 พักยาว${pauseTitle ? ` (${pauseTitle})` : ''} · ไม่อยู่ ${fmtTime(pausedSec)}`
+              : `⏸️ พักชั่วคราว · พักไปแล้ว ${fmtTime(pausedSec)}`}
         </div>
       </div>
 
@@ -98,20 +105,26 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
       </div>
 
       <div className="timer-controls">
-        <button className="btn btn-primary btn-big" onClick={running ? onPause : onResume}>
+        <button className="btn btn-primary btn-big" onClick={running ? () => { setPauseGoHome(false); setPauseTitleInput(''); setShowPauseChoice(true); } : onResume}>
           {running ? '⏸️ หยุดพัก' : '▶️ โฟกัสต่อ'}
         </button>
         {/* ตอนพัก — ปุ่มทิ้ง session อยู่ข้างๆ โฟกัสต่อ เห็นชัด (เหมือนแถบโฟกัสต่อที่หน้าหลัก) */}
         {!running && (
           <button className="btn btn-danger" onClick={onAbort} title="ทิ้งเซสชันนี้ (คอมโบโฟกัสจะหายไป)">💨 ทิ้ง session</button>
         )}
-        <button className="btn" onClick={onHome}>🏠 กลับหน้าหลัก (พักไว้)</button>
+        <button className="btn" onClick={() => { setPauseGoHome(true); setPauseTitleInput(''); setShowPauseChoice(true); }}>🏠 กลับหน้าหลัก (พักไว้)</button>
         {running && (
           <button className="btn btn-danger" onClick={onAbort}>💨 ทิ้งเซสชัน</button>
         )}
       </div>
 
-      {!running && <p className="hint">⏸️ เวลาพักกลาง session ถูกนับแยกต่างหาก — กดโฟกัสต่อเมื่อพร้อม (ไม่สะสม XP ระหว่างพัก)</p>}
+      {!running && (
+        <p className="hint">
+          {pauseMode === 'long'
+            ? '😴 พักยาว — เวลาพักนี้แยกหมวดในสถิติ "พักยาว" (ไม่ปนกับพักกลาง session) · กดโฟกัสต่อเมื่อพร้อม (ไม่สะสม XP ระหว่างพัก)'
+            : '⏸️ เวลาพักกลาง session ถูกนับแยกต่างหาก — กดโฟกัสต่อเมื่อพร้อม (ไม่สะสม XP ระหว่างพัก)'}
+        </p>
+      )}
       <p className="hint">โฟกัสงานของคุณไปเรื่อย ๆ — ตัวละครจะจัดการมอนสเตอร์เอง!</p>
 
       {sessionEvents.length > 0 && (
@@ -134,6 +147,39 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* เลือก ⏸️ พักสั้น / 😴 พักยาว — เวลางานหยุดทั้งคู่ (🏠 กลับหน้าหลักก็เปิดตัวเลือกนี้เหมือนกัน) */}
+      {showPauseChoice && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>⏸️ พักแบบไหน?</h2>
+            <p>เวลางานจะหยุดทั้งคู่ — ต่างกันที่หมวดสถิติ: พักสั้น = "พักกลาง session" · พักยาว = แยกหมวด "พักยาว"</p>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={() => { setShowPauseChoice(false); onPause('short'); if (pauseGoHome) onHome(); }}>
+                ⏸️ พักสั้น (นับเวลา)
+              </button>
+              <button className="btn" onClick={() => { setShowPauseChoice(false); onPause('long', pauseTitleInput.trim()); if (pauseGoHome) onHome(); }}>
+                😴 พักยาว (แยกหมวดสถิติ)
+              </button>
+            </div>
+            <label className="pause-title-label">
+              😴 ชื่อพักยาว (เช่น "ไปกินข้าว" — ดูย้อนหลังใน log):
+              <input
+                className="input pause-title-input"
+                value={pauseTitleInput}
+                onChange={(e) => setPauseTitleInput(e.target.value)}
+                placeholder="ไปกินข้าว / นอนกลางวัน / ธุระ…"
+                maxLength={40}
+                autoFocus
+              />
+            </label>
+            <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (ตั้งชื่อได้)</p>
+            <div className="modal-actions">
+              <button className="btn btn-sm" onClick={() => setShowPauseChoice(false)}>ยกเลิก</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

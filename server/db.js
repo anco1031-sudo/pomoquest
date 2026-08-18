@@ -219,6 +219,8 @@ ensureColumn('progress', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'break_extended', 'INTEGER DEFAULT 0');
 // พักกลาง session (กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส จนกว่าจะกดโฟกัสต่อ) — แยกจาก break_sec (พักระหว่าง session)
 ensureColumn('progress', 'pause_sec', 'INTEGER DEFAULT 0');
+// พักยาว 😴 (เลือกตอนกดพัก — ไปนอน/ทานข้าว/ธุระ) — แยกหมวดจาก pause_sec (พักสั้น) ในสถิติ
+ensureColumn('progress', 'long_pause_sec', 'INTEGER DEFAULT 0');
 // จำนวนครั้งที่สลายท่าไม้ตายบอส (ระบบต่อสู้บอส — ตรา "จอมสลาย")
 ensureColumn('progress', 'charge_breaks', 'INTEGER DEFAULT 0');
 // ขายของให้พ่อค้าที่ต้องการ (achievement สายพ่อค้า)
@@ -239,6 +241,8 @@ ensureColumn('log', 'break_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 // พักกลาง session (กดหยุดพัก/กลับหน้าหลัก) — เก็บราย session เอาไว้ทำกราฟย้อนหลัง
 ensureColumn('log', 'pause_sec', 'INTEGER DEFAULT 0');
+// พักยาว 😴 (เลือกตอนกดพัก) — แยกหมวดจาก pause_sec สำหรับกราฟย้อนหลัง
+ensureColumn('log', 'long_pause_sec', 'INTEGER DEFAULT 0');
 // พลังที่เปลี่ยนจากเหตุการณ์ระหว่าง session (ดูย้อนหลังได้ในบันทึกการผจญภัย)
 ensureColumn('log', 'hp_change', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'mp_change', 'INTEGER DEFAULT 0');
@@ -399,10 +403,10 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, pauseSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null }) {
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, pauseSec = 0, longPauseSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null }) {
   // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
-  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, pause_sec, hp_change, mp_change, session_key, city, challenge_mode, focus_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, pauseSec, hpChange, mpChange, sessionKey, city, challengeMode, focusTask).lastInsertRowid;
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, pause_sec, long_pause_sec, hp_change, mp_change, session_key, city, challenge_mode, focus_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, pauseSec, longPauseSec, hpChange, mpChange, sessionKey, city, challengeMode, focusTask).lastInsertRowid;
 }
 
 // ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----

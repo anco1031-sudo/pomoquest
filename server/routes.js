@@ -231,7 +231,7 @@ router.post('/adventure/event', (req, res) => {
 
 router.post('/adventure/complete', (req, res) => {
   const c = requireChar(res); if (!c) return;
-  const { focusSec = 1500, pauseSec = 0, events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null, focusTask = null } = req.body || {};
+  const { focusSec = 1500, pauseSec = 0, longPauseSec = 0, longPauseTitle = '', events = [], sessionIdx = 1, sessionsPerCycle = 1, sessionKey = null, focusTask = null } = req.body || {};
   const prog = getProgress(c.id);
 
   // โหมดมาราธอน: ห้ามพักระหว่างโฟกัส — ถ้าโฟกัสไม่ถึง 90% ของเวลาที่ควร (กดพัก/กลับหน้าหลักกลาง session)
@@ -280,6 +280,8 @@ router.post('/adventure/complete', (req, res) => {
   prog.total_focus_sec += focusSec;
   // พักกลาง session (กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส) — แยกจาก break_sec (พักระหว่าง session)
   prog.pause_sec += Math.max(0, Math.round(pauseSec));
+  // พักยาว 😴 (เลือกตอนกดพัก — ไปนอน/ทานข้าว/ธุระ) — แยกหมวดจาก pause_sec (พักสั้น)
+  prog.long_pause_sec += Math.max(0, Math.round(longPauseSec));
   // 🐾 สัตว์เลี้ยงสะสม XP จากเวลาโฟกัส (โฟกัส 1 นาที = 1 XP — ฟัก/ร่วมผจญภัยก็ได้ XP จาก event ด้วย)
   const petLevelNote = (() => {
     const active = getPets(c.id).find((p) => p.is_active);
@@ -311,16 +313,21 @@ router.post('/adventure/complete', (req, res) => {
 
   updateCharacter(c);
   db.prepare(`UPDATE progress SET streak=@streak, best_streak=@best_streak, sessions_completed=@sessions_completed,
-    total_focus_sec=@total_focus_sec, pause_sec=@pause_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
+    total_focus_sec=@total_focus_sec, pause_sec=@pause_sec, long_pause_sec=@long_pause_sec, gold_earned=@gold_earned, daily_streak=@daily_streak, last_focus_date=@last_focus_date WHERE id=@id`).run(prog);
 
   const streakMsg = bonus > 1 ? ` (คอมโบโฟกัส x${bonus.toFixed(1)})` : '';
   const pauseSecRounded = Math.max(0, Math.round(pauseSec));
   const pauseNote = pauseSecRounded > 60
     ? ` · ⏸️ พัก ${Math.round(pauseSecRounded / 60)} นาที`
     : pauseSecRounded > 0 ? ` · ⏸️ พัก ${pauseSecRounded} วิ` : '';
+  const longPauseSecRounded = Math.max(0, Math.round(longPauseSec));
+  const longPauseTitleClean = typeof longPauseTitle === 'string' ? longPauseTitle.trim() : '';
+  const longPauseNote = longPauseSecRounded > 0
+    ? ` · 😴 พักยาว ${Math.round(longPauseSecRounded / 60)} นาที${longPauseTitleClean ? ` (${longPauseTitleClean})` : ''}`
+    : '';
   const taleAfter = addLog(c.id, {
-    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${petLevelNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
-    xp, gold, focusSec, pauseSec: pauseSecRounded, focusTask,
+    type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${longPauseNote}${petLevelNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
+    xp, gold, focusSec, pauseSec: pauseSecRounded, longPauseSec: longPauseSecRounded, focusTask,
   });
   if (survivalFall) {
     addLog(c.id, { type: 'survival_fall', title: '💀 อ่อนแรงล้ม', detail: survivalFall });
@@ -1418,12 +1425,18 @@ router.get('/stats', (req, res) => {
     FROM log WHERE character_id = ? AND type = 'session_done'
       AND created_at >= datetime('now', 'localtime', '-6 days')
     GROUP BY d`).all(c.id);
+  const longPauseRaw = db.prepare(`
+    SELECT date(created_at) AS d, COALESCE(SUM(long_pause_sec), 0) AS long_pause_sec
+    FROM log WHERE character_id = ? AND type = 'session_done'
+      AND created_at >= datetime('now', 'localtime', '-6 days')
+    GROUP BY d`).all(c.id);
   const pauseByDate = Object.fromEntries(pauseRaw.map((r) => [r.d, r.pause_sec]));
+  const longPauseByDate = Object.fromEntries(longPauseRaw.map((r) => [r.d, r.long_pause_sec]));
   const breakDays = [];
   for (let i = 6; i >= 0; i--) {
     const date = db.prepare(`SELECT date('now','localtime','-${i} day') AS d`).get().d;
     const row = breakRaw.find((r) => r.d === date);
-    breakDays.push({ date, breakSec: row?.break_sec || 0, overrunSec: row?.overrun_sec || 0, pauseSec: pauseByDate[date] || 0 });
+    breakDays.push({ date, breakSec: row?.break_sec || 0, overrunSec: row?.overrun_sec || 0, pauseSec: pauseByDate[date] || 0, longPauseSec: longPauseByDate[date] || 0 });
   }
 
   // สถิติแยกตามงานที่โฟกัส (session_done — 30 วันล่าสุด) — ตั้งชื่องานก่อนเริ่มโฟกัสได้
