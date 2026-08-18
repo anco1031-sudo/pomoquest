@@ -386,7 +386,7 @@ router.post('/adventure/complete', (req, res) => {
   const city = CITIES[c.city_index % CITIES.length];
   if (!isDevDryRun()) {
     llmChat({
-      system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story in Thai mixed with English (like the game\'s style). Narrate only what happened during this focus session, weaving in the events list below if provided — never invent rewards, numbers, items or levels. Keep it fun and concise.',
+      system: 'You are the narrator of PomoQuest, a Pomodoro RPG game. Write a short, vivid 2-3 sentence adventure story entirely in Thai (ภาษาไทยล้วน ๆ — no English words at all). Narrate only what happened during this focus session, weaving in the events list below if provided — never invent rewards, numbers, items or levels. Keep it fun and concise.',
       user: JSON.stringify({
         character: c.name, class: CLASSES[c.class]?.name || c.class, level: c.level,
         city: city.name, terrain: city.terrain,
