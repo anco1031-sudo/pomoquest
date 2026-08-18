@@ -327,7 +327,7 @@ router.post('/adventure/complete', (req, res) => {
     : '';
   const taleAfter = addLog(c.id, {
     type: 'session_done', title: '✅ จบเซสชันโฟกัส', detail: `โฟกัสครบ! +${xp} XP${streakMsg}, +${gold} ทอง${pauseNote}${longPauseNote}${petLevelNote}${survivalFall ? ` · ${survivalFall}` : ''}`,
-    xp, gold, focusSec, pauseSec: pauseSecRounded, longPauseSec: longPauseSecRounded, focusTask,
+    xp, gold, focusSec, pauseSec: pauseSecRounded, longPauseSec: longPauseSecRounded, longPauseTitle: longPauseTitleClean, focusTask,
   });
   if (survivalFall) {
     addLog(c.id, { type: 'survival_fall', title: '💀 อ่อนแรงล้ม', detail: survivalFall });
@@ -1447,6 +1447,15 @@ router.get('/stats', (req, res) => {
     GROUP BY task ORDER BY focus_sec DESC LIMIT 12
   `).all(c.id);
 
+  // พักยาว 😴 แยกตามชื่อ (30 วันล่าสุด) — ตัวเลือกสำเร็จรูป + ชื่อที่พิมพ์เอง — รวมเวลาพักยาวต่อชื่อ
+  const longPauseTitles = db.prepare(`
+    SELECT COALESCE(NULLIF(long_pause_title, ''), '(ไม่มีชื่อ)') AS title,
+           COALESCE(SUM(long_pause_sec), 0) AS sec, COUNT(*) AS times
+    FROM log WHERE character_id = ? AND type = 'session_done' AND long_pause_sec > 0
+      AND created_at >= datetime('now', 'localtime', '-29 days')
+    GROUP BY title ORDER BY sec DESC LIMIT 12
+  `).all(c.id);
+
   // heatmap โฟกัส 12 สัปดาห์ (วันละกี่นาที)
   const heatRaw = db.prepare(`
     SELECT date(created_at) AS d, COALESCE(SUM(focus_sec), 0) AS focus_sec
@@ -1468,6 +1477,7 @@ router.get('/stats', (req, res) => {
     breakDays,
     heatmap,
     tasks,
+    longPauseTitles,
     cityLogs,
     bmStats,
     achievements: { unlocked: ach.unlocked, total: ach.total },

@@ -243,6 +243,8 @@ ensureColumn('log', 'break_overrun_sec', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'pause_sec', 'INTEGER DEFAULT 0');
 // พักยาว 😴 (เลือกตอนกดพัก) — แยกหมวดจาก pause_sec สำหรับกราฟย้อนหลัง
 ensureColumn('log', 'long_pause_sec', 'INTEGER DEFAULT 0');
+// ชื่อ/เหตุผลพักยาว (ตัวเลือกสำเร็จรูปหรือพิมพ์เอง) — ใช้รวมสถิติพักยาวแยกตามชื่อ
+ensureColumn('log', 'long_pause_title', 'TEXT');
 // พลังที่เปลี่ยนจากเหตุการณ์ระหว่าง session (ดูย้อนหลังได้ในบันทึกการผจญภัย)
 ensureColumn('log', 'hp_change', 'INTEGER DEFAULT 0');
 ensureColumn('log', 'mp_change', 'INTEGER DEFAULT 0');
@@ -403,10 +405,10 @@ export const getInventory = (charId) => db.prepare(`
 export const getLog = (charId, limit = 30) =>
   db.prepare('SELECT * FROM log WHERE character_id = ? ORDER BY id DESC LIMIT ?').all(charId, limit);
 
-export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, pauseSec = 0, longPauseSec = 0, hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null }) {
+export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec = 0, breakSec = 0, overrunSec = 0, pauseSec = 0, longPauseSec = 0, longPauseTitle = '', hpChange = 0, mpChange = 0, sessionKey = null, city = null, challengeMode = '', focusTask = null }) {
   // เก็บเวลาตาม timezone เครื่อง (สำหรับหน้า Stats และ streak รายวัน) — คืน id เพื่อใช้เป็นตัวอ้างอิง "หลัง log นี้"
-  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, pause_sec, long_pause_sec, hp_change, mp_change, session_key, city, challenge_mode, focus_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
-    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, pauseSec, longPauseSec, hpChange, mpChange, sessionKey, city, challengeMode, focusTask).lastInsertRowid;
+  return db.prepare("INSERT INTO log (character_id, type, title, detail, xp, gold, focus_sec, break_sec, break_overrun_sec, pause_sec, long_pause_sec, long_pause_title, hp_change, mp_change, session_key, city, challenge_mode, focus_task, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))")
+    .run(charId, type, title, detail, xp, gold, focusSec, breakSec, overrunSec, pauseSec, longPauseSec, longPauseTitle, hpChange, mpChange, sessionKey, city, challengeMode, focusTask).lastInsertRowid;
 }
 
 // ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----

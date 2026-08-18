@@ -67,20 +67,7 @@ const evalJs = async (expr) => {
   const rr = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
   return rr?.result?.value;
 };
-// ตั้งค่าช่อง input (React controlled input — ต้องใช้ native setter + input event)
-const setPauseTitle = async (text) => {
-  const ok = await evalJs(`(() => {
-    const inp = document.querySelector('.pause-title-input');
-    if (!inp) return false;
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(inp, ${JSON.stringify(text)});
-    inp.dispatchEvent(new Event('input', { bubbles: true }));
-    inp.dispatchEvent(new Event('change', { bubbles: true }));
-    return true;
-  })()`);
-  await sleep(300); // รอ React re-render (onChange อัปเดต state) ก่อนกดปุ่ม
-  return ok;
-};
+
 
 await send('Page.enable');
 await send('Runtime.enable');
@@ -147,7 +134,15 @@ await evalJs(`(() => {
 await sleep(600);
 const homeChooser = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
 expect('🏠 กลับหน้าหลัก → เปิดตัวเลือกพัก (ถามพักสั้น/พักยาว)', homeChooser.includes('พักแบบไหน'), homeChooser.replace(/\n/g, ' ').slice(0, 80));
-await setPauseTitle('ไปกินข้าว'); // ตั้งชื่อพักยาวผ่าน input ใน modal
+// เลือกชื่อพักยาวจากตัวเลือกสำเร็จรูป (chip "🍚 กินข้าว") แล้วกดพักยาว
+const chipClicked = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('.pause-preset-chip')].find((x) => x.textContent.includes('กินข้าว'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`);
+expect('เลือกชื่อพักยาวจากตัวเลือกสำเร็จรูป (🍚 กินข้าว)', chipClicked === true);
+await sleep(300);
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('พักยาว'));
   if (!b) return false;
@@ -156,7 +151,7 @@ await evalJs(`(() => {
 })()`);
 await sleep(1000);
 const homeBar = await evalJs(`document.querySelector('.resume-bar')?.innerText || ''`);
-expect('พักยาวจาก 🏠 → แถบ Home โชว์ "😴 พักยาว · ไปกินข้าว"', homeBar.includes('พักยาว') && homeBar.includes('ไปกินข้าว'), homeBar.replace(/\n/g, ' ').slice(0, 130));
+expect('พักยาวจาก 🏠 → แถบ Home โชว์ "😴 พักยาว · 🍚 กินข้าว"', homeBar.includes('พักยาว') && homeBar.includes('กินข้าว'), homeBar.replace(/\n/g, ' ').slice(0, 130));
 
 // ---- 4) กดโฟกัสต่อ (แถบ) → modal โชว์ชื่อพัก → ทิ้ง session (ไม่ถามซ้ำ) → Home ว่าง ----
 await evalJs(`(() => {
@@ -167,7 +162,7 @@ await evalJs(`(() => {
 })()`);
 await sleep(800);
 returnModal = await evalJs(`document.querySelector('.modal')?.innerText || ''`);
-expect('modal กลับมาจากพักยาวโชว์ชื่อ "ไปกินข้าว"', returnModal.includes('กลับมาจากพักยาว') && returnModal.includes('ไปกินข้าว'), returnModal.replace(/\n/g, ' ').slice(0, 130));
+expect('modal กลับมาจากพักยาวโชว์ชื่อ "🍚 กินข้าว"', returnModal.includes('กลับมาจากพักยาว') && returnModal.includes('กินข้าว'), returnModal.replace(/\n/g, ' ').slice(0, 130));
 await evalJs(`(() => {
   const b = [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('ทิ้ง session'));
   if (!b) return false;

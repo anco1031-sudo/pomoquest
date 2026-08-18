@@ -136,11 +136,13 @@ try {
   expect('complete: จบ session หลังพักยาว (longPauseSec 900 วิ)', r.status === 200, r.json.error || '');
   const lpRow = db.prepare('SELECT pause_sec, long_pause_sec FROM progress WHERE character_id = ?').get(lpId);
   expect('progress: พักยาวแยกหมวด (long_pause_sec = 900, pause_sec = 0)', lpRow?.long_pause_sec === 900 && (lpRow?.pause_sec || 0) === 0, JSON.stringify(lpRow));
-  const lpLog = db.prepare("SELECT long_pause_sec, detail FROM log WHERE character_id = ? AND type = 'session_done' ORDER BY id DESC LIMIT 1").get(lpId);
-  expect('log session_done: long_pause_sec = 900 + detail มีชื่อพักยาว', lpLog?.long_pause_sec === 900 && (lpLog?.detail || '').includes('ไปกินข้าว'), JSON.stringify(lpLog));
+  const lpLog = db.prepare("SELECT long_pause_sec, long_pause_title, detail FROM log WHERE character_id = ? AND type = 'session_done' ORDER BY id DESC LIMIT 1").get(lpId);
+  expect('log session_done: long_pause_sec = 900 + คอลัมน์ชื่อพักยาว', lpLog?.long_pause_sec === 900 && lpLog?.long_pause_title === 'ไปกินข้าว' && (lpLog?.detail || '').includes('ไปกินข้าว'), JSON.stringify(lpLog));
   r = await api('/stats');
   const todayLongPause = r.json.breakDays?.find((d) => d.date === today)?.longPauseSec || 0;
   expect('stats: กราฟ 7 วันมีพักยาว (longPauseSec วันนี้ = 900)', todayLongPause === 900, `longPauseSec วันนี้=${todayLongPause}`);
+  const lpTitleRow = (r.json.longPauseTitles || []).find((t) => t.title === 'ไปกินข้าว');
+  expect('stats: พักยาวแยกตามชื่อ (ไปกินข้าว = 900 วิ x1)', !!lpTitleRow && lpTitleRow.sec === 900 && lpTitleRow.times === 1, JSON.stringify(r.json.longPauseTitles));
   r = await api('/character/select', { method: 'POST', body: { id: cid } }); // กลับไป cid — เทสต์ถัด ๆ ไปใช้ cid เหมือนเดิม
 
   // --- เรื่องราว LLM ในประวัติ session: llm_tale เกาะกลุ่ม session ด้วย session_key (ค้นหา/อ่านได้) ---

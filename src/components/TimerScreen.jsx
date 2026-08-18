@@ -3,6 +3,18 @@ import { useGame } from '../context.jsx';
 import { sfx, isMuted, setMuted } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 
+// ชื่อพักยาวสำเร็จรูป (ตัวเลือกเร็ว — ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามชื่อได้) · พิมพ์เองก็ได้ที่ช่องอื่น ๆ
+const PAUSE_PRESETS = [
+  { id: 'eat', icon: '🍚', label: 'กินข้าว', full: '🍚 กินข้าว' },
+  { id: 'nap', icon: '😴', label: 'นอนกลางวัน', full: '😴 นอนกลางวัน' },
+  { id: 'errand', icon: '🛒', label: 'ธุระ/ซื้อของ', full: '🛒 ธุระ/ซื้อของ' },
+  { id: 'exercise', icon: '🏃', label: 'ออกกำลังกาย', full: '🏃 ออกกำลังกาย' },
+  { id: 'call', icon: '📞', label: 'รับสาย/ประชุม', full: '📞 รับสาย/ประชุม' },
+  { id: 'outside', icon: '🚶', label: 'ออกไปข้างนอก', full: '🚶 ออกไปข้างนอก' },
+  { id: 'housework', icon: '🧹', label: 'งานบ้าน', full: '🧹 งานบ้าน' },
+  { id: 'rest', icon: '🛌', label: 'พักผ่อน/ไม่สบาย', full: '🛌 พักผ่อน/ไม่สบาย' },
+];
+
 // เวลาสัมพัทธ์ (ms) — ใช้กับ `at` ที่เก็บตอน event เกิด
 function fmtAgo(ms) {
   if (!ms) return '';
@@ -164,15 +176,26 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
                 😴 พักยาว (แยกหมวดสถิติ)
               </button>
             </div>
+            <div className="pause-presets">
+              {PAUSE_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`pause-preset-chip${pauseTitleInput === p.full ? ' active' : ''}`}
+                  onClick={() => setPauseTitleInput(p.full)}
+                >
+                  {p.icon} {p.label}
+                </button>
+              ))}
+            </div>
             <label className="pause-title-label">
-              😴 ชื่อพักยาว (เช่น "ไปกินข้าว" — ดูย้อนหลังใน log):
+              😴 ชื่อพักยาว (เลือกด้านบน หรือพิมพ์เอง — ดูย้อนหลังใน log + รวมสถิติตามชื่อ):
               <input
                 className="input pause-title-input"
                 value={pauseTitleInput}
                 onChange={(e) => setPauseTitleInput(e.target.value)}
-                placeholder="ไปกินข้าว / นอนกลางวัน / ธุระ…"
+                placeholder="พิมพ์ชื่อพักเอง…"
                 maxLength={40}
-                autoFocus
               />
             </label>
             <p className="hint">พักสั้น = เข้าห้องน้ำ/รับสาย · พักยาว = นอน/ทานข้าว/ธุระยาว (ตั้งชื่อได้)</p>

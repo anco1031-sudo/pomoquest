@@ -305,6 +305,21 @@ export default function StatsScreen() {
         <p className="hint">⏸️ พักสั้น = กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส (นับใน "พักกลาง session") · 😴 พักยาว = เลือกตอนกดพัก ตั้งชื่อเหตุผลได้ (แยกหมวดสถิติ "พักยาว") — ทั้งคู่ไม่สะสม XP ระหว่างพัก</p>
       </Panel>
 
+      {data.longPauseTitles && data.longPauseTitles.length > 0 && (
+        <Panel title="😴 พักยาวแยกตามชื่อ (30 วัน)">
+          <div className="task-list">
+            {data.longPauseTitles.map((t) => (
+              <div className="task-row" key={t.title}>
+                <span className="task-name">{t.title}</span>
+                <span className="task-val">{fmtDuration(t.sec)}</span>
+                <span className="task-sessions">x{t.times} ครั้ง</span>
+              </div>
+            ))}
+          </div>
+          <p className="hint">💡 ตั้งชื่อพักยาวจากตัวเลือกสำเร็จรูป (หรือพิมพ์เอง) — ดูได้ว่าเวลาไปกับอะไรบ้าง</p>
+        </Panel>
+      )}
+
       {(data.bmStats?.buys > 0 || data.bmStats?.sells > 0) && (
         <Panel title="🖤 สถิติตลาดมืด">
           <div className="stat-grid">

@@ -96,6 +96,19 @@ body {
 /* ช่องตั้งชื่อพักยาว 😴 ใน modal เลือกพัก */
 .pause-title-label { display: block; margin: 10px 0 6px; font-size: 12.5px; color: var(--muted); text-align: left; }
 .pause-title-input { margin-top: 6px; padding: 9px 12px; font-size: 14px; }
+/* ตัวเลือกชื่อพักยาวสำเร็จรูป */
+.pause-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.pause-preset-chip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  cursor: pointer;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: inherit;
+}
+.pause-preset-chip:hover { background: rgba(139, 92, 246, 0.22); }
+.pause-preset-chip.active { background: rgba(139, 92, 246, 0.4); border-color: var(--purple); }
 
 .input {
   width: 100%;
