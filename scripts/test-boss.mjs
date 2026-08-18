@@ -347,6 +347,29 @@ try {
     const vLost = [192, 191, 190].filter((id) => !vInv.some((x) => x.item_id === id));
     expect('dragon-top3: เสีย 1 ใน 3 ของมีค่าที่สุด (192/191/190)', vLost.length === 1, `lost=[${vLost}]`);
     expect('dragon-top3: ของถูก (🦴 45) รอด — มังกรไม่สนใจขยะ', vInv.some((x) => x.item_id === 45), JSON.stringify(vInv.map((x) => x.item_id)));
+    // 🎁 ของขวัญ (ราคาหน้าร้าน 0) นับมูลค่าจริง (เปิดได้เฉลี่ย 580 ทอง) → อยู่ใน 3 อันดับมีค่า เหนือขยะ
+    r = await api('/character/create', { method: 'POST', body: { name: 'มังกรกล่อง', class: 'rogue' } });
+    const gcid = r.json.character.id;
+    db.prepare('UPDATE character SET gold = 500, hp = 500, max_hp = 500 WHERE id = ?').run(gcid);
+    addItem(gcid, 193, 10); // 🎁 กล่อง x10 (มูลค่าจริง 580/ใบ — ราคาหน้าร้าน 0)
+    addItem(gcid, 45, 10);  // 🦴 12ท x10
+    addItem(gcid, 48, 10);  // 🧵 10ท x10
+    addItem(gcid, 47, 10);  // 🥀 8ท x10 (ของถูกที่สุด — ต้องหลุดจาก 3 อันดับ)
+    r = await api('/boss');
+    expect('dragon-gift: เจอมังกรทอง', r.json.boss?.isDragon === true, r.json.boss?.name);
+    const qty = (inv, id) => inv.find((x) => x.item_id === id)?.qty || 0;
+    let giftStolen = 0, cheapestLost = 0;
+    for (let i = 0; i < 10; i++) {
+      const before = (await api('/state')).json.inventory || [];
+      const giftB = qty(before, 193), cheapB = qty(before, 47);
+      await api('/boss'); // สร้างไฟต์ใหม่ (retreat ลบไฟต์)
+      await api('/boss/retreat', { method: 'POST' });
+      const after = (await api('/state')).json.inventory || [];
+      if (qty(after, 193) < giftB) giftStolen++;
+      if (qty(after, 47) < cheapB) cheapestLost++;
+    }
+    expect('dragon-gift: 🎁 กล่องโดนขโมยอย่างน้อย 1 ครั้งใน 10 (มูลค่าจริง 580 — อยู่ใน 3 อันดับ)', giftStolen >= 1, `giftStolen=${giftStolen}`);
+    expect('dragon-gift: ของถูกที่สุด (🥀 47) ไม่โดนเลยใน 10 ครั้ง', cheapestLost === 0, `cheapestLost=${cheapestLost}`);
     // 💀 ถูกโค่นล้มผ่าน API (HP ถึง 0) — มังกร: server ลงโทษทันทีเหมือนกดหนี + เคลียร์ไฟต์
     r = await api('/character/create', { method: 'POST', body: { name: 'มังกรโค่น', class: 'warrior' } });
     const kcid = r.json.character.id;

@@ -1348,15 +1348,29 @@ router.post('/boss/after', (req, res) => {
 // แพ้บอส (กดหนี หรือ HP ถึง 0 = ถูกโค่นล้ม) — บทลงโทษตามชนิดบอส:
 // 🌟 มังกรทอง: เสียของสุ่ม 1 ชิ้น + ทอง 10% + คอมโบโฟกัส + HP เหลือ 1 · บอสปกติ: เสียพลัง 20%
 // ทั้งคู่ = "เริ่มสำรวจใหม่" — ไม่ reset รอบสำรวจ (city_rounds) และไม่เพิ่มรอบ (สู้บอสใหม่ความยากเท่าเดิม)
+
+// มูลค่าจริงของไอเทม (ที่มังกรจะขโมย) — ของที่ราคาหน้าร้าน 0 แต่มีค่าจริง:
+// 🎁 ของขวัญจ้าวมังกรทอง → ค่าเฉลี่ยการเปิด (🏆500×40% + 💛650×30% + 👑800×20% + ถุงทอง250×10% = 580)
+// 🧧 ถุงเงินนำโชค → ใช้ได้ทอง 150 ตรง ๆ (สูงกว่าราคา) · ที่เหลือใช้ราคาพื้นฐาน
+const itemRealValue = (item) => {
+  if (!item) return 0;
+  if (item.use_gift) {
+    return 0.4 * (ITEM_BY_ID[190]?.price || 500) + 0.3 * (ITEM_BY_ID[191]?.price || 650)
+      + 0.2 * (ITEM_BY_ID[192]?.price || 800) + 0.1 * 250;
+  }
+  if (item.use_gold) return Math.max(item.price || 0, item.use_gold);
+  return item.price || 0;
+};
+
 function applyBossLoss(c, fight) {
   const stats = computeStats(c);
   if (fight?.boss?.isDragon) {
     const inv = getInventory(c.id).filter((i) => i.qty > 0 && i.type !== 'scroll');
     let lostItem = '';
     if (inv.length > 0) {
-      // 🐉 มังกรทองเลือกของมีค่าที่สุด 3 ชิ้น แล้วสุ่ม 1 ในนั้น (ของถูก/ของถังรอดไปได้ — มังกรไม่สนใจขยะ)
+      // 🐉 มังกรทองเลือกของมีค่าที่สุด 3 ชิ้น (ตามมูลค่าจริง) แล้วสุ่ม 1 ในนั้น (ของถูก/ของถังรอดไปได้ — มังกรไม่สนใจขยะ)
       const valuable = inv
-        .map((i) => ({ ...i, val: ITEM_BY_ID[i.item_id]?.price || 0 }))
+        .map((i) => ({ ...i, val: itemRealValue(ITEM_BY_ID[i.item_id]) }))
         .sort((a, b) => b.val - a.val)
         .slice(0, 3);
       const victim = valuable[Math.floor(Math.random() * valuable.length)];
