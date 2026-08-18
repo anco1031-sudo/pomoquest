@@ -70,7 +70,7 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
               <span className="pet-mood-emoji">{petMood.msg.split(' ')[0]}</span>
             </div>
           ) : (
-            <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~4%) แล้วใช้ฟักดูสิ!">
+            <div className="companion-bubble" title="🐾 ยังไม่มีสัตว์เลี้ยง — หา 🥚 ไข่ปริศนาจากกล่องสมบัติ (หายาก ~2%) แล้วใช้ฟักดูสิ!">
               🥚
             </div>
           )}

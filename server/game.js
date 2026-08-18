@@ -108,7 +108,7 @@ export function mysteryBoxRoll(visit, c) {
   if (roll < 0.05) return ITEM_BY_ID[pick(SCROLL_ITEMS)];
   if (roll < 0.25) return ITEM_BY_ID[pick(RARE_JUNK)];
   if (roll < 0.5) {
-    // ไม่รวมไข่🥚/บัตรขยายคอก — มีช่องทางดรอปเฉพาะ (ไข่จากสมบัติ ~4%) กันดรอปซ้ำซ้อน
+    // ไม่รวมไข่🥚/บัตรขยายคอก — มีช่องทางดรอปเฉพาะ (ไข่จากสมบัติ ~2%) กันดรอปซ้ำซ้อน
     const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !i.use_stall && i.type !== 'junk' && i.type !== 'scroll' && i.type !== 'mystery' && i.type !== 'blueprint' && (!i.classReq || i.classReq.includes(c?.class)) && (i.type === 'consumable' || (i.lvl || 1) <= lvl + 1));
     if (pool.length) return pick(pool);
   }
@@ -727,8 +727,8 @@ export function rollEvent(c, forceKey = null) {
     base.xp = xp; base.gold = gold;
     base.ups = ups;
     base.detail = `เปิดกล่องสมบัติ: ได้ทอง ${gold} และประสบการณ์ ${xp}`;
-    // 🥚 ไข่ปริศนา — ~4% เจอไข่แทนของปกติ (หายาก — ฟักเป็นสัตว์เลี้ยง สุ่มตัว)
-    if (Math.random() < 0.04) {
+    // 🥚 ไข่ปริศนา — ~2% เจอไข่แทนของปกติ (หายาก — ฟักเป็นสัตว์เลี้ยง สุ่มตัว)
+    if (Math.random() < 0.02) {
       const egg = ITEM_BY_ID[PET_EGG_ID];
       base.item = { id: egg.id, name: egg.name, icon: egg.icon, lvl: 1, type: egg.type };
       base.detail += ` — และพบ ${egg.icon} ${egg.name}! (ฟักได้เป็นสัตว์เลี้ยง)`;
@@ -748,7 +748,7 @@ export function rollEvent(c, forceKey = null) {
         item = ITEM_BY_ID[pick(RARE_JUNK)]; // ของขวัญหายาก — ดรอปยาก (ออกทางนี้ทางเดียว)
       } else {
         // เกียร์ที่เจอต้องสวมได้กับคลาสนี้ (ไม่ดรอปของคลาสอื่นให้รกกระเป๋า)
-        // ไม่รวมไข่🥚/บัตรขยายคอก (มีช่องทางดรอปเฉพาะของตัวเอง — ไข่จากสมบัติ ~4% ฯลฯ)
+        // ไม่รวมไข่🥚/บัตรขยายคอก (มีช่องทางดรอปเฉพาะของตัวเอง — ไข่จากสมบัติ ~2% ฯลฯ)
         const pool = Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && !i.use_egg && !i.use_stall && !RARE_JUNK.includes(i.id) && i.type !== 'scroll' && (!i.classReq || i.classReq.includes(c.class)) && (i.type === 'consumable' || i.type === 'junk' || (i.lvl || 1) <= c.level + 1));
         // น้ำหนัก: ขยะที่วันนี้ขายถูก (พ่อค้าไม่ต้องการ) x4 — ของแพง/เป็นที่ต้องการเจอยากกว่า
         const dayKey = today();
