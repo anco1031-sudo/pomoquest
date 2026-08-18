@@ -668,7 +668,8 @@ router.post('/shop/buy', (req, res) => {
     price = 0;
     fromFree = true;
   } else if (row.market === 'black') {
-    const bm = blackMarketStock(visit);
+    // ใช้ c ด้วย — stock ตลาดมืดรู้จักตัวละคร (คัมภีร์ที่เรียนแล้ว) + โอกาสเจอเพิ่มจากการสำรวจเมืองเดิมต่อ (ต้องตรงกับหน้า /camp)
+    const bm = blackMarketStock(visit, c);
     const bmItem = bm?.find((x) => x.id === itemId);
     if (!bmItem) return res.status(400).json({ error: 'ของชิ้นนี้ไม่อยู่ในตลาดมืดค่ายนี้' });
     price = Math.round(bmItem.bmPrice * priceMult(c));

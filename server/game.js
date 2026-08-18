@@ -65,18 +65,26 @@ const mulberry32 = (a) => () => {
 // ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
 // เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส → โอกาสเจอตลาดมืดเพิ่มขึ้น (+10% ต่อรอบ สูงสุด +35%)
 // รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%), ของพิเศษ exclusive (ลด 10%)
+// คัมภีร์ไม่การันตี — มีโอกาส ~45% ต่อตลาดมืด (BM_SCROLL_CHANCE) · ไม่เจอ → แบบแปลน 📋 / ของหายากแทน · เรียนครบ 6 เล่มแล้วไม่ขายคัมภีร์อีก (กันช่องตาย)
 export const BM_OPEN_CHANCE = 0.25;
 export const BM_JUNK_MULT = 1.25;
+export const BM_SCROLL_CHANCE = 0.45;
 // โบนัสโอกาสเจอตลาดมืดจากการสำรวจเมืองเดิมต่อ — +10% ต่อรอบ สูงสุด +35% (รวมสูงสุด 60%)
 export const bmExtraChance = (c) => Math.round(Math.min(0.35, (c?.city_rounds || 0) * 0.1) * 100) / 100;
 export const blackMarketOpen = (visit, extraChance = 0) => seededRng(`bm-open-${visit}`)() < BM_OPEN_CHANCE + extraChance;
 const bmDisc = (item, mult) => ({ bmPrice: Math.max(1, Math.round(item.price * mult)), bmNormal: item.price });
 
-// stock ของตลาดมืด (ไม่เช็คว่าเจอหรือเปล่า — ใช้ preview ได้) — deterministic จาก visit
-export function bmStockFor(visit) {
+// stock ของตลาดมืด (ไม่เช็คว่าเจอหรือเปล่า — ใช้ preview ได้) — deterministic จาก visit (+ คัมภีร์ที่เรียนแล้วของตัวละคร)
+export function bmStockFor(visit, c = null) {
   const rng = seededRng(`bm-stock-${visit}`);
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
-  const scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
+  // ช่องคัมภีร์ — ไม่การันตีแล้ว: มีโอกาส ~45% ที่ตลาดมืดจะเอาคัมภีร์มาขาย (เทียบกล่องสมบัติ ~0.36% ต่อกล่อง ยังคุ้มกว่าเยอะ)
+  // ไม่เจอคัมภีร์ → สุ่มเป็นแบบแปลนสูตรคราฟต์ 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้ว → ไม่ขายคัมภีร์อีกเลย (กันช่องตาย — เรียนซ้ำไม่ได้)
+  const learnedSkills = new Set((c?.id ? getSkillRows(c.id) : []).map((s) => s.skill_id));
+  const allScrollsLearned = SCROLL_ITEMS.every((id) => learnedSkills.has(ITEM_BY_ID[id].learn_skill));
+  let scroll = null;
+  if (!allScrollsLearned && rng() < BM_SCROLL_CHANCE) scroll = ITEM_BY_ID[pick(SCROLL_ITEMS)];
+  const scrollAlt = scroll ?? ITEM_BY_ID[pick([...BLUEPRINT_ITEMS, ...RARE_JUNK])];
   const rare = ITEM_BY_ID[pick([...RARE_JUNK, ...BOSSES.map((b) => b.loot)])];
   const specPool = ITEMS.filter((i) => !i.exclusive && i.type !== 'scroll' && i.type !== 'blueprint' && i.type !== 'mystery');
   const spec = pick(specPool);
@@ -85,7 +93,7 @@ export function bmStockFor(visit) {
   // กล่องลึกลับ — ซื้อแล้วเปิดเลย (สุ่มของคุ้ม/เจ๊ง deterministic จากค่ายพัก) — ไม่เข้าสู่กระเป๋า
   const box = ITEM_BY_ID[MYSTERY_BOX_ID];
   return [
-    { ...scroll, ...bmDisc(scroll, 0.85), bmTag: 'คัมภีร์หายาก' },
+    { ...scrollAlt, ...bmDisc(scrollAlt, scroll ? 0.85 : 0.75), bmTag: scroll ? 'คัมภีร์หายาก' : (scrollAlt.type === 'blueprint' ? 'แบบแปลนสูตรคราฟต์' : 'ของหายาก') },
     { ...rare, ...bmDisc(rare, 0.75), bmTag: 'ของหายาก' },
     { ...spec, ...bmDisc(spec, 0.55), bmTag: 'ของเถื่อน เก็งกำไร' },
     { ...bmExclusive, ...bmDisc(bmExclusive, 0.9), bmTag: 'ของพิเศษ (exclusive)' },
@@ -95,7 +103,7 @@ export function bmStockFor(visit) {
 
 export function blackMarketStock(visit, c = null) {
   if (!visit || !blackMarketOpen(visit, bmExtraChance(c))) return null;
-  return bmStockFor(visit);
+  return bmStockFor(visit, c);
 }
 
 // ----- กล่องลึกลับตลาดมืด — ซื้อแล้วสุ่มของ (deterministic จาก visit — เปิดหน้าเดิมได้ของเดิม) -----

@@ -182,17 +182,19 @@ try {
 
   // --- ตลาดมืด: เจอสุ่ม ~25% (deterministic จาก visit) + ซื้อ/ขายราคาพิเศษ ---
   {
-    const { seededRng, campSellPrice } = await import('../server/game.js');
+    const { seededRng, bmStockFor, campSellPrice } = await import('../server/game.js');
     const { today } = await import('../server/db.js');
-    // หา visit ที่ตลาดมืดเปิด / ไม่เปิด (deterministic — ลองจนเจอ)
-    let bmVisit = null, normalVisit = null;
-    for (let i = 0; i < 60 && (!bmVisit || !normalVisit); i++) {
+    // หา visit: ตลาดมืดเปิด+มีคัมภีร์ / เปิดแต่ไม่มีคัมภีร์ (ช่องแรกเป็นแบบแปลน/ของหายาก) / ไม่เปิด (deterministic — ลองจนเจอ)
+    let bmVisit = null, bmNoScrollVisit = null, normalVisit = null;
+    for (let i = 0; i < 150 && (!bmVisit || !bmNoScrollVisit || !normalVisit); i++) {
       const v = `bm-test-${i}`;
       const open = seededRng(`bm-open-${v}`)() < 0.25;
-      if (open && !bmVisit) bmVisit = v;
+      const hasScroll = bmStockFor(v, { id: cid }).some((x) => x.type === 'scroll');
+      if (open && hasScroll && !bmVisit) bmVisit = v;
+      if (open && !hasScroll && !bmNoScrollVisit) bmNoScrollVisit = v;
       if (!open && !normalVisit) normalVisit = v;
     }
-    expect('black market: เจอ visit เปิด/ไม่เปิดตลาดมืด', !!bmVisit && !!normalVisit, `open=${bmVisit} closed=${normalVisit}`);
+    expect('black market: เจอ visit เปิด/ไม่เปิดตลาดมืด', !!bmVisit && !!bmNoScrollVisit && !!normalVisit, `scroll=${bmVisit} noScroll=${bmNoScrollVisit} closed=${normalVisit}`);
 
     r = await api(`/camp?visit=${encodeURIComponent(normalVisit)}`);
     expect('camp: ค่ายปกติไม่มีตลาดมืด', r.status === 200 && r.json.blackMarket === null);
@@ -229,6 +231,22 @@ try {
     const bs = r.json.bmStats;
     expect('stats: bmStats นับซื้อ 1 / ขาย 1', bs?.buys === 1 && bs?.sells === 1, JSON.stringify(bs));
     expect('stats: bmStats กำไร = รายได้ขาย - ทองที่ใช้ซื้อ', bs?.profit === bs.sellGold - bs.buyGold && bs.sellGold > 0 && bs.buyGold > 0, JSON.stringify(bs));
+
+    // คัมภีร์ไม่การันตี: คืนที่ตลาดมืดไม่มีคัมภีร์ → ช่องนั้นเป็นแบบแปลน 📋 / ของหายากแทน
+    // (หน่วย: ตรวจ bmStockFor ตรง ๆ — ลำดับสล็อตชัดเจน) + (API: หน้า /camp ตรงกัน)
+    const stockNs = bmStockFor(bmNoScrollVisit, { id: cid });
+    expect('black market: คืนที่ไม่มีคัมภีร์ → ช่องแรกเป็นแบบแปลน/ของหายากแทน', !stockNs.some((x) => x.type === 'scroll') && ['blueprint', 'junk'].includes(stockNs[0].type), JSON.stringify(stockNs.map((x) => [x.name, x.type])));
+    r = await api(`/camp?visit=${encodeURIComponent(bmNoScrollVisit)}`);
+    const bmNs = r.json.blackMarket;
+    expect('black market: หน้า /camp ตรงกัน — ไม่มีคัมภีร์ขาย (มีแบบแปลน/ของหายากแทน)', !!bmNs && !bmNs.items.some((i) => i.type === 'scroll') && bmNs.items.some((i) => ['blueprint', 'junk'].includes(i.type)), JSON.stringify(bmNs?.items?.map((i) => [i.name, i.type])));
+
+    // เรียนคัมภีร์ครบ 6 เล่ม → ตลาดมืดไม่ขายคัมภีร์อีกเลย (กันช่องตาย — เรียนซ้ำไม่ได้)
+    const scrollIds = [110, 111, 112, 113, 114, 115];
+    const learnIns = db.prepare('INSERT OR IGNORE INTO character_skill (character_id, skill_id, level, xp, source) VALUES (?, ?, 1, 0, ?)');
+    for (const sid of scrollIds) learnIns.run(cid, ITEM_BY_ID[sid].learn_skill, 'scroll');
+    const stockAllLearned = bmStockFor(bmVisit, { id: cid });
+    expect('black market: เรียนคัมภีร์ครบ 6 เล่ม → ไม่มีคัมภีร์ขาย (ช่องแรกเป็นแบบแปลน/ของหายาก)', !stockAllLearned.some((x) => x.type === 'scroll') && ['blueprint', 'junk'].includes(stockAllLearned[0].type), JSON.stringify(stockAllLearned.map((x) => [x.name, x.type])));
+    for (const sid of scrollIds) db.prepare('DELETE FROM character_skill WHERE character_id = ? AND skill_id = ?').run(cid, ITEM_BY_ID[sid].learn_skill); // คืนสภาพ — เทสต์อื่นไม่เห็นสกิลคัมภีร์
   }
 
   // --- ของแถม (พ่อค้า/ตลาดมืดไม่อยากได้ — ราคา 0) — สุ่มรายค่ายพัก deterministic จาก visit ---
