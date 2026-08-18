@@ -434,6 +434,22 @@ try {
     // ไม่มีผลกับเกมจริง: ค่ายพักนี้ไม่บังคับให้เจอตลาดมืด
     const campR = await api(`/camp?visit=${bmVisit}`);
     expect('dev bm: ค่ายพักจริงไม่ถูกบังคับ (ตลาดมืดยังสุ่มตามปกติ)', campR.status === 200, campR.json.error || '');
+
+    // --- dev: token หมดอายุ (server รีสตาร์ท — token เก่าค้างใน localStorage) → ต้อง 401 ห้ามรันต่อ ---
+    // (ไม่งั้น dev test จะบันทึก log/XP/ทองลง DB จริงเงียบ ๆ — กันปั๊มเลเวลทะลุ)
+    {
+      const staleRes = await fetch(`${base}/api/adventure/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-dev-token': 'stale-token-not-in-server-memory' },
+        body: JSON.stringify({ key: 'monster' }),
+      });
+      const staleJson = await staleRes.json().catch(() => ({}));
+      expect('dev stale token: ตอบ 401 (ห้ามรัน action แบบบันทึกจริง)', staleRes.status === 401, `status=${staleRes.status}`);
+      const staleLogs = db.prepare("SELECT COUNT(*) n FROM log WHERE type = 'dev' OR title LIKE '%dev%'").get().n;
+      expect('dev stale token: ไม่มี log เข้า DB', staleLogs === 0);
+      const staleState = (await api('/state')).json.character;
+      expect('dev stale token: XP/ทองไม่เปลี่ยน (ไม่บันทึก)', staleState.xp === stA.json.character.xp && staleState.gold === stA.json.character.gold, `xp=${staleState.xp} gold=${staleState.gold}`);
+    }
   }
 
   // --- โหมดท้าทาย: hard (ราคาแพง + XP/ทอง x1.5) ---

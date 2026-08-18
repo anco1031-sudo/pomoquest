@@ -121,6 +121,11 @@ export default function DevPanel({ onClose }) {
       toast(summarize(d, msg));
     } catch (e) {
       toast(e.message);
+      // token หมดอายุ (server รีสตาร์ท — token ในหน่วยความจำหาย) → ถ้าไม่ clear จะกดปุ่มต่อแล้วบันทึกจริงเงียบ ๆ
+      if (/เข้าสู่ระบบ/.test(e.message)) {
+        setToken('');
+        localStorage.removeItem(DEV_KEY);
+      }
     } finally {
       setBusy(false);
     }

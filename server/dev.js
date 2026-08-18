@@ -25,7 +25,13 @@ export const isDevDryRun = () => dryRunActive;
 // ข้าม /dev/* เพราะจัดการ transaction เองอยู่แล้ว (dryRun ด้านล่าง)
 export const devDryRun = (req, res, next) => {
   const token = req.headers['x-dev-token'];
-  if (!token || !tokens.has(token) || req.path.startsWith('/dev/')) return next();
+  // ไม่มี token = เล่นเกมปกติ (apiPost ไม่ส่ง header นี้) · /dev/* จัดการ transaction เอง
+  if (!token || req.path.startsWith('/dev/')) return next();
+  // token หมดอายุ (token อยู่ในหน่วยความจำ server — รีสตาร์ทแล้วของเก่าที่ค้างใน localStorage ใช้ไม่ได้)
+  // → ตอบ 401 ห้ามรันต่อแบบปกติ: ไม่งั้น dev test จะบันทึก log/XP/ทองลง DB จริงเงียบ ๆ (กันปั๊มเลเวลทะลุ)
+  if (!tokens.has(token)) {
+    return res.status(401).json({ error: 'เซสชัน dev หมดอายุ — ต้องเข้าสู่ระบบ dev ใหม่ (server รีสตาร์ทแล้ว login ใหม่)' });
+  }
   dryRunActive = true;
   try {
     db.exec('BEGIN');
