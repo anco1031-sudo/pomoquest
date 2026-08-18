@@ -22,6 +22,17 @@ const check = (label, cond, extra = '') => {
 
 const quests = getDailyQuests(c).quests;
 check('สุ่ม quest 3 อัน', quests.length === 3);
+
+// --- ภารกิจใหม่ "นักล่าตำนานเมือง" (ชนะมอนสเตอร์ประจำเมือง — ตรวจ definition + counter) ---
+const { DAILY_QUESTS } = await import('../server/data.js');
+const cityQuestDef = DAILY_QUESTS.find((q) => q.id === 'dq_city_monster');
+check('มีภารกิจ "นักล่าตำนานเมือง" (key=city_monsters, target 1)', !!cityQuestDef && cityQuestDef.key === 'city_monsters' && cityQuestDef.target() === 1, cityQuestDef?.name);
+const q0 = getDailyQuests(c).quests.find((q) => q.id === 'dq_city_monster');
+if (q0) {
+  bumpDaily(c.id, 'city_monsters', 1);
+  const q1 = getDailyQuests(c).quests.find((q) => q.id === 'dq_city_monster');
+  check('bump city_monsters → ความคืบหน้าภารกิจอัปเดต (1/1)', !!q1 && q1.progress >= q1.target && q1.done === true, JSON.stringify(q1));
+}
 check('ร้านค้าไม่มีไอเทม exclusive', SHOP_STOCK.every((i) => !i.exclusive));
 check('randomRewardItem มีโอกาสได้ exclusive', (() => {
   for (let i = 0; i < 30; i++) {

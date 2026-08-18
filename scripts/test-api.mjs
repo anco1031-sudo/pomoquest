@@ -2,6 +2,7 @@ process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษค
 
 // ทดสอบ API routes แบบ end-to-end — รัน server ชั่วคราวที่ port สุ่ม + DB แยก (ไม่แตะของจริง)
 process.env.POMOQUEST_DB = `/tmp/pq-test-api-${Date.now()}.db`;
+process.env.POMOQUEST_NO_DRAGON = '1'; // ปิดสุ่มจ้าวมังกรทอง (4%) — กันผลขึ้นกับดวงตอนเทสต์ generateBoss/บอสเร่ร่อน
 
 const express = (await import('express')).default;
 const routes = (await import('../server/routes.js')).default;

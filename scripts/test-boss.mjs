@@ -4,10 +4,11 @@ process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษค
 // + smoke test API ว่า /boss และ /boss/act ส่ง fight state (rage/fury/charging) กลับมา
 process.env.POMOQUEST_DB = `/tmp/pq-test-boss-${Date.now()}.db`;
 process.env.POMOQUEST_NO_WANDER = '1'; // ปิดบอสเร่ร่อนรายสัปดาห์ — กันผลขึ้นกับสัปดาห์จริง (เทสต์บอสเมืองตรง ๆ)
+process.env.POMOQUEST_NO_DRAGON = '1'; // ปิดสุ่มจ้าวมังกรทอง — กัน 4% มาแทรกตอนเทสต์บอสเมือง (บังคับเปิดในเทสต์มังกรทองเอง)
 
 const express = (await import('express')).default;
 const routes = (await import('../server/routes.js')).default;
-const { db } = await import('../server/db.js');
+const { db, addItem } = await import('../server/db.js');
 const { generateBoss, bossPlayerTurn } = await import('../server/game.js');
 
 const app = express();
@@ -264,6 +265,52 @@ try {
     r = await api('/adventure/event', { method: 'POST', body: { key: 'trap' } });
     const hpAfter2 = db.prepare('SELECT hp FROM character WHERE id = ?').get(uc).hp;
     expect('pet: ยูนิคอร์นโล่หมด → ตกกับดักเสียพลังปกติ', hpAfter2 < hpAfter, `hp ${hpAfter} → ${hpAfter2}`);
+  }
+
+  // --- 🌟 บอสจ้าวมังกรทอง: สุ่มเจอแทนบอสเมือง (~4%) โหดสุด ชนะได้ 🎁 2 กล่องการันตี + แพ้โดนบทลงโทษ ---
+  {
+    const normB = generateBoss(10, 0, null); // บอสเมืองปกติ (ก่อนบังคับมังกร)
+    process.env.POMOQUEST_DRAGON = '1'; // บังคับให้เจอมังกรทอง (ปิดหลังจบ)
+    const dgB = generateBoss(10, 0, null);
+    expect('dragon: จ้าวมังกรทอง isDragon + แข็งกว่าบอสเมืองชัดเจน (em x1.5)', dgB.isDragon === true && dgB.maxHp > normB.maxHp * 1.4 && dgB.atk > normB.atk * 1.4,
+      `maxHp ปกติ ${normB.maxHp} vs มังกร ${dgB.maxHp} · atk ${normB.atk} vs ${dgB.atk}`);
+    // API: สร้างตัวละครใหม่ → เจอมังกรทองแทนบอสเมือง
+    r = await api('/character/create', { method: 'POST', body: { name: 'มังกรเทสเตอร์', class: 'warrior' } });
+    const dcid = r.json.character.id;
+    r = await api('/boss');
+    expect('dragon: /boss เจอจ้าวมังกรทอง (isDragon + ชื่อถูก)', r.status === 200 && r.json.boss?.isDragon === true && r.json.boss?.name === 'จ้าวมังกรทอง', `${r.json.boss?.name}`);
+    // อัปเกรดพลัง → ชนะ → ได้ 🎁 2 กล่องการันตี + นับ rare_wins + รางวัล x1.5
+    db.prepare('UPDATE character SET level = 50, max_hp = 5000, hp = 5000, mp = 500, max_mp = 500, atk = 2000, def = 500, spd = 0, crit = 0 WHERE id = ?').run(dcid);
+    const goldBefore = db.prepare('SELECT gold FROM character WHERE id = ?').get(dcid).gold;
+    let dwin = null;
+    for (let i = 0; i < 40 && !dwin; i++) {
+      const act = await api('/boss/act', { method: 'POST', body: { action: 'attack' } });
+      if (act.json.outcome === 'win') dwin = act.json;
+    }
+    expect('dragon: ชนะจ้าวมังกรทองได้', !!dwin);
+    const dInv = dwin?.inventory || [];
+    const giftQty = dInv.find((x) => x.item_id === 193)?.qty || 0;
+    expect('dragon: ชนะ → ได้ 🎁 ของขวัญจ้าวมังกรทอง 2 กล่องการันตี', giftQty >= 2, `qty=${giftQty}`);
+    expect('dragon: ชนะ → นับ rare_wins (ตราลับ "นักล่าตำนาน")', (dwin?.progress?.rare_wins || 0) >= 1, `rare_wins=${dwin?.progress?.rare_wins}`);
+    const goldAfter = db.prepare('SELECT gold FROM character WHERE id = ?').get(dcid).gold;
+    expect('dragon: ชนะ → รางวัล x1.5 (ทองเพิ่มเยอะกว่าบอสปกติ)', goldAfter > goldBefore + 500, `gold ${goldBefore} → ${goldAfter}`);
+    // ตัวละครใหม่ → เจอมังกร → ถอยทัพ → บทลงโทษ (เสียของ/ทอง/คอมโบ + HP เหลือ 1)
+    r = await api('/character/create', { method: 'POST', body: { name: 'มังกรหนี', class: 'rogue' } });
+    const rcid = r.json.character.id;
+    db.prepare('UPDATE character SET gold = 500, hp = 500, max_hp = 500 WHERE id = ?').run(rcid);
+    db.prepare('UPDATE progress SET streak = 3 WHERE character_id = ?').run(rcid);
+    addItem(rcid, 45, 1);
+    r = await api('/boss');
+    expect('dragon: ตัวละครใหม่เจอมังกรทอง', r.json.boss?.isDragon === true, r.json.boss?.name);
+    r = await api('/boss/retreat', { method: 'POST' });
+    const after = db.prepare('SELECT gold, hp FROM character WHERE id = ?').get(rcid);
+    const invAfter = (await api('/state')).json.inventory || [];
+    const streakAfter = db.prepare('SELECT streak FROM progress WHERE character_id = ?').get(rcid).streak;
+    expect('dragon: แพ้ (หนี) → เสียทอง 10% (500 → 450)', after.gold === 450, `gold=${after.gold}`);
+    expect('dragon: แพ้ (หนี) → HP เหลือ 1', after.hp === 1, `hp=${after.hp}`);
+    expect('dragon: แพ้ (หนี) → เสียของสุ่ม 1 ชิ้นจากกระเป๋า', !invAfter.some((x) => x.item_id === 45), JSON.stringify(invAfter.map((x) => x.item_id)));
+    expect('dragon: แพ้ (หนี) → คอมโบโฟกัสหาย (streak=0)', streakAfter === 0, `streak=${streakAfter}`);
+    process.env.POMOQUEST_DRAGON = '0';
   }
 
   // --- reset: หมุน "world epoch" — session ที่พักค้างใน localStorage (โลกเก่า) ถูกทิ้งอัตโนมัติ ---

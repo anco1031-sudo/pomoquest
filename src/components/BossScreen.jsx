@@ -59,7 +59,12 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
               : `⏳ พักยาวเหลือ ${fmtTime(remain)} — ชนะบอสเพื่อเดินทางต่อ`}
           </div>
         </div>
-        <button className="btn btn-sm" onClick={() => window.confirm('หนีจากบอส? จะเสียพลัง 20%') && onRetreat()}>💨 หนี</button>
+        <button
+          className="btn btn-sm"
+          onClick={() => window.confirm(boss.isDragon ? '🩸 หนีจากจ้าวมังกรทอง?! จะเสียของ 1 ชิ้น + ทอง 10% + คอมโบโฟกัส และ HP เหลือ 1 — สู้ต่อดีไหม?' : 'หนีจากบอส? จะเสียพลัง 20%') && onRetreat()}
+        >
+          💨 หนี
+        </button>
       </header>
 
       {/* boss card */}
@@ -69,6 +74,7 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
           {boss.name}
           {boss.isAlt && <span className="alt-boss-tag" title="บอสลับ — เจอเมื่อสำรวจเมืองเดิมครบรอบ ให้ของพิเศษ">👁️ บอสลับ</span>}
           {boss.isWander && <span className="alt-boss-tag wander-boss-tag" title="บอสเร่ร่อนประจำสัปดาห์ — ชนะได้ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ 📋">🐉 บอสเร่ร่อน</span>}
+          {boss.isDragon && <span className="alt-boss-tag dragon-boss-tag" title="🌟 จ้าวมังกรทอง — เจอแบบสุ่มหายาก (~4% แทนบอสเมือง) แข็งแกร่งที่สุด แต่ชนะแล้วได้ 🎁 ของขวัญ 2 กล่องการันตี + รางวัล x1.5 · แพ้เสียของ/ทอง/คอมโบ!">🌟 จ้าวมังกรทอง</span>}
           {fight.rage && <span className="boss-rage-tag" title="HP เหลือไม่ถึงครึ่ง — บอสโกรธจัด! ATK พุ่ง x1.4 และใช้ท่าเด็ดถี่ขึ้น">😡 โกรธจัด</span>}
           {fight.fury && <span className="boss-rage-tag boss-fury-tag" title="สู้ยืดเยื้อเกิน 30 เทิร์น — ATK บอสพุ่งถาวร x1.6">🔥 สุดทน</span>}
           {fight.armor && <span className="boss-status-chip boss-armor-chip" title="เกราะติดอยู่ — ดาเมจที่บอสได้รับลดลง">🛡️ กันดาเมจ ({fight.armorTurns} เทิร์น)</span>}

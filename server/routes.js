@@ -228,6 +228,7 @@ router.post('/adventure/event', (req, res) => {
   // ตัวนับรายวัน (Daily Quest)
   if (ev.key === 'treasure') bumpDaily(c.id, 'treasures');
   if (ev.key === 'monster' && ev.monster?.win) bumpDaily(c.id, 'monsters');
+  if (ev.key === 'monster' && ev.monster?.win && ev.monster?.cityRare) bumpDaily(c.id, 'city_monsters'); // ภารกิจ "นักล่าตำนานเมือง"
   const ach = checkAchievements(c, prog, { event: ev });
   res.json({
     ...serialize(c),
@@ -1239,7 +1240,13 @@ router.post('/boss/act', (req, res) => {
     // บอสลับ (สำรวจเมืองเดิมครบรอบ) → ได้ของพิเศษการันตีครั้งแรกของเมืองนั้น · มีแล้วได้ค่าหัวทองแทน (กันฟาร์มซ้ำ)
     // ชนะด้วยฝีมือ (สลายท่าไม้ตาย ≥1 ครั้ง หรืออดทนสู้จนบอสสุดทน) → การันตีของรางวัลบอส (แทนสุ่ม 50%)
     const masterWin = (result.breaks || 0) > 0 || result.furyWin;
-    if (fight.boss.isWander && fight.boss.loot) {
+    if (fight.boss.isDragon) {
+      // 🌟 จ้าวมังกรทอง — 🎁 ของขวัญการันตี 2 กล่อง (เปิดที่ค่าย) + นับชัยชนะ (ตราลับ "นักล่าตำนาน")
+      lootNote += lootAdd(193, ' และได้ของขวัญจ้าวมังกรทอง');
+      lootNote += lootAdd(193, ' 🎁 ของขวัญอีก 1 กล่อง');
+      prog.rare_wins = (prog.rare_wins || 0) + 1;
+      db.prepare('UPDATE progress SET rare_wins=? WHERE id=?').run(prog.rare_wins, prog.id);
+    } else if (fight.boss.isWander && fight.boss.loot) {
       // บอสเร่ร่อน — ของรางวัลการันตี + แบบแปลนสูตรคราฟต์ (แหล่งหาแบบแปลนที่แน่นอน)
       lootNote += lootAdd(fight.boss.loot, ' และได้ของรางวัลบอสเร่ร่อน');
       const bp = ITEM_BY_ID[BLUEPRINT_ITEMS[Math.floor(Math.random() * BLUEPRINT_ITEMS.length)]];
@@ -1327,8 +1334,35 @@ router.post('/boss/after', (req, res) => {
 
 router.post('/boss/retreat', (req, res) => {
   const c = requireChar(res); if (!c) return;
+  const fight = fights.get(c.id);
   fights.delete(c.id);
   const stats = computeStats(c);
+  // 🌟 จ้าวมังกรทอง — แพ้ (หนี) บทลงโทษหนัก: เสียของสุ่ม 1 ชิ้น + ทอง 10% + คอมโบโฟกัส + HP เหลือ 1
+  // (มังกรทองไม่ปล่อยง่าย ๆ — แต่ไม่ถึงขั้น "เริ่มเดินทางใหม่" เพราะเจอแบบสุ่ม ~4% กันความโหดร้ายเกินจำเป็น)
+  if (fight?.boss?.isDragon) {
+    const inv = getInventory(c.id).filter((i) => i.qty > 0 && i.type !== 'scroll');
+    let lostItem = '';
+    if (inv.length > 0) {
+      const victim = inv[Math.floor(Math.random() * inv.length)];
+      db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, victim.item_id);
+      lostItem = ` ของหาย: ${victim.icon} ${victim.name}`;
+    }
+    const goldLoss = Math.round(c.gold * 0.1);
+    c.gold = Math.max(0, c.gold - goldLoss);
+    c.hp = 1;
+    const prog = getProgress(c.id);
+    if (prog.streak > 0) {
+      prog.streak = 0;
+      db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
+    }
+    updateCharacter(c);
+    addLog(c.id, {
+      type: 'boss_lose', title: '🌟 หนีจากจ้าวมังกรทอง!',
+      detail: `สู้มังกรทองไม่ไหว ต้องหนีเอาตัวรอด — HP เหลือ 1, เสียทอง ${goldLoss},${lostItem} และคอมโบโฟกัสหาย (มังกรทองหนีไปแล้ว — ครั้งหน้าเจอบอสปกติจนกว่าจะสุ่มเจออีก)`,
+    });
+    return res.json({ ...serialize(c), message: `🌟 หนีจากจ้าวมังกรทองเอาตัวรอดมาได้ — แต่เสียทอง ${goldLoss}${lostItem} คอมโบหาย และ HP เหลือ 1! (มังกรทองหนีไปแล้ว)` });
+  }
+  // บอสปกติ/บอสลับ/บอสเร่ร่อน — ถอยทัพแบบเดิม (เสียพลัง 20% ไม่นับรอบไม่เพิ่มความยาก)
   c.hp = Math.max(1, c.hp - Math.round(stats.maxHp * 0.2));
   updateCharacter(c);
   addLog(c.id, { type: 'boss_lose', title: '💨 ถอยทัพ', detail: 'สู้บอสไม่ไหว ถอยกลับไปสำรวจใหม่ — ไม่นับรอบและไม่เพิ่มความยาก' });

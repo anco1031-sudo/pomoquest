@@ -3,6 +3,7 @@ process.env.POMOQUEST_CLASS_PERKS = '0'; // ปิดค่าพิเศษค
 // ทดสอบระบบสำรวจเมืองเดิมต่อ — ชนะบอสแล้วเลือกเดินทางต่อ/อยู่ต่อ + บอสลับ + ความยาก/รางวัล/ตลาดมืด + ราคาร้าน
 process.env.POMOQUEST_DB = `/tmp/pq-test-explore-${Date.now()}.db`;
 process.env.POMOQUEST_NO_WANDER = '1'; // ปิดบอสเร่ร่อนรายสัปดาห์ — กันผลขึ้นกับสัปดาห์จริง (ทดสอบบอสเมือง/บอสลับตรง ๆ)
+process.env.POMOQUEST_NO_DRAGON = '1'; // ปิดสุ่มจ้าวมังกรทอง (4%) — กันมาแทรกตอนเทสต์บอสลับ/สเกลเมือง
 
 const express = (await import('express')).default;
 const routes = (await import('../server/routes.js')).default;

@@ -1,4 +1,4 @@
-import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
+import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, GOLDEN_DRAGON_BOSS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_MAX_SLOTS, petXpToNext } from './data.js';
 import { today, getSkillRows, getSkillRow, upsertSkillRow, getPets, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -894,13 +894,22 @@ export const setBossAtk = (fight) => {
 // ดาเมจขั้นต่ำที่ต้องทำในเทิร์นที่บอสชาร์จ เพื่อสลายท่าไม้ตาย
 const chargeBreakAt = (fight) => Math.max(1, Math.round(fight.boss.maxHp * BOSS_CHARGE_BREAK));
 
+// 🌟 บอสจ้าวมังกรทอง — สุ่มเจอแทนบอสปกติของเมือง (~4%) แรงกว่าใคร (em x1.5) · ชนะรางวัล x1.5 + 🎁 2 กล่องการันตี · แพ้โดนบทลงโทษ
+// POMOQUEST_DRAGON=1 บังคับให้เจอ · POMOQUEST_NO_DRAGON=1 ปิด (ใช้ในเทสต์)
+export const DRAGON_BOSS_CHANCE = 0.04;
 export function generateBoss(level, cityIndex, c = null, overrideBoss = null) {
   const round = exploreRound(c);
   const isAlt = !overrideBoss && round >= altBossAt(cityIndex);
-  const boss = overrideBoss || (isAlt ? ALT_BOSSES[cityIndex % ALT_BOSSES.length] : BOSSES[cityIndex % BOSSES.length]);
+  // มังกรทอง — สุ่มแทนบอสเมือง (ไม่ทับบอสลับ/บอสเร่ร่อน) · POMOQUEST_DRAGON=1 บังคับ · POMOQUEST_NO_DRAGON=1 ปิดสุ่ม (เทสต์)
+  const forceDragon = process.env.POMOQUEST_DRAGON === '1';
+  const dragon = overrideBoss?.isDragon || forceDragon || (!overrideBoss && !isAlt && process.env.POMOQUEST_NO_DRAGON !== '1' && Math.random() < DRAGON_BOSS_CHANCE);
+  const boss = dragon
+    ? GOLDEN_DRAGON_BOSS
+    : overrideBoss || (isAlt ? ALT_BOSSES[cityIndex % ALT_BOSSES.length] : BOSSES[cityIndex % BOSSES.length]);
   const loadout = BOSS_LOADOUTS[cityIndex % BOSS_LOADOUTS.length] || [];
   const skills = loadout.map((k) => BOSS_SKILLS[k]).filter(Boolean);
-  const em = enemyMult(c) * exploreMult(c) * (isAlt ? 1.15 : overrideBoss ? 1.2 : 1); // บอสลับ/บอสเร่ร่อนโหดกว่าเล็กน้อย (รางวัลเป็นสิ่งตอบแทน)
+  // บอสลับ x1.15 · บอสเร่ร่อน x1.2 · จ้าวมังกรทอง x1.5 (โหดสุด — รางวัลเป็นสิ่งตอบแทน)
+  const em = enemyMult(c) * exploreMult(c) * (dragon ? 1.5 : isAlt ? 1.15 : overrideBoss ? 1.2 : 1);
   const cityPow = 1 + cityIndex * 0.05; // เมืองยิ่งลึก ยิ่งแข็ง (x1.05/เมือง)
   const maxHp = Math.round((90 + 32 * level) * em * cityPow);
   const atk = Math.round((9 + 2.5 * level) * em * cityPow);
@@ -908,7 +917,8 @@ export function generateBoss(level, cityIndex, c = null, overrideBoss = null) {
     name: boss.name,
     icon: boss.icon,
     isAlt,
-    isWander: !!overrideBoss, // 🐉 บอสเร่ร่อน (รายสัปดาห์) — ของรางวัลการันตี + แบบแปลน
+    isDragon: !!dragon, // 🌟 จ้าวมังกรทอง — สุ่มเจอแทนบอสเมือง
+    isWander: !dragon && !!overrideBoss, // 🐉 บอสเร่ร่อน (รายสัปดาห์) — ของรางวัลการันตี + แบบแปลน
     loot: boss.loot || null, // ของรางวัลเฉพาะตัว — ดรอปตอนชนะ (routes จัดการ)
     ult: BOSS_ULTS[boss.ult] || BOSS_ULTS.smash, // ท่าไม้ตายเฉพาะตัว (ชาร์จพลัง) — สไตล์ต่างกันตามบอส
     maxHp,
@@ -1195,12 +1205,14 @@ export function bossPlayerTurn(c, fight, action, itemId, skillId) {
     outcome = 'win';
     const rMult = exploreRewardMult(c); // สำรวจเมืองเดิมต่อ → รางวัลบอสสูงขึ้น
     // รางวัลฝีมือ: สลายท่าไม้ตาย +8% XP/ทอง ต่อครั้ง (สูงสุด +24%) · ชนะตอนบอสสุดทน (30+ เทิร์น) +15% ทอง
+    // 🌟 จ้าวมังกรทอง — แพ้ยาก/โหดกว่าใคร → รางวัล x1.5 (เพิ่มจากสูตรฐาน)
+    const dragonMult = fight.boss.isDragon ? 1.5 : 1;
     const breaks = fight.breaks || 0;
     const furyWin = !!fight.bossFury;
     const breakMult = 1 + Math.min(3, breaks) * 0.08;
     const patienceMult = furyWin ? 1.15 : 1;
-    const xp = Math.round((250 + 60 * c.level) * rMult * breakMult);
-    const gold = Math.round((120 + 40 * c.level) * rMult * breakMult * patienceMult);
+    const xp = Math.round((250 + 60 * c.level) * rMult * breakMult * dragonMult);
+    const gold = Math.round((120 + 40 * c.level) * rMult * breakMult * patienceMult * dragonMult);
     const ups = gainXp(c, xp);
     c.gold += gold;
     const drop = Math.random() < 0.35 ? pick(Object.values(ITEM_BY_ID).filter((i) => !i.exclusive && i.type !== 'consumable' && i.type !== 'junk' && i.type !== 'scroll' && (i.lvl || 1) <= c.level + 1)) : null;
