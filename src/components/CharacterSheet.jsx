@@ -204,6 +204,10 @@ function PetStable() {
   };
   const unstore = async (p) => {
     sfx.click();
+    // ถ้ามี active อยู่ ให้แจ้งเตือนก่อน (ตัว active จะถูกเก็บลงกระเป๋าแทน)
+    if (activePet) {
+      if (!window.confirm(`📤 เอา ${p.icon} ${p.name} ออกจากกระเป๋า?\n\n⚠️ ${activePet.icon} ${activePet.name} (ตัวที่ใช้งานอยู่) จะถูกเก็บลงกระเป๋าแทน`)) return;
+    }
     await post('/pet/unstore', { petId: p.id });
   };
   const swap = async (p) => {
