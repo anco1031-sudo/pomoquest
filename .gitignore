@@ -4,3 +4,6 @@ dist/
 .DS_Store
 server/data/
 backups/
+
+# opencode session state (per-machine, ไม่ใช่เนื้อหาโปรเจกต์)
+.omo/
