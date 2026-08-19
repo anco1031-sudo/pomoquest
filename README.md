@@ -8,17 +8,21 @@
 - สถานะ: 🟢 แอ็กทีฟ
 - เวอร์ชัน: 1.0.0 (จาก package.json)
 - PWA: 📱 รองรับ
-- เเล้ว: ✅ ทดสอบแล้ว
+- แล้ว: ✅ ทดสอบแล้ว
 
 ## 📖 สารบัญ
 
 - [📋 บัตรสรุป](#-บัตรสรุป-project-badges)
 - [🚀 เริ่มต้นเร็ว](#-เริ่มต้นเร็ว)
-- [🎮 วิธีเล่น / ระบบหลัก (ผู้เล่น)]
-- [🛠️ Tech Stack + API + LLM + การทดสอบ (Developer)]
+- [🎮 วิธีเล่น / ระบบหลัก (ผู้เล่น)](#-วิธีเล่น--ระบบหลัก-ผู้เล่น)
+- [🛠️ Tech Stack + API + LLM + การทดสอบ (Developer)](#️-tech-stack--api--llm--การทดสอบ-developer)
+- [🚀 วิธีรัน](#-วิธีรัน)
+- [📁 โครงสร้างโปรเจกต์](#-โครงสร้างโปรเจกต์)
+- [➕ เพิ่มเนื้อหาเกมเอง](#-เพิ่มเนื้อหาเกมเอง)
+- [🤖 ระบบ LLM (เนื้อเรื่องสุ่มเสริม)](#-ระบบ-llm-เนื้อเรื่องสุ่มเสริม)
 - [📱 ติดตั้ง PWA](#-ติดตั้ง-pwa)
-- [❓ คำถามที่พบบ่อย (FAQ)]
-- [📦 Version & Deploy]
+- [❓ คำถามที่พบบ่อย (FAQ)](#-คำถามที่พบบ่อย-faq)
+- [📦 Version & Deploy](#-version--deploy)
 
 ## 🚀 เริ่มต้นเร็ว
 
@@ -317,6 +321,138 @@ npm run test:llm          # ทดสอบโมดูล LLM (mock server)
 npm run test:explore      # ทดสอบระบบสำรวจเมืองเดิมต่อ
 npm run test:boss         # ทดสอบระบบต่อสู้บอส
 ```
+
+---
+
+## 🚀 วิธีรัน
+
+**รันง่ายด้วย script** (ดูวิธีใช้เต็ม: `./run.sh help`):
+
+```bash
+./run.sh            # โหมดพัฒนา (server :3001 + frontend :5173)
+./run.sh prod       # build + รัน production ที่ http://localhost:3001
+./run.sh start      # รัน production แบบ background (log: /tmp/pomoquest.log)
+./run.sh stop       # หยุด server
+./run.sh reset      # RESET เกม: หยุด server → ลบ DB → รันใหม่ (พิมพ์ reset ยืนยัน, -y ข้าม)
+./run.sh backup     # สำรอง DB ไปที่ backups/ (server รันอยู่ได้)
+./run.sh backup --json   # สำรองเป็น .json.gz (บีบอัด, อ่าน/แก้ได้)
+./run.sh restore    # กู้คืนจาก backup (.db หรือ .json.gz) — เช็คเวอร์ชัน schema ก่อน
+./run.sh status     # ดูสถานะ server + LLM
+./run.sh llm        # เช็คว่า LLM ที่ localhost:8080 พร้อมใช้ไหม
+```
+
+หรือรันด้วย npm:
+
+```bash
+npm install          # ติดตั้ง dependencies (ครั้งแรก)
+npm run dev          # โหมดพัฒนา — server :3001 + frontend :5173
+npm run build        # build frontend ไปที่ dist/
+npm start            # รัน production — เสิร์ฟที่ http://localhost:3001
+```
+
+> 💡 บนมือถือ: เปิดเว็บใน Chrome → เมนู → **Add to Home Screen** → ใช้งานเหมือนแอพจริง
+```
+
+## 📁 โครงสร้างโปรเจกต์
+
+```
+├── server/
+│   ├── index.js      # Express entry (เสิร์ฟ dist ใน production)
+│   ├── routes.js     # API ทั้งหมด
+│   ├── db.js         # SQLite schema + seed
+│   ├── game.js       # game engine (XP, ต่อสู้, event, บอส, quest)
+│   ├── data.js       # ข้อมูลเกม (คลาส, ไอเทม, เมือง, มอนสเตอร์, เหตุการณ์)
+│   └── data/         # ไฟล์ฐานข้อมูล (auto-create, อย่า commit)
+├── src/
+│   ├── Game.jsx      # phase machine: idle → work → พักสั้น → บอส
+│   ├── context.jsx   # state กลาง + API actions + toast + level-up signal
+│   └── components/   # UI ทั้งหมด (creation, timer, camp, boss, ฯลฯ)
+├── public/           # PWA (manifest, sw.js, ไอคอน)
+└── scripts/          # gen-icons.mjs — สร้างไอคอนจาก pixel art
+```
+```
+
+## ➕ เพิ่มเนื้อหาเกมเอง
+
+ข้อมูลเกมทั้งหมดอยู่ในไฟล์เดียว: **`server/data.js`** — เกม engine อ่านจาก array เหล่านี้โดยตรง ดังนั้น **เพิ่มเนื้อหาใหม่ไม่ต้องแตโค้ดอื่นเลย** เปิดแอพใหม่แล้วใช้งานได้ทันที
+
+### 🐾 เพิ่มมอนสเตอร์
+
+เพิ่ม entry ใน `MONSTERS` array:
+
+```js
+{ name: 'กอร์กอน', icon: '🐍', power: 1.4, xp: 48, gold: 30, loot: 120 },
+```
+
+| field | ความหมาย |
+|---|---|
+| `name` / `icon` | ชื่อและอีโมจิ |
+| `power` | ตัวคูณพลัง (0.7 = อ่อน, 1.5 = แรง) |
+| `xp` / `gold` | รางวัลพื้นฐาน |
+| `loot` | id ของไอเทมดรอป (~40% เมื่อชนะ) |
+| `rare: true` | มอนสเตอร์พิเศษ 🌟 (เจอ ~1%) — ชนะการันตีดรอป loot |
+
+**มอนสเตอร์ประจำเมือง** เพิ่มที่ `CITY_MONSTERS` (index ตรงกับ `CITIES`):
+
+```js
+{ name: 'กวางเขาทอง', icon: '🦌', power: 1.7, xp: 70, gold: 40, loot: 146, flavor: '…{monster}…' },
+```
+
+### ⚔️ เพิ่มอุปกรณ์ / ไอเทม
+
+เพิ่ม entry ใน `ITEMS` array:
+
+```js
+// อาวุธ (handed: 1 = มือเดียว, 2 = สองมือ)
+{ id: 14, name: 'ดาบเพลิง', icon: '🔥', type: 'weapon', atk_bonus: 12, price: 260, lvl: 4, handed: 1 },
+
+// เกราะ/หมวก/แขน/ขา/เท้า
+{ id: 20, name: 'เกราะมังกร', icon: '🐉', type: 'armor', def_bonus: 15, price: 350, lvl: 6 },
+
+// เครื่องประดับ (4 ช่อง — ไม่มี classReq ใส่ได้ทุกคลาส)
+{ id: 30, name: 'แหวนพลัง', icon: '💍', type: 'accessory', atk_bonus: 5, price: 200, lvl: 3 },
+```
+
+| field | ความหมาย |
+|---|---|
+| `type` | `weapon` / `armor` / `helmet` / `gloves` / `pants` / `boots` / `accessory` / `consumable` / `junk` |
+| `classReq` | (ไม่บังคับ) array ของคลาสที่สวมได้ เช่น `['warrior', 'cleric']` |
+| `handed` | (ไม่บังคับ) `1` = มือเดียว (ใส่มือหลักหรือมือรอง) · `2` = สองมือ (ปิดมือรอง) |
+| `exclusive` | (ไม่บังคับ) `true` = ดรอปเฉพาะทาง (ไม่ดรอปตามปกติ) |
+| `learn_skill` | (ไม่บังคับ) id ของสกิลที่เรียนเมื่อใช้ (คัมภีร์สกิล) |
+
+```
+## 🤖 ระบบ LLM (เนื้อเรื่องสุ่มเสริม)
+
+เกมเชื่อม **LLM** เขียน "เรื่องราวการผจญภัย" สั้น ๆ ลงในบันทึกหลังจบ session — เนื้อเรื่องไม่ซ้ำเดิม
+
+> ⚠️ LLM เขียนแค่ **ข้อความบรรยายเท่านั้น** — XP/ทอง/ไอเทม/รางวัลทั้งหมดคำนวณที่ server ตามเดิม
+
+### วิธีเปิดใช้
+
+ค่า default ชี้ไป LLM ในเครื่อง (`localhost:8080/v1`) — **รันตามปกติได้เลย ไม่ต้องตั้ง env**:
+
+```bash
+npm run dev
+```
+
+ตั้งค่าเพิ่มเติม (ไม่บังคับ):
+
+```bash
+LLM_BASE_URL=http://localhost:8080/v1   # base URL (ค่า default)
+LLM_MODEL=default            # ชื่อโมเดล (ค่า default: "default")
+LLM_TIMEOUT_MS=30000         # timeout ต่อ request
+LLM_ENABLED=0                # บังคับปิด LLM
+```
+
+### ใช้กับ g4f.space (remote)
+
+- Bake proof-of-work ฟรีที่ `g4f.dev/chat` → credits ผูก IP → รันด้วย `LLM_ENABLED=1 npm run dev`
+- หรือสมัคร `g4f.dev/members.html` เอา key มาใส่ `LLM_API_KEY`
+
+| จุดที่ LLM ถูกใช้ | ผลลัพธ์ |
+|---|---|
+| หลังจบ work session (`/adventure/complete`) | เขียนเรื่องราว 2-3 ประโยคจากบริบท → บันทึกเป็น log "📖 เรื่องราวการผจญภัย" |
 
 ---
 
