@@ -383,6 +383,15 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
       {tab === 'inv' && (
         <div className="panel">
           <div className="panel-title">🎒 กระเป๋า</div>
+          <div className={`bag-meter ${inventory.length >= character.bagSize ? 'bag-full' : inventory.length >= character.bagSize - 3 ? 'bag-warn' : ''}`}>
+            <span>🎒 {inventory.length}/{character.bagSize} ช่อง</span>
+            <div className="bag-bar"><div className="bag-fill" style={{ width: `${Math.min(100, (inventory.length / character.bagSize) * 100)}%` }} /></div>
+            {inventory.length >= character.bagSize - 3 && (
+              <span className="bag-note">
+                {inventory.length >= character.bagSize ? '🚨 กระเป๋าเต็ม! ขายของก่อนซื้อ/คราฟต์ — ของรางวัลจะขายอัตโนมัติราคาพื้นฐาน' : '⚠️ ใกล้เต็ม — ของรางวัล/ดรอปใหม่จะขายอัตโนมัติเมื่อเต็ม (ราคาพื้นฐาน ไม่รอวันพ่อค้าต้องการ)'}
+              </span>
+            )}
+          </div>
           {inventory.length === 0 ? (
             <p className="hint">กระเป๋าว่างเปล่า — ไปหา treasure กัน!</p>
           ) : (

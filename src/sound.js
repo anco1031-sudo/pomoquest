@@ -66,26 +66,26 @@ export const sfx = {
   pause: () => tone(330, { dur: 0.28, type: 'triangle', vol: 0.09, glide: 280 }),
 
   // จบ work session — แฟนแฟร์ "สำเร็จ" กระดิ่งดัง ๆ (C5 E5 G5 C6)
-  complete: () => seq([523, 659, 784, 1047], { dur: 0.32, type: 'sine', vol: 0.16, gap: 0.11, harmonics: [{ mult: 2, vol: 0.35 }, { mult: 3, vol: 0.14 }] }),
+  complete: () => seq([523, 659, 784, 1047], { dur: 0.32, type: 'sine', vol: 0.22, gap: 0.11, harmonics: [{ mult: 2, vol: 0.4 }, { mult: 3, vol: 0.18 }] }),
 
   // เริ่มพักเบรก/พักหลังชนะบอส — คู่เสียงนุ่มลงมา
   breakStart: () => seq([659, 523], { dur: 0.3, type: 'sine', vol: 0.13, gap: 0.13, harmonics: [{ mult: 2, vol: 0.25 }] }),
 
   // หมดเวลาพัก — "ติ๊งต่อง" เรียกให้รู้ว่าพักครบ
-  breakOver: () => seq([660, 880], { dur: 0.4, type: 'sine', vol: 0.14, gap: 0.3, harmonics: [{ mult: 2.76, vol: 0.3 }] }),
+  breakOver: () => seq([660, 880], { dur: 0.4, type: 'sine', vol: 0.2, gap: 0.3, harmonics: [{ mult: 2.76, vol: 0.35 }] }),
 
   // ไข่ฟัก — ป๊อปขึ้น + สายฟ้าสูงน่ารัก ๆ
   hatch: () => {
-    tone(392, { dur: 0.12, type: 'triangle', vol: 0.12, glide: 520 });
-    seq([784, 1047, 1319], { dur: 0.24, type: 'sine', vol: 0.13, gap: 0.1, delay: 0.12, harmonics: [{ mult: 2, vol: 0.3 }] });
+    tone(392, { dur: 0.12, type: 'triangle', vol: 0.18, glide: 520 });
+    seq([784, 1047, 1319], { dur: 0.24, type: 'sine', vol: 0.18, gap: 0.1, delay: 0.12, harmonics: [{ mult: 2, vol: 0.35 }] });
   },
 
   // เหรียญทอง — ดิงสั้น ๆ (สมบัติ/พ่อค้า/ค่าปลอบใจ)
   coin: () => tone(1320, { dur: 0.2, type: 'sine', vol: 0.1, harmonics: [{ mult: 2.01, vol: 0.25 }] }),
 
   // เลเวลอัพ — แฟนแฟร์ใหญ่กว่า complete (C5 E5 G5 C6 E6)
-  levelup: () => seq([523, 659, 784, 1047, 1319], { dur: 0.3, type: 'sine', vol: 0.16, gap: 0.1, harmonics: [{ mult: 2, vol: 0.3 }] }),
+  levelup: () => seq([523, 659, 784, 1047, 1319], { dur: 0.3, type: 'sine', vol: 0.22, gap: 0.1, harmonics: [{ mult: 2, vol: 0.35 }] }),
 
   // บอส — เสียงต่ำข่มขู่ (ซอว์ทูธ + เบสทับ)
-  boss: () => tone(82, { dur: 0.8, type: 'sawtooth', vol: 0.12, harmonics: [{ mult: 0.5, vol: 0.6, type: 'sine' }] }),
+  boss: () => tone(82, { dur: 0.8, type: 'sawtooth', vol: 0.18, harmonics: [{ mult: 0.5, vol: 0.65, type: 'sine' }] }),
 };
