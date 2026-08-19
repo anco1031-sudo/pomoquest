@@ -28,7 +28,7 @@ const TABS = [
 ];
 
 export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 0, hasPausedSession = false, pausedSec = 0, pauseMode = null, pauseTitle = '', pausedTask = '', onDiscard = null, onLongPause = null, onManageCharacters, breakAtHome = false, breakRemain = 0, breakOver = false, onBreakBack = null }) {
-  const { character, progress, settings, put, refresh, showToast, post } = useGame();
+  const { character, progress, settings, get, put, refresh, showToast, post } = useGame();
   const [tab, setTab] = useState('home');
   const [muted, setMutedState] = useState(isMuted());
   const [showDev, setShowDev] = useState(false);
