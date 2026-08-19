@@ -962,16 +962,25 @@ router.post('/pet/store', (req, res) => {
   res.json({ ...serialize(c), inventory: getInventory(c.id), message: `👜 เก็บ ${def?.icon || ''} ${def?.name || active.pet_id} ไว้ในกระเป๋าแล้ว!` });
 });
 
-// เอาสัตว์เลี้ยงออกจากกระเป๋า (stored → active)
+// เอาสัตว์เลี้ยงออกจากกระเป๋า (stored → active) — ถ้ามี active อยู่ ให้สลับเก็บ active เดิม
 router.post('/pet/unstore', (req, res) => {
   const c = requireChar(res); if (!c) return;
   const { petId } = req.body || {};
   const row = getPet(c.id, petId);
   if (!row || !row.stored) return res.status(400).json({ error: 'ไม่มีสัตว์เลี้ยงตัวนี้ในกระเป๋า' });
+  const prog = getProgress(c.id);
+  const active = getActivePet(c.id);
+  // ถ้ามี active อยู่แล้ว → ต้องมีช่องเก็บเหลือสำหรับตัว active เดิม (สลับ stored ↔ active = ช่องเท่าเดิม)
+  if (active) {
+    const storedCount = getStoredPets(c.id).length;
+    const capacity = prog.pet_bag_capacity || 0;
+    if (storedCount >= capacity) return res.status(400).json({ error: `👜 กระเป๋าเก็บสัตว์เต็ม (${storedCount}/${capacity}) — เก็บตัว active ไม่ได้` });
+  }
   unstorePet(c.id, petId);
   const def = PET_BY_ID[petId];
-  addLog(c.id, { type: 'pet_unstore', title: '📤 เอาสัตว์เลี้ยงออกจากกระเป๋า', detail: `${def?.icon || ''} ${def?.name || petId} (Lv.${row.level}) กลับมาใช้งานแล้ว!` });
-  res.json({ ...serialize(c), message: `📤 ${def?.icon || ''} ${def?.name || petId} กลับมาใช้งานแล้ว!` });
+  const swapNote = active ? ` (เก็บ ${PET_BY_ID[active.pet_id]?.icon || ''} ${PET_BY_ID[active.pet_id]?.name || active.pet_id} ลงกระเป๋าแทน)` : '';
+  addLog(c.id, { type: 'pet_unstore', title: '📤 เอาสัตว์เลี้ยงออกจากกระเป๋า', detail: `${def?.icon || ''} ${def?.name || petId} (Lv.${row.level}) กลับมาใช้งานแล้ว!${swapNote}` });
+  res.json({ ...serialize(c), message: `📤 ${def?.icon || ''} ${def?.name || petId} กลับมาใช้งานแล้ว!${swapNote}` });
 });
 
 router.post('/pet/release', (req, res) => {

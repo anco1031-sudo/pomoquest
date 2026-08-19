@@ -490,11 +490,18 @@ export const storePet = (charId, petId) => {
   db.prepare('UPDATE pet SET is_active = 0, stored = 1 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
 };
 
-// เอาสัตว์เลี้ยงออกจากกระเป๋า (stored → active) — ต้องปล่อย active ตัวเดิมก่อน
+// เอาสัตว์เลี้ยงออกจากกระเป๋า (stored → active) — ถ้ามี active อยู่ ให้สลับเก็บ active เดิมลงกระเป๋า
 export const unstorePet = (charId, petId) => {
+  // ดึงตัวที่ active อยู่ก่อน (ถ้ามี)
+  const oldActive = db.prepare('SELECT pet_id FROM pet WHERE character_id = ? AND is_active = 1 AND stored = 0').get(charId);
+  // เอาตัวที่ต้องการออกจากกระเป๋า
   db.prepare('UPDATE pet SET stored = 0 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
-  db.prepare('UPDATE pet SET is_active = 0 WHERE character_id = ? AND stored = 0').run(charId);
+  // ตั้งตัวใหม่เป็น active
   db.prepare('UPDATE pet SET is_active = 1 WHERE character_id = ? AND pet_id = ?').run(charId, petId);
+  // ถ้ามีตัว active เดิม → เก็บลงกระเป๋า (สลับ stored ↔ active)
+  if (oldActive && oldActive.pet_id !== petId) {
+    db.prepare('UPDATE pet SET is_active = 0, stored = 1 WHERE character_id = ? AND pet_id = ?').run(charId, oldActive.pet_id);
+  }
 };
 
 // ปล่อย pet — ลบออกจากคอก
