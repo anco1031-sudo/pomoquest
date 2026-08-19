@@ -50,6 +50,7 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
   });
   const fileRef = useRef(null);
   const [focusTask, setFocusTask] = useState(''); // ชื่องานที่จะโฟกัส session ถัดไป
+  const [recentTasks, setRecentTasks] = useState([]); // ชื่องานล่าสุดที่เคยโฟกัส (เลือกได้)
   const heroRef = useRef(null);
   const [barCollapsed, setBarCollapsed] = useState(false); // เลื่อนผ่าน hero card → แถบโฟกัสต่อย่อเหลือแค่ปุ่ม (ประหยัดพื้นที่)
 
@@ -64,6 +65,13 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // ดึงชื่องานล่าสุดที่เคยโฟกัส (เลือกได้ Instead of typing)
+  useEffect(() => {
+    get('/recent-tasks').then((d) => {
+      if (d?.tasks) setRecentTasks(d.tasks);
+    }).catch(() => {});
+  }, [get]);
 
   if (!character) return null;
   const city = character.city;
@@ -350,6 +358,20 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                       onChange={(e) => setFocusTask(e.target.value)}
                     />
                   </div>
+                  {recentTasks.length > 0 && !focusTask && (
+                    <div className="recent-tasks">
+                      <span className="recent-tasks-label">📋 งานล่าสุด:</span>
+                      {recentTasks.map((t) => (
+                        <button
+                          key={t}
+                          className="recent-task-chip"
+                          onClick={() => { setFocusTask(t); sfx.click(); }}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <button
                     className="btn btn-primary btn-big"
                     onClick={() => (breakAtHome ? onBreakBack?.() : onStart(focusTask))}

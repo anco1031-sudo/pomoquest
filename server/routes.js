@@ -440,6 +440,17 @@ router.get('/adventure/story', (req, res) => {
   res.json({ story: tale || null, pending: llmEnabled() });
 });
 
+// ชื่องานล่าสุดที่เคยโฟกัส (unique) — ใช้เป็นตัวเลือกด่วนตอนเริ่ม session ใหม่
+router.get('/recent-tasks', (req, res) => {
+  const c = requireChar(res); if (!c) return;
+  const rows = db.prepare(`
+    SELECT DISTINCT focus_task FROM log
+    WHERE character_id = ? AND type = 'session_done' AND focus_task IS NOT NULL AND focus_task != ''
+    ORDER BY id DESC LIMIT 10
+  `).all(c.id);
+  res.json({ tasks: rows.map((r) => r.focus_task) });
+});
+
 // ประวัติ session — สรุป session (session_summary) + เหตุการณ์ทั้งหมดที่อยู่ใน session นั้น (จับกลุ่มด้วย session_key)
 router.get('/session-history', (req, res) => {
   const c = requireChar(res); if (!c) return;
