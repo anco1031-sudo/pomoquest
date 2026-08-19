@@ -351,7 +351,6 @@ npm start            # รัน production — เสิร์ฟที่ http
 ```
 
 > 💡 บนมือถือ: เปิดเว็บใน Chrome → เมนู → **Add to Home Screen** → ใช้งานเหมือนแอพจริง
-```
 
 ## 📁 โครงสร้างโปรเจกต์
 
@@ -369,7 +368,6 @@ npm start            # รัน production — เสิร์ฟที่ http
 │   └── components/   # UI ทั้งหมด (creation, timer, camp, boss, ฯลฯ)
 ├── public/           # PWA (manifest, sw.js, ไอคอน)
 └── scripts/          # gen-icons.mjs — สร้างไอคอนจาก pixel art
-```
 ```
 
 ## ➕ เพิ่มเนื้อหาเกมเอง
@@ -421,7 +419,6 @@ npm start            # รัน production — เสิร์ฟที่ http
 | `exclusive` | (ไม่บังคับ) `true` = ดรอปเฉพาะทาง (ไม่ดรอปตามปกติ) |
 | `learn_skill` | (ไม่บังคับ) id ของสกิลที่เรียนเมื่อใช้ (คัมภีร์สกิล) |
 
-```
 ## 🤖 ระบบ LLM (เนื้อเรื่องสุ่มเสริม)
 
 เกมเชื่อม **LLM** เขียน "เรื่องราวการผจญภัย" สั้น ๆ ลงในบันทึกหลังจบ session — เนื้อเรื่องไม่ซ้ำเดิม
