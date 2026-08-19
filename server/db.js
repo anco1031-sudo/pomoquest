@@ -230,6 +230,8 @@ ensureColumn('progress', 'freebies', 'INTEGER DEFAULT 0');
 // ชนะ 🌟 มอนสเตอร์พิเศษ (จ้าวมังกรทอง) / 🏙️ มอนสเตอร์ประจำเมือง (ตราลับสายนักล่าตำนาน)
 ensureColumn('progress', 'rare_wins', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'city_wins', 'INTEGER DEFAULT 0');
+// จำนวนครั้งที่ถูก auto-discard (พักเกินเวลา — auto-discard จาก Pomodoro threshold)
+ensureColumn('progress', 'auto_discard_count', 'INTEGER DEFAULT 0');
 // สถิติจ้าวมังกรทอง (หน้า Stats): ชนะ/แพ้บอสเวอร์ชัน + เปิดของขวัญ
 ensureColumn('progress', 'dragon_boss_wins', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'dragon_boss_loses', 'INTEGER DEFAULT 0');

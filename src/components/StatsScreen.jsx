@@ -89,6 +89,7 @@ export default function StatsScreen() {
           <div className="stat-box"><b>{p.daily_streak}</b><span>โฟกัสติดต่อ (วัน)</span></div>
           <div className="stat-box"><b>{p.best_streak}</b><span>คอมโบสูงสุด</span></div>
           <div className="stat-box"><b>{data.abortsTotal || 0}</b><span>session ที่ทิ้ง</span></div>
+          <div className="stat-box"><b>{p.auto_discard_count || 0}</b><span>⏰ auto-discard</span></div>
           <div className="stat-box"><b>{data.achievements.unlocked}/{data.achievements.total}</b><span>ตราที่ปลดล็อก</span></div>
         </div>
       </div>
@@ -322,8 +323,9 @@ export default function StatsScreen() {
           <div className="stat-box"><b>{fmtDuration(p.break_overrun_sec)}</b><span>เวลาที่เลยพักทั้งหมด</span></div>
           <div className="stat-box"><b>{fmtDuration(p.pause_sec || 0)}</b><span>พักกลาง session (⏸️ พักสั้น)</span></div>
           <div className="stat-box"><b>{fmtDuration(p.long_pause_sec || 0)}</b><span>พักยาว 😴 (นอน/ทานข้าว/ธุระ)</span></div>
+          <div className="stat-box"><b>{p.auto_discard_count || 0}</b><span>⏰ auto-discard (พักเกินเวลา)</span></div>
         </div>
-        <p className="hint">⏸️ พักสั้น = กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส (นับใน "พักกลาง session") · 😴 พักยาว = เลือกตอนกดพัก ต้องเลือกชื่อ/เหตุผลจากตัวเลือก (แยกหมวดสถิติ "พักยาว") — ทั้งคู่ไม่สะสม XP ระหว่างพัก</p>
+        <p className="hint">⏸️ พักสั้น = กดหยุดพัก/กลับหน้าหลักระหว่างโฟกัส (นับใน "พักกลาง session") · 😴 พักยาว = เลือกตอนกดพัก ต้องเลือกชื่อ/เหตุผลจากตัวเลือก (แยกหมวดสถิติ "พักยาว") · ⏰ auto-discard = พักเกินเวลา (สั้น >10 นาที / ยาว >60 นาที) จนถูกทิ้งอัตโนมัติ</p>
       </Panel>
 
       {data.longPauseTitles && data.longPauseTitles.length > 0 && (

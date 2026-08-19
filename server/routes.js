@@ -492,10 +492,16 @@ router.post('/adventure/abort', (req, res) => {
   }
   prog.streak = 0;
   db.prepare('UPDATE progress SET streak = 0 WHERE id = ?').run(prog.id);
+  // นับ auto-discard (พักเกินเวลา) — แยกจาก abort ทั่วไป
+  const isAutoDiscard = reasonLabel.includes('auto-discard');
+  if (isAutoDiscard) {
+    prog.auto_discard_count = (prog.auto_discard_count || 0) + 1;
+    db.prepare('UPDATE progress SET auto_discard_count = ? WHERE id = ?').run(prog.auto_discard_count, prog.id);
+  }
   const detail = reasonLabel
     ? `เหตุผล: ${reasonLabel} · คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)`
     : 'คอมโบโฟกัสหายไป (เริ่มใหม่จาก 1)';
-  addLog(c.id, { type: 'abort', title: '💨 ละทิ้งเซสชัน', detail, focusSec: focusSecN, abortReason: reasonLabel });
+  addLog(c.id, { type: 'abort', title: isAutoDiscard ? '⏰ ทิ้ง session อัตโนมัติ' : '💨 ละทิ้งเซสชัน', detail, focusSec: focusSecN, abortReason: reasonLabel });
   res.json({ progress: getProgress(c.id), abortsThisWeek: abortsThisWeekCount(c.id) });
 });
 

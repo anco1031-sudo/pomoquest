@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, isMuted, setMuted } from '../sound.js';
-import { fmtTime } from './ui.jsx';
+import { fmtTime, fmtDuration } from './ui.jsx';
 import { petMoodOf, petPerkLabel } from '../meta.js';
+
+// auto-discard thresholds (synced with Game.jsx)
+const SHORT_PAUSE_DISCARD_SEC = 10 * 60;
+const LONG_PAUSE_DISCARD_SEC = 60 * 60;
+const WARN_GRACE_SEC = 5 * 60;
 
 // ชื่อพักยาวสำเร็จรูป (ตัวเลือกเดียวเท่านั้น — บังคับเลือกก่อนกด 😴 พักยาว ชื่อสม่ำเสมอ เอาไปรวมสถิติแยกตามชื่อได้)
 export const PAUSE_PRESETS = [
@@ -94,14 +99,26 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
         </button>
       </div>
 
-      <div className="timer-ring" style={{ '--pct': pct }}>
+      <div className={`timer-ring${(() => { const threshold = pauseMode === 'long' ? LONG_PAUSE_DISCARD_SEC : SHORT_PAUSE_DISCARD_SEC; if (!running && pausedSec >= threshold) return ' danger'; if (!running && pausedSec >= threshold - 120) return ' warning'; return ''; })()}`} style={{ '--pct': pct }}>
         <div className="timer-time">{fmtTime(remain)}</div>
         <div className="timer-label">
           {running
             ? 'กำลังโฟกัส…'
-            : pauseMode === 'long'
-              ? `😴 พักยาว${pauseTitle ? ` (${pauseTitle})` : ''} · ไม่อยู่ ${fmtTime(pausedSec)}`
-              : `⏸️ พักชั่วคราว · พักไปแล้ว ${fmtTime(pausedSec)}`}
+            : (() => {
+                const threshold = pauseMode === 'long' ? LONG_PAUSE_DISCARD_SEC : SHORT_PAUSE_DISCARD_SEC;
+                const remaining = Math.max(0, threshold - pausedSec);
+                const isWarning = !running && pausedSec >= threshold - 120 && pausedSec < threshold;
+                const isDanger = !running && pausedSec >= threshold;
+                if (isDanger) {
+                  return `⏰ พักเกิน ${fmtDuration(threshold)} — เตือน auto-discard!`; 
+                } else if (isWarning) {
+                  return `${pauseMode === 'long' ? '😴 พักยาว' : '⏸️ พักสั้น'} · อีก ${fmtTime(remaining)} จะเตือน`; 
+                } else if (pauseMode === 'long') {
+                  return `😴 พักยาว${pauseTitle ? ` (${pauseTitle})` : ''} · ไม่อยู่ ${fmtTime(pausedSec)}`;
+                } else {
+                  return `⏸️ พักชั่วคราว · พักไปแล้ว ${fmtTime(pausedSec)}`;
+                }
+              })()}
         </div>
       </div>
 
@@ -169,6 +186,9 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
           {pauseMode === 'long'
             ? '😴 พักยาว — เวลาพักนี้แยกหมวดในสถิติ "พักยาว" (ไม่ปนกับพักกลาง session) · กดโฟกัสต่อเมื่อพร้อม (ไม่สะสม XP ระหว่างพัก)'
             : '⏸️ เวลาพักกลาง session ถูกนับแยกต่างหาก — กดโฟกัสต่อเมื่อพร้อม (ไม่สะสม XP ระหว่างพัก)'}
+          {pauseMode === 'long'
+            ? ' · ⚠️ พักเกิน 60 นาทีจะเตือน + ทิ้ง session อัตโนมัติ'
+            : ' · ⚠️ พักเกิน 10 นาทีจะเตือน + ทิ้ง session อัตโนมัติ'}
         </p>
       )}
       <p className="hint">โฟกัสงานของคุณไปเรื่อย ๆ — ตัวละครจะจัดการมอนสเตอร์เอง!</p>

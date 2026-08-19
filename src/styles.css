@@ -356,7 +356,13 @@ body {
   box-shadow: 0 0 60px rgba(139, 92, 246, 0.25);
 }
 .timer-time { font-size: 52px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
-.timer-label { color: var(--muted); font-size: 14px; }
+.timer-label { color: var(--muted); font-size: 14px; transition: color 0.3s; }
+.timer-ring.warning .timer-label { color: #f59e0b; font-weight: 600; }
+.timer-ring.warning { box-shadow: 0 0 60px rgba(245, 158, 11, 0.3); animation: pulse-warning 2s ease-in-out infinite; }
+.timer-ring.danger .timer-label { color: #ef4444; font-weight: 600; }
+.timer-ring.danger { box-shadow: 0 0 60px rgba(239, 68, 68, 0.35); animation: pulse-danger 1.5s ease-in-out infinite; }
+@keyframes pulse-warning { 0%, 100% { box-shadow: 0 0 60px rgba(245, 158, 11, 0.3); } 50% { box-shadow: 0 0 80px rgba(245, 158, 11, 0.5); } }
+@keyframes pulse-danger { 0%, 100% { box-shadow: 0 0 60px rgba(239, 68, 68, 0.35); } 50% { box-shadow: 0 0 90px rgba(239, 68, 68, 0.6); } }
 
 /* นาฬิกานับถอยหลังเวลาพัก — แสดงที่ค่ายพัก */
 .break-timer {

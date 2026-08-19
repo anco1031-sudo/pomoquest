@@ -44,6 +44,12 @@ const ABORT_PRESETS = [
   { id: 'other', icon: '🎲', label: 'อื่น ๆ', full: '🎲 อื่น ๆ' },
 ];
 
+// ---- เกณฑ์ auto-discard ตอนพักเกินเวลา (Pomodoro-based) ----
+// พักสั้น > 10 นาที / พักยาว > 60 นาที → เตือน + auto-discard หลัง 5 นาที
+const SHORT_PAUSE_DISCARD_SEC = 10 * 60; // 10 นาที
+const LONG_PAUSE_DISCARD_SEC = 60 * 60;  // 60 นาที
+const WARN_GRACE_SEC = 5 * 60;           // เตือนแล้ว 5 นาที auto-discard
+
 // เกาะชื่อพักยาวมาเป็นเหตุผลเริ่มต้นตอนทิ้งจากพักยาว — หา abort preset ที่ไอคอนตรงกัน (เช่น 🍚 กินข้าว → 🍚 ต้องไปกินข้าว)
 // ไม่ตรงกัน = ปล่อยว่างให้เลือกเอง (พักยาวกับทิ้ง session เป็นคนละระบบ แต่เชื่อมต่อกันตรงนี้)
 const abortPresetFromPause = (pauseTitle) => {
@@ -80,6 +86,8 @@ export default function Game() {
   const [longPauseAccumSec, setLongPauseAccumSec] = useState(0); // รวมวินาทีพักยาวใน session นี้ (แยกจาก pauseAccumSec = พักสั้น)
   const [longPauseTitles, setLongPauseTitles] = useState([]); // ชื่อพักยาวที่ผ่านมาใน session นี้ (ส่งไป log ตอนจบ session)
   const [pausedTick, setPausedTick] = useState(0); // นาฬิกาจำลองตอนพัก — ให้ UI นับเวลาพักสด ๆ
+  const [pauseWarnedAt, setPauseWarnedAt] = useState(null); // เตือนพักเกินเวลาเมื่อไหร่ (ms) — null = ไม่ได้เตือน
+  const [nextPauseWarnTick, setNextPauseWarnTick] = useState(null); // pausedTick ที่จะเตือนครั้งถัดไป (คูณ2ทุกครั้งที่เลื่อน)
   const [bossState, setBossState] = useState(null);
   const [mounted, setMounted] = useState(false);
   const [showCharSelect, setShowCharSelect] = useState(false);
@@ -140,12 +148,17 @@ export default function Game() {
   const pauseTitleRef = useRef('');
   const longPauseAccumSecRef = useRef(0);
   const longPauseTitlesRef = useRef([]);
+  const pauseWarnedAtRef = useRef(null);
+  const nextPauseWarnTickRef = useRef(null);
+  const autoDiscardTimerRef = useRef(null);
   pauseStartedAtRef.current = pauseStartedAt;
   pauseAccumSecRef.current = pauseAccumSec;
   pauseModeRef.current = pauseMode;
   pauseTitleRef.current = pauseTitle;
   longPauseAccumSecRef.current = longPauseAccumSec;
   longPauseTitlesRef.current = longPauseTitles;
+  pauseWarnedAtRef.current = pauseWarnedAt;
+  nextPauseWarnTickRef.current = nextPauseWarnTick;
   runningRef.current = running;
   phaseRef.current = phase;
   sessionIdxRef.current = sessionIdx;
@@ -180,6 +193,9 @@ export default function Game() {
     setLongPauseTitles([]);
     setShowLongPauseReturn(false);
     setPausedTick(0);
+    setPauseWarnedAt(null);
+    setNextPauseWarnTick(null);
+    if (autoDiscardTimerRef.current) { clearTimeout(autoDiscardTimerRef.current); autoDiscardTimerRef.current = null; }
     setBossState(null);
     eventBusyRef.current = false;
     endedRef.current = false;
@@ -226,8 +242,34 @@ export default function Game() {
       setPauseTitle(t.pauseTitle || '');
       setLongPauseAccumSec(t.longPauseAccumSec || 0);
       setLongPauseTitles(t.longPauseTitles || []);
+      setPauseWarnedAt(t.pauseWarnedAt || null);
+      setNextPauseWarnTick(t.nextPauseWarnTick || null);
       // story ไมไดเก็บไว้ใน localStorage — ถ้ากลับมาค้างที่รอเลือกพัก/ข้าม ให้ข้ามเรื่องไปถามพัก/ข้ามเลย
       if (t.awaitingBreak) setStoryDone(true);
+
+      // กู้คืน auto-discard timer ถ้ากำลังอยู่ใน grace period
+      if (t.pauseWarnedAt && t.phase === 'work' && t.pausedAtHome) {
+        const elapsed = Math.floor((Date.now() - t.pauseWarnedAt) / 1000);
+        const remaining = Math.max(0, WARN_GRACE_SEC - elapsed);
+        if (remaining > 0) {
+          autoDiscardTimerRef.current = setTimeout(() => {
+            const reason = (t.pauseMode === 'long')
+              ? '⏰ พักยาวนานเกินไป (auto-discard)'
+              : '⏰ พักสั้นนานเกินไป (auto-discard)';
+            abortSession(reason);
+            showToast('⏰ ทิ้ง session อัตโนมัติ — พักนานเกินเกณฑ์');
+            setPauseWarnedAt(null);
+            setNextPauseWarnTick(null);
+          }, remaining * 1000);
+        } else {
+          // เลย grace period แล้ว → ทิ้งเลย
+          const reason = (t.pauseMode === 'long')
+            ? '⏰ พักยาวนานเกินไป (auto-discard)'
+            : '⏰ พักสั้นนานเกินไป (auto-discard)';
+          abortSession(reason);
+          showToast('⏰ ทิ้ง session อัตโนมัติ — พักนานเกินเกณฑ์');
+        }
+      }
 
       if (t.phase === 'work') {
         if (t.awaitingBreak) {
@@ -277,13 +319,13 @@ export default function Game() {
     if (!mounted || !character) return;
     const t = {
       phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit,
-      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, pauseMode, pauseTitle, longPauseAccumSec, longPauseTitles,
+      awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, pauseMode, pauseTitle, longPauseAccumSec, longPauseTitles, pauseWarnedAt, nextPauseWarnTick,
       focusTask, // ชื่องานที่ตั้งไว้ — เก็บไว้กู้คืนหลังรีโหลด (session ต่อ ๆ ไปในรอบใช้ชื่อเดิม)
       epoch, // "โลกเวอร์ชัน" — reset/ลบ DB แล้ว epoch เปลี่ยน → session ที่พักค้างถูกทิ้ง (ไม่กู้คืน)
       expiresAt: running ? Date.now() + remain * 1000 : null,
     };
     localStorage.setItem(storeKey(character.id), JSON.stringify(t));
-  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, pauseMode, pauseTitle, longPauseAccumSec, longPauseTitles, focusTask, epoch, mounted, character?.id]);
+  }, [phase, sessionIdx, remain, running, elapsed, nextEventIn, sessionEvents, sessionKey, breakVisit, awaitingBreak, breakOver, overrun, breakStartedAt, breakAtHome, postBossNote, hatchResult, pausedAtHome, pauseStartedAt, pauseAccumSec, pauseMode, pauseTitle, longPauseAccumSec, longPauseTitles, pauseWarnedAt, nextPauseWarnTick, focusTask, epoch, mounted, character?.id]);
 
   // ---- ตัวนับถอยหลัง ----
   useEffect(() => {
@@ -305,6 +347,36 @@ export default function Game() {
     const id = setInterval(() => setPausedTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [running, phase, pauseStartedAt]);
+
+  // ---- เตือน auto-discard เมื่อพักเกินเวลา (Pomodoro-based) ----
+  // พักสั้น > 10 นาที / พักยาว > 60 นาที → เตือน + auto-discard หลัง 5 นาที
+  useEffect(() => {
+    if (running || phase !== 'work' || !pauseStartedAtRef.current) return;
+    if (showLongPauseReturn || showAbortReason) return; // มี modal อื่นเปิดอยู่
+    if (pauseWarnedAtRef.current) return; // กำลังรอ grace period
+    const elapsed = pausedTick; // วินาทีที่พักมาแล้ว
+    const threshold = pauseModeRef.current === 'long' ? LONG_PAUSE_DISCARD_SEC : SHORT_PAUSE_DISCARD_SEC;
+    const nextWarn = nextPauseWarnTickRef.current;
+    if (elapsed >= threshold && (!nextWarn || elapsed >= nextWarn)) {
+      setPauseWarnedAt(Date.now());
+      // แจ้งเตือนเบราว์เซอร์ (เฉพาะแท็บเบื้องหลัง)
+      const pauseLabel = pauseModeRef.current === 'long' ? 'พักยาว' : 'พักสั้น';
+      notify(`⏰ ${pauseLabel}นานเกินเวลา!`, `พักมา ${Math.round(elapsed / 60)} นาที — อีก 5 นาทีจะทิ้ง session อัตโนมัติ`);
+      // auto-discard หลัง 5 นาที ถ้าไม่มี action
+      autoDiscardTimerRef.current = setTimeout(() => {
+        const reason = pauseModeRef.current === 'long'
+          ? '⏰ พักยาวนานเกินไป (auto-discard)'
+          : '⏰ พักสั้นนานเกินไป (auto-discard)';
+        abortSession(reason);
+        showToast('⏰ ทิ้ง session อัตโนมัติ — พักนานเกินเกณฑ์');
+        setPauseWarnedAt(null);
+        setNextPauseWarnTick(null);
+      }, WARN_GRACE_SEC * 1000);
+    }
+  }, [pausedTick, running, phase, showLongPauseReturn, showAbortReason]);
+
+  // Cleanup auto-discard timer
+  useEffect(() => () => { if (autoDiscardTimerRef.current) { clearTimeout(autoDiscardTimerRef.current); autoDiscardTimerRef.current = null; } }, []);
 
   // ---- ตรวจจับจบเฟส ----
   useEffect(() => {
@@ -384,10 +456,12 @@ export default function Game() {
     } else {
       // พักสั้น — นับเวลาพักเข้าสถิติ "พักกลาง session"
       setPauseAccumSec((a) => a + sec);
-    }
-    setPauseStartedAt(null);
+    }    setPauseStartedAt(null);
     setPauseMode(null);
     setPauseTitle('');
+    setPauseWarnedAt(null);
+    setNextPauseWarnTick(null);
+    if (autoDiscardTimerRef.current) { clearTimeout(autoDiscardTimerRef.current); autoDiscardTimerRef.current = null; }
   };
 
   const resetPause = () => {
@@ -397,7 +471,22 @@ export default function Game() {
     setPauseTitle('');
     setLongPauseAccumSec(0);
     setLongPauseTitles([]);
+    setPauseWarnedAt(null);
+    setNextPauseWarnTick(null);
+    if (autoDiscardTimerRef.current) { clearTimeout(autoDiscardTimerRef.current); autoDiscardTimerRef.current = null; }
   };
+
+  // ปิด modal เตือนพักเกินเวลา — ล้าง auto-discard timer + เลื่อนเตือนครั้งถัดไปเป็น2x
+  const dismissPauseWarning = () => {
+    if (autoDiscardTimerRef.current) { clearTimeout(autoDiscardTimerRef.current); autoDiscardTimerRef.current = null; }
+    setPauseWarnedAt(null);
+    // เลื่อนเตือนครั้งถัดไปเป็น2x ของปัจจุบัน (กันเตือนซ้ำทันที)
+    setNextPauseWarnTick((prev) => {
+      const cur = prev || pausedTick;
+      return cur * 2;
+    });
+  };
+
 
   // ---- กลับหน้าหลักกลาง session: พัก timer ไว้ แล้วกลับมากด "ต่อ session" ได้ ----
   // (ปุ่ม 🏠 ที่หน้าโฟกัสเปิดตัวเลือกพักสั้น/ยาวให้เลือกก่อนแล้ว — ตรงนี้แค่พักไว้ที่หน้า Home
@@ -1086,6 +1175,33 @@ export default function Game() {
                 😴 เปลี่ยนเป็นพักยาว
               </button>
               <button className="btn" onClick={() => setShowLongPauseTitle(false)}>ยกเลิก</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* เตือน auto-discard เมื่อพักเกินเวลา — นับถอยหลัง 5 นาที แล้วทิ้ง session อัตโนมัติ */}
+      {pauseWarnedAt && phase === 'work' && !running && !showLongPauseReturn && !showAbortReason && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h2>⏰ พักนานเกินเกณฑ์!</h2>
+            <p>
+              {pauseMode === 'long' ? '😴 พักยาว' : '⏸️ พักสั้น'} มานาน <b>{fmtDuration(pausedTick)}</b>
+              {pauseMode === 'long' ? ' (เกิน 60 นาที)' : ' (เกิน 10 นาที)'}
+              <br />
+              ⏳ เหลืออีก <b>{fmtDuration(Math.max(0, WARN_GRACE_SEC - Math.floor((Date.now() - pauseWarnedAt) / 1000)))}</b> ก่อนทิ้ง session อัตโนมัติ
+            </p>
+            <p className="hint">💡 ถ้าพร้อมกลับมาโฟกัส ให้กด "กลับมาโฟกัส" ก่อนหมดเวลา</p>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={() => { dismissPauseWarning(); handleContinue(); }}>
+                ▶️ กลับมาโฟกัส
+              </button>
+              <button className="btn" onClick={dismissPauseWarning}>
+                😴 ยังพักต่อ (เตือนใหม่ครั้งถัดไป)
+              </button>
+              <button className="btn btn-danger" onClick={() => { dismissPauseWarning(); openAbortModal(); }}>
+                💨 ทิ้ง session
+              </button>
             </div>
           </div>
         </div>
