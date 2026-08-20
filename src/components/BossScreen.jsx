@@ -4,10 +4,11 @@ import { sfx } from '../sound.js';
 import { fmtTime } from './ui.jsx';
 import { petMoodOf, petPerkLabel } from '../meta.js';
 
-export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onWinChoice, onDefeat }) {
+export default function BossScreen({ bossState, remain, total, running, breakOver = false, overrun = 0, onAct, onRetreat, onWinChoice, onWinFinish, onDefeat }) {
   const { character, progress, inventory, cities } = useGame();
   const [potionOpen, setPotionOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
+  const [winChoice, setWinChoice] = useState(null); // null = ยังไม่เลือก · 'focus' = พักเพื่อโฟกัสต่อ · 'finish' = จบงาน
   const logRef = useRef(null);
 
   const boss = bossState?.boss;
@@ -249,23 +250,50 @@ export default function BossScreen({ bossState, remain, total, running, breakOve
             </div>
           )}
           <p>
-            กำราบ {boss.name} ได้!{boss.isAlt ? ' (👁️ บอสลับ — ของพิเศษการันตี!)' : ''}{boss.isDragon ? ' (🌟 ของขวัญ 2 กล่องเข้าถุงแล้ว!)' : ''} — จะเดินทางต่อ หรือสำรวจเมืองเดิมต่อ?
+            กำราบ {boss.name} ได้!{boss.isAlt ? ' (👁️ บอสลับ — ของพิเศษการันตี!)' : ''}{boss.isDragon ? ' (🌟 ของขวัญ 2 กล่องเข้าถุงแล้ว!)' : ''}
           </p>
-          <div className="victory-choices">
-            <button
-              className="btn btn-primary btn-big"
-              onClick={() => { sfx.levelup(); onWinChoice('travel'); }}
-              disabled={!nextCity}
-            >
-              🚶 เดินทางต่อ{nextCity ? ` — ${nextCity.icon} ${nextCity.name}` : ''}
-              <span className="stay-detail">เมืองใหม่ ความยากกลับสู่ปกติ</span>
-            </button>
-            <button className="btn btn-big btn-stay" onClick={() => { sfx.levelup(); onWinChoice('stay'); }}>
-              🏠 สำรวจ {character.city.name} ต่อ (รอบที่ {stayRound})
-              {/* ไม่โชว์ตารางรอบบอสลับ — ให้ผู้เล่นเจอเองตอนสู้ (เดาสุ่มเอา) */}
-              <span className="stay-detail">ศัตรู x{stayEnemy} · รางวัล x{stayReward}</span>
-            </button>
-          </div>
+          {!winChoice && (
+            <div className="victory-choices">
+              <button className="btn btn-primary btn-big" onClick={() => { sfx.levelup(); setWinChoice('focus'); }}>
+                🏕️ พักเพื่อโฟกัสต่อ
+                <span className="stay-detail">พักที่ค่าย แล้วเริ่มรอบใหม่</span>
+              </button>
+              <button className="btn btn-big btn-finish" onClick={() => { sfx.levelup(); setWinChoice('finish'); }}>
+                🏁 จบงาน เลิกโฟกัส
+                <span className="stay-detail">สรุปผลแล้วกลับหน้าหลัก</span>
+              </button>
+            </div>
+          )}
+          {winChoice === 'focus' && (
+            <div className="victory-choices">
+              <p style={{ margin: '8px 0 4px', color: 'var(--muted)', fontSize: '13px' }}>จะอยู่เมืองเดิม หรือไปเมืองใหม่?</p>
+              <button
+                className="btn btn-primary btn-big"
+                onClick={() => { sfx.levelup(); onWinChoice('travel'); }}
+                disabled={!nextCity}
+              >
+                🚶 เดินทางต่อ{nextCity ? ` — ${nextCity.icon} ${nextCity.name}` : ''}
+                <span className="stay-detail">เมืองใหม่ ความยากกลับสู่ปกติ</span>
+              </button>
+              <button className="btn btn-big btn-stay" onClick={() => { sfx.levelup(); onWinChoice('stay'); }}>
+                🏠 สำรวจ {character.city.name} ต่อ (รอบที่ {stayRound})
+                <span className="stay-detail">ศัตรู x{stayEnemy} · รางวัล x{stayReward}</span>
+              </button>
+            </div>
+          )}
+          {winChoice === 'finish' && (
+            <div className="victory-finish">
+              <div className="victory-finish-summary">
+                <div className="victory-finish-title">📊 สรุปผลการผจญภัย</div>
+                <div className="victory-finish-detail">🧑‍🎤 {character.name} ({character.className}) Lv.{character.level}</div>
+                <div className="victory-finish-detail">💰 ทอง {character.gold} · 📍 {character.city.name}{(character.cityRound || 0) > 0 ? ` รอบที่ ${character.cityRound}` : ''}</div>
+                <div className="victory-finish-detail">👹 บอสที่ชนะ: {boss.icon} {boss.name}</div>
+              </div>
+              <button className="btn btn-primary btn-big" onClick={() => { sfx.levelup(); onWinFinish(); }}>
+                🏠 กลับหน้าหลัก
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

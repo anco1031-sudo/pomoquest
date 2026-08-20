@@ -820,6 +820,13 @@ export default function Game() {
     startPostBossBreak(d.message);
   };
 
+  // หลังชนะบอส — เลือก "จบงาน เลิกโฟกัส" → บันทึกสถิติพัก แล้วกลับหน้าหลัก
+  const bossWinFinish = async () => {
+    await recordBreak();
+    setPostBossNote(null);
+    setPhase('idle');
+  };
+
   // กำลังโฟกัสงานอยู่ → ซ่อน notification (เลเวลอัพ/รางวัล) ไว้แจ้งหลังจบ session แทน
   const inActiveWork = phase === 'work' && running;
   // กำลังพักกลาง session (กดหยุดพัก/กลับหน้าหลัก) → ซ่อน modal รางวัล/เลเวลอัพไว้ก่อน — พัก = หยุดทุกอย่างจริง ๆ
@@ -911,6 +918,7 @@ export default function Game() {
           onAct={bossAct}
           onRetreat={bossRetreat}
           onWinChoice={bossWinChoice}
+          onWinFinish={bossWinFinish}
           onDefeat={bossDefeated}
         />
       )}
@@ -925,6 +933,7 @@ export default function Game() {
           overrun={overrun}
           onSkip={finishBreak}
           onHome={handleBreakHome}
+          onAbort={openAbortModal}
           visit={breakVisit}
           postBoss={postBossNote}
         />
@@ -1061,6 +1070,9 @@ export default function Game() {
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={finishBreak}>▶️ เริ่มโฟกัส</button>
               <button className="btn" onClick={dismissBreakOver}>⏳ ยังพักต่อ (เวลานับต่อไป)</button>
+              {postBossNote && (
+                <button className="btn btn-danger" onClick={openAbortModal}>💨 ทิ้ง session</button>
+              )}
             </div>
           </div>
         </div>

@@ -2391,6 +2391,23 @@ body {
   color: #86efac;
 }
 .btn-stay:hover { background: rgba(34, 197, 94, 0.2); }
+.btn-finish {
+  background: rgba(156, 163, 175, 0.12);
+  border: 1px solid rgba(156, 163, 175, 0.45);
+  color: #d1d5db;
+}
+.btn-finish:hover { background: rgba(156, 163, 175, 0.2); }
+.victory-finish { margin-top: 8px; }
+.victory-finish-summary {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+.victory-finish-title { font-size: 15px; font-weight: 800; color: #a5b4fc; margin-bottom: 6px; }
+.victory-finish-detail { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
 
 /* ---------- ขายของหลายชิ้น: เลือกจำนวน ---------- */
 .qty-picker {

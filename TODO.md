@@ -20,6 +20,7 @@
 - [ ] **README: อธิบาย Class Perks เงื่อนไขเวลาจริง** — "(ตามเวลาระบบของเครื่องคุณ)" (จาก Cher: Should-have #4)
 - [ ] **README: screenshot/สื่อตัวอย่าง UI** — อ้างอิง `public/manifest.json` หรือเพิ่มรูป (จาก Cher: Should-have #3 + Nice-to-have #3)
 - [ ] **README: Changelog/Roadmap สั้นๆ** — 3 จุดใหม่ล่าสุดจาก `git log` (จาก Cher: Nice-to-have #1)
+- [ ] **README: เพิ่ม Boss Victory Flow** — อธิบาย flow ใหม่หลังชนะบอส: เลือก "พักเพื่อโฟกัสต่อ" (อยู่เมืองเดิม/ไปเมืองใหม่) หรือ "จบงาน เลิกโฟกัส" (สรุปผลกลับหน้าหลัก) · เพิ่ม ability ทิ้ง session ได้ระหว่างพักหลังบอส (20-Aug-26)
 - [ ] **ล้าง `.omo/` session state ในเครื่อง** — ไฟล์ session ค้าง (gitignore ไว้แล้ว ไม่กระทบ repo — เป็นการล้างเครื่องล้วนๆ)
 
 ---

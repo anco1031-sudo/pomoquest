@@ -16,7 +16,7 @@ const TABS = [
   { key: 'trophy', label: 'ถ้วยรางวัล', icon: '🏆' },
 ];
 
-export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, visit, postBoss = null }) {
+export default function CampScreen({ remain, total, running, breakOver = false, overrun = 0, onSkip, onHome, onAbort, visit, postBoss = null }) {
   const { character, progress, get, post, inventory, showToast } = useGame();
   const [tab, setTab] = useState('shop');
   const [muted, setMutedState] = useState(isMuted());
@@ -168,6 +168,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
             <button className="btn btn-sm" onClick={onHome} title="กลับหน้าหลัก — เวลาพักยังนับต่อ (หมดเวลาแล้วยังถามเริ่มโฟกัส/ต่อพักเหมือนเดิม)">
               🏠 กลับหน้าหลัก
             </button>
+          )}
+          {postBoss && onAbort && !breakOver && (
+            <button className="btn btn-sm btn-danger" onClick={onAbort} title="ทิ้งเซสชันนี้ (คอมโบโฟกัสจะหายไป)">💨 ทิ้ง session</button>
           )}
           <button className="btn btn-sm" onClick={onSkip}>จบพักเร็ว ⏩</button>
         </div>
