@@ -13,7 +13,7 @@ import StoryQuests from './StoryQuests.jsx';
 import ChallengeTab from './ChallengeTab.jsx';
 import HomeQuickCards from './HomeQuickCards.jsx';
 import DevPanel from './DevPanel.jsx';
-import { rankOf, moraleOf, petMoodOf, petPerkLabel } from '../meta.js';
+import { rankOf, moraleOf, petMoodOf, petPerkLabel, comboBonusOf } from '../meta.js';
 
 const TABS = [
   { key: 'home', label: 'สรุป', icon: '🏠' },
@@ -305,6 +305,14 @@ export default function HomeScreen({ onStart, onContinue = null, pausedRemain = 
                 </span>
                 {progress?.combo_shield > 0 && (
                   <span className="shield-badge" title="🛡️ โล่โฟกัสติดตั้งอยู่ — พัก/ทิ้ง session ครั้งถัดไป คอมโบจะไม่หาย (โล่จะแตก)">🛡️ โล่โฟกัส</span>
+                )}
+                {progress?.streak > 0 && (
+                  <span
+                    className="combo-badge"
+                    title={`🔥 คอมโบโฟกัส ${progress.streak} ครั้ง — จบ session นี้จะได้โบนัส XP x${comboBonusOf(progress.streak).toFixed(1)} (สูงสุด x1.5)`}
+                  >
+                    🔥 คอมโบ x{comboBonusOf(progress.streak).toFixed(1)}
+                  </span>
                 )}
               </div>
             </div>

@@ -54,6 +54,13 @@ export function petPerkLabel(pet) {
   return parts.join(' · ');
 }
 
+// คอมโบโฟกัส — โบนัส XP ของ session ถัดไป (สูตรเดียวกับ server/game.js: bonus = 1 + min(streak-1, 4)*0.1)
+// streak = จำนวน session ที่ทำครบต่อเนื่องแล้ว → จบ session นี้จะได้ bonus = 1 + min(streak, 4)*0.1 (สูงสุด x1.5)
+export function comboBonusOf(streak) {
+  const s = Math.max(0, Math.floor(streak || 0));
+  return 1 + Math.min(s, 4) * 0.1;
+}
+
 // ขวัญกำลังใจ — ดูจากวันสุดท้ายที่โฟกัส (กี่วันแล้ว)
 export function moraleOf(lastFocusDate) {
   if (!lastFocusDate) {

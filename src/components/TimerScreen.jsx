@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../context.jsx';
 import { sfx, isMuted, setMuted } from '../sound.js';
 import { fmtTime, fmtDuration } from './ui.jsx';
-import { petMoodOf, petPerkLabel } from '../meta.js';
+import { petMoodOf, petPerkLabel, comboBonusOf } from '../meta.js';
 
 // auto-discard thresholds (synced with Game.jsx)
 const SHORT_PAUSE_DISCARD_SEC = 10 * 60;
@@ -139,6 +139,14 @@ export default function TimerScreen({ remain, total, running, sessionIdx, sessio
             title="🛡️ โล่โฟกัสติดตั้งอยู่ — พัก/ทิ้ง session ครั้งถัดไป คอมโบจะไม่หาย (โล่จะแตก)"
           >
             🛡️ โล่โฟกัส
+          </span>
+        )}
+        {progress?.streak > 0 && (
+          <span
+            className="combo-badge shield-chip"
+            title={`🔥 คอมโบโฟกัส ${progress.streak} ครั้ง — จบ session นี้จะได้โบนัส XP x${comboBonusOf(progress.streak).toFixed(1)} (สูงสุด x1.5)`}
+          >
+            🔥 คอมโบ x{comboBonusOf(progress.streak).toFixed(1)}
           </span>
         )}
       </div>

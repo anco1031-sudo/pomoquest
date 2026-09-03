@@ -1902,7 +1902,7 @@ body {
 
 /* ---------- ยศ / ขวัญกำลังใจ / โล่โฟกัส (hero card) ---------- */
 .hero-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.rank-badge, .morale-badge, .shield-badge {
+.rank-badge, .morale-badge, .shield-badge, .combo-badge {
   display: inline-flex;
   align-items: center;
   font-size: 11px;
@@ -1915,6 +1915,7 @@ body {
 .morale-badge.ml3 { color: #fca5a5; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
 .morale-badge.ml2 { color: #fcd34d; border-color: rgba(245, 185, 66, 0.4); background: rgba(245, 185, 66, 0.1); }
 .shield-badge { color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); }
+.combo-badge { color: #fdba74; border: 1px solid rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.12); }
 
 /* companion — ฟองเล็กข้างตัวละคร (สัตว์เลี้ยงที่ active / ไข่ถ้ายังไม่มี) */
 .hero-avatar { position: relative; }
