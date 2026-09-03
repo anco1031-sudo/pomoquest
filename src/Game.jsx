@@ -350,13 +350,24 @@ export default function Game() {
 
   // ---- เตือน auto-discard เมื่อพักเกินเวลา (Pomodoro-based) ----
   // พักสั้น > 10 นาที / พักยาว > 60 นาที → เตือน + auto-discard หลัง 5 นาที
+  // นับเวลาพักจากนาฬิกาจริง (Date.now() - pauseStartedAt) ไม่ใช่ pausedTick — กันแท็บเบื้องหลัง/รีโหลดหน้า
+  // ทำให้ตัวนับค้าง (browser throttle setInterval) แล้วพักเกิน 1 ชม. แต่ไม่ทิ้ง session
   useEffect(() => {
     if (running || phase !== 'work' || !pauseStartedAtRef.current) return;
     if (showLongPauseReturn || showAbortReason) return; // มี modal อื่นเปิดอยู่
     if (pauseWarnedAtRef.current) return; // กำลังรอ grace period
-    const elapsed = pausedTick; // วินาทีที่พักมาแล้ว
+    const elapsed = pauseAccumSecRef.current + Math.max(0, Math.floor((Date.now() - pauseStartedAtRef.current) / 1000)); // วินาทีที่พักมาแล้ว (เวลาจริง)
     const threshold = pauseModeRef.current === 'long' ? LONG_PAUSE_DISCARD_SEC : SHORT_PAUSE_DISCARD_SEC;
     const nextWarn = nextPauseWarnTickRef.current;
+    // เลยทั้งเกณฑ์ + grace แล้ว (เช่น กลับมาเปิดหน้าใหม่หลังค้างพักไว้นาน) → ทิ้งทันที ไม่ต้องเตือน
+    if (!nextWarn && elapsed >= threshold + WARN_GRACE_SEC) {
+      const reason = pauseModeRef.current === 'long'
+        ? '⏰ พักยาวนานเกินไป (auto-discard)'
+        : '⏰ พักสั้นนานเกินไป (auto-discard)';
+      abortSession(reason);
+      showToast('⏰ ทิ้ง session อัตโนมัติ — พักนานเกินเกณฑ์');
+      return;
+    }
     if (elapsed >= threshold && (!nextWarn || elapsed >= nextWarn)) {
       setPauseWarnedAt(Date.now());
       // แจ้งเตือนเบราว์เซอร์ (เฉพาะแท็บเบื้องหลัง)
@@ -480,9 +491,9 @@ export default function Game() {
   const dismissPauseWarning = () => {
     if (autoDiscardTimerRef.current) { clearTimeout(autoDiscardTimerRef.current); autoDiscardTimerRef.current = null; }
     setPauseWarnedAt(null);
-    // เลื่อนเตือนครั้งถัดไปเป็น2x ของปัจจุบัน (กันเตือนซ้ำทันที)
+    // เลื่อนเตือนครั้งถัดไปเป็น2x ของปัจจุบัน (กันเตือนซ้ำทันที) — นับจากเวลาจริง (เผื่อ pausedTick ค้างในแท็บเบื้องหลัง)
     setNextPauseWarnTick((prev) => {
-      const cur = prev || pausedTick;
+      const cur = prev || (pauseAccumSecRef.current + Math.max(0, Math.floor((Date.now() - pauseStartedAtRef.current) / 1000)));
       return cur * 2;
     });
   };
@@ -1198,7 +1209,7 @@ export default function Game() {
           <div className="modal">
             <h2>⏰ พักนานเกินเกณฑ์!</h2>
             <p>
-              {pauseMode === 'long' ? '😴 พักยาว' : '⏸️ พักสั้น'} มานาน <b>{fmtDuration(pausedTick)}</b>
+              {pauseMode === 'long' ? '😴 พักยาว' : '⏸️ พักสั้น'} มานาน <b>{fmtDuration(pausedSec)}</b>
               {pauseMode === 'long' ? ' (เกิน 60 นาที)' : ' (เกิน 10 นาที)'}
               <br />
               ⏳ เหลืออีก <b>{fmtDuration(Math.max(0, WARN_GRACE_SEC - Math.floor((Date.now() - pauseWarnedAt) / 1000)))}</b> ก่อนทิ้ง session อัตโนมัติ
