@@ -151,6 +151,7 @@ export default function Game() {
   const pauseWarnedAtRef = useRef(null);
   const nextPauseWarnTickRef = useRef(null);
   const autoDiscardTimerRef = useRef(null);
+  const abortingRef = useRef(false); // กัน abort ซ้ำ (auto-discard race) — โล่จะได้ไม่ถูกใช้แล้วคอมโบหายตาม
   pauseStartedAtRef.current = pauseStartedAt;
   pauseAccumSecRef.current = pauseAccumSec;
   pauseModeRef.current = pauseMode;
@@ -258,8 +259,7 @@ export default function Game() {
               : '⏰ พักสั้นนานเกินไป (auto-discard)';
             abortSession(reason);
             showToast('⏰ ทิ้ง session อัตโนมัติ — พักนานเกินเกณฑ์');
-            setPauseWarnedAt(null);
-            setNextPauseWarnTick(null);
+            // cleanup (pauseWarnedAt ฯลฯ) อยู่ที่ resetPause() หลัง abortSession เสร็จ — กัน effect รันซ้ำระหว่าง POST ค้าง
           }, remaining * 1000);
         } else {
           // เลย grace period แล้ว → ทิ้งเลย
@@ -380,8 +380,8 @@ export default function Game() {
           : '⏰ พักสั้นนานเกินไป (auto-discard)';
         abortSession(reason);
         showToast('⏰ ทิ้ง session อัตโนมัติ — พักนานเกินเกณฑ์');
-        setPauseWarnedAt(null);
-        setNextPauseWarnTick(null);
+        // ไม่ล้าง pauseWarnedAt ตรงนี้ก่อน POST เสร็จ — กัน effect รันซ้ำ (guard pauseWarnedAt) ตอน request ยังค้าง
+        // cleanup จริงอยู่ที่ resetPause() หลัง abortSession เสร็จ
       }, WARN_GRACE_SEC * 1000);
     }
   }, [pausedTick, running, phase, showLongPauseReturn, showAbortReason]);
@@ -719,8 +719,16 @@ export default function Game() {
 
   // ทิ้งเซสชันจริง (เรียกจาก modal ถามเหตุผลที่ตัดสินใจแล้วเท่านั้น)
   const abortSession = async (reason = '') => {
-    // ส่งเหตุผล + โฟกัสไปแล้วกี่วินาที — เก็บสถิติ/ดูย้อนหลัง (ถ้าใช้โล่ กันคอมโบ — server โชว์ toast ยืนยันเองผ่าน d.message กัน toast ซ้อน)
-    await post('/adventure/abort', { reason, focusSec: elapsedRef.current });
+    // กัน abort ซ้ำ (auto-discard race — POST ครั้งแรกยังไม่ทันจบ effect รันซ้ำอีกครั้ง):
+    // ถ้าซ้ำ ครั้งแรกใช้โล่กันคอมโบ (โล่แตก) แล้วครั้งที่สองโล่ไม่มีแล้ว → คอมโบหายจริง = โล่เหมือนไม่เคยกัน
+    if (abortingRef.current) return;
+    abortingRef.current = true;
+    try {
+      // ส่งเหตุผล + โฟกัสไปแล้วกี่วินาที — เก็บสถิติ/ดูย้อนหลัง (ถ้าใช้โล่ กันคอมโบ — server โชว์ toast ยืนยันเองผ่าน d.message กัน toast ซ้อน)
+      await post('/adventure/abort', { reason, focusSec: elapsedRef.current });
+    } finally {
+      abortingRef.current = false;
+    }
     setPhase('idle');
     setRunning(false);
     setPausedAtHome(false);
