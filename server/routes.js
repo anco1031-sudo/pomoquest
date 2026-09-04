@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import {
   db, DB_PATH, getCharacter, getCharacters, getProgress, getSettings, getInventory, getLog, addLog,
   addItem, updateCharacter, getActiveCharacterId, setActiveCharacter, deleteCharacter, bumpDaily, today,
-  getSkillRow, learnSkill, getEpoch, rotateEpoch, learnRecipe, getLearnedRecipes, addTrophy, getTrophies,
+  getSkillRow, learnSkill, getEpoch, rotateEpoch, learnRecipe, getLearnedRecipes, getRecipeRow, upgradeRecipeTier, upgradeScrollTier, addTrophy, getTrophies,
   getPets, getPet, getActivePet, getStoredPets, setActivePet, storePet, unstorePet, releasePet, grantPetXp, setPetTrapShield,
 } from './db.js';
 import {
@@ -641,9 +641,10 @@ router.get('/camp', (req, res) => {
     const rc = RECIPE_BY_ID[rid];
     if (!rc) return null;
     const result = ITEM_BY_ID[rc.result.id];
+    const tier = getRecipeRow(c.id, rc.id)?.tier || 1; // ระดับสูตร (แบบแปลนซ้ำ → +1) — คราฟต์ได้ของ x tier
     return {
-      id: rc.id, name: rc.name, icon: rc.icon, desc: rc.desc,
-      result: { id: result?.id, name: result?.name, icon: result?.icon, qty: rc.result.qty },
+      id: rc.id, name: rc.name, icon: rc.icon, desc: rc.desc, tier,
+      result: { id: result?.id, name: result?.name, icon: result?.icon, qty: rc.result.qty * tier },
       materials: rc.materials.map((m) => {
         const it = ITEM_BY_ID[m.id];
         return { id: m.id, name: it?.name, icon: it?.icon, qty: m.qty, have: inventory.find((x) => x.item_id === m.id)?.qty || 0 };
@@ -787,11 +788,22 @@ router.post('/inventory/use', (req, res) => {
   let used = false;
   let ups = 0;
 
-  // แบบแปลนสูตรคราฟต์ — ใช้แล้วเรียนรู้สูตร (เรียนซ้ำไม่ได้ เหมือนคัมภีร์สกิล)
+  // แบบแปลนสูตรคราฟต์ — ใช้แล้วเรียนรู้สูตร · ซ้ำ → ยกระดับสูตร (tier +1) คราฟต์ได้ของ x tier
   if (item.type === 'blueprint') {
     const rc = RECIPE_BY_ID[item.learn_recipe];
     if (!rc) return res.status(400).json({ error: 'แบบแปลนนี้ใช้ไม่ได้' });
-    if (getLearnedRecipes(c.id).includes(rc.id)) return res.status(400).json({ error: `เรียนรู้สูตร ${rc.name} ไปแล้ว — แบบแปลนซ้ำใช้ไม่ได้` });
+    const row = getRecipeRow(c.id, rc.id);
+    if (row) {
+      const newTier = upgradeRecipeTier(c.id, rc.id);
+      db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+      addLog(c.id, { type: 'recipe_upgrade', title: `📋 ยกระดับสูตร: ${rc.icon} ${rc.name} → ระดับ ${newTier}`, detail: `จาก ${item.name} — คราฟต์ได้ของ x${newTier} แล้ว!` });
+      return res.json({
+        ...serialize(c), inventory: getInventory(c.id),
+        message: `📋 แบบแปลนซ้ำ! ยกระดับสูตร ${rc.name} เป็นระดับ ${newTier} — คราฟต์ครั้งละ x${newTier}!`,
+        ...dailyPayload(c),
+        levelUps: { levels: 0, statPoints: c.stat_points },
+      });
+    }
     learnRecipe(c.id, rc.id);
     db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
     addLog(c.id, { type: 'recipe_learn', title: `📋 เรียนรู้สูตรใหม่: ${rc.icon} ${rc.name}`, detail: `จาก ${item.name} — ไปคราฟต์ได้ที่แท็บ 🛠️ คราฟต์ในค่ายพัก` });
@@ -805,11 +817,22 @@ router.post('/inventory/use', (req, res) => {
     });
   }
 
-  // คัมภีร์สกิลหายาก — ใช้แล้วเรียนรู้สกิลใหม่ (เรียนซ้ำไม่ได้)
+  // คัมภีร์สกิลหายาก — ใช้แล้วเรียนรู้สกิลใหม่ · ซ้ำ → ยกระดับคัมภีร์ (tier +1) สกิลแรงขึ้น x1.1/ระดับ
   if (item.type === 'scroll') {
     const sk = SCROLL_SKILL_BY_ID[item.learn_skill];
     if (!sk) return res.status(400).json({ error: 'คัมภีร์นี้ใช้ไม่ได้' });
-    if (getSkillRow(c.id, sk.id)) return res.status(400).json({ error: `เรียนรู้สกิล ${sk.name} ไปแล้ว — คัมภีร์ซ้ำใช้ไม่ได้` });
+    const row = getSkillRow(c.id, sk.id);
+    if (row) {
+      const newTier = upgradeScrollTier(c.id, sk.id);
+      db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
+      addLog(c.id, { type: 'skill_upgrade', title: `📖 ยกระดับคัมภีร์: ${sk.icon} ${sk.name} → ระดับ ${newTier}`, detail: `จาก ${item.name} — สกิลแรงขึ้น x${(1.1 ** (newTier - 1)).toFixed(2)}!` });
+      return res.json({
+        ...serialize(c), inventory: getInventory(c.id),
+        message: `📖 คัมภีร์ซ้ำ! ยกระดับ ${sk.name} เป็นคัมภีร์ระดับ ${newTier} — พลัง x${(1.1 ** (newTier - 1)).toFixed(2)}!`,
+        ...dailyPayload(c),
+        levelUps: { levels: 0, statPoints: c.stat_points },
+      });
+    }
     learnSkill(c.id, sk.id, 'scroll');
     db.prepare('UPDATE inventory SET qty = qty - 1 WHERE character_id = ? AND item_id = ?').run(c.id, itemId);
     addLog(c.id, { type: 'skill_learn', title: `📖 เรียนรู้สกิลใหม่: ${sk.icon} ${sk.name}`, detail: `จาก ${item.name} — ใช้สู้บอสได้เลย! (${sk.mp} MP)` });
@@ -1023,19 +1046,22 @@ router.post('/craft', (req, res) => {
       return res.status(400).json({ error: `วัสดุไม่พอ: ${it?.icon || ''} ${it?.name || m.id} ต้องใช้ ${m.qty} ชิ้น (มี ${have})` });
     }
   }
+  // ระดับสูตร (แบบแปลนซ้ำ → +1) — คราฟต์ได้ของ x tier
+  const tier = getRecipeRow(c.id, rc.id)?.tier || 1;
+  const makeQty = (rc.result.qty || 1) * tier;
   // กระเป๋าเต็ม + ยังไม่เคยมีของที่คราฟต์ได้ → บล็อก (กันของที่คราฟต์ไปโดนขาย/หาย)
   const result = ITEM_BY_ID[rc.result.id];
-  const preCheck = acquireItem(c, result.id, rc.result.qty || 1, { fullMode: 'block', checkOnly: true });
+  const preCheck = acquireItem(c, result.id, makeQty, { fullMode: 'block', checkOnly: true });
   if (preCheck.blocked) {
     return res.status(400).json({ error: `🎒 กระเป๋าเต็ม (${preCheck.used}/${preCheck.cap}) — ขายของก่อนคราฟต์ (${result.icon} ${result.name} จะใช้ช่องใหม่)` });
   }
   for (const m of rc.materials) {
     db.prepare('UPDATE inventory SET qty = qty - ? WHERE character_id = ? AND item_id = ?').run(m.qty, c.id, m.id);
   }
-  acquireItem(c, result.id, rc.result.qty || 1, { fullMode: 'block' }); // เช็คผ่านแล้ว → เพิ่มได้
+  acquireItem(c, result.id, makeQty, { fullMode: 'block' }); // เช็คผ่านแล้ว → เพิ่มได้
   const matLabel = rc.materials.map((m) => `${ITEM_BY_ID[m.id]?.icon} ${ITEM_BY_ID[m.id]?.name} x${m.qty}`).join(' + ');
-  addLog(c.id, { type: 'craft', title: `🛠️ คราฟต์: ${rc.icon} ${rc.name}`, detail: `${matLabel} → ได้ ${result.icon} ${result.name} x${rc.result.qty || 1}` });
-  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `🛠️ คราฟต์ ${result.icon} ${result.name} สำเร็จ!` });
+  addLog(c.id, { type: 'craft', title: `🛠️ คราฟต์: ${rc.icon} ${rc.name}${tier > 1 ? ` (ระดับ ${tier})` : ''}`, detail: `${matLabel} → ได้ ${result.icon} ${result.name} x${makeQty}` });
+  res.json({ ...serialize(c), inventory: getInventory(c.id), message: `🛠️ คราฟต์ ${result.icon} ${result.name} x${makeQty} สำเร็จ!${tier > 1 ? ` (ระดับสูตร ${tier})` : ''}` });
 });
 
 const SLOT_NAMES = {

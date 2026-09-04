@@ -3,7 +3,7 @@
 //    — แสดงผลเหมือนจริง (เลเวล/ทอง/ไอเทม/ตรา) แต่ไม่บันทึกอะไรลง DB (กันปั๊มเลเวล)
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { db, getCharacter, getProgress, getInventory, addItem, addLog, updateCharacter, bumpDaily, getSkillRow, learnSkill } from './db.js';
+import { db, getCharacter, getProgress, getInventory, addItem, addLog, updateCharacter, bumpDaily, getSkillRow, learnSkill, upgradeScrollTier } from './db.js';
 import { ITEM_BY_ID, CITIES, ACHIEVEMENTS, SECRET_ACHIEVEMENTS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID } from './data.js';
 import { serializeCharacter, gainXp, generateBoss, computeStats, getCharacterSkills, grantSkillXp, bmStockFor, BM_JUNK_MULT, exploreRewardMult } from './game.js';
 import { checkAchievements } from './achievements.js';
@@ -201,14 +201,17 @@ router.post('/dev/achieve', requireDev, (req, res) => {
   });
 });
 
-// เรียนรู้สกิลสุ่มจากคัมภีร์ (ทดสอบระบบสกิลคัมภีร์)
+// เรียนรู้สกิลสุ่มจากคัมภีร์ (ทดสอบระบบสกิลคัมภีร์) — ซ้ำ = ยกระดับคัมภีร์ tier
 router.post('/dev/learn-skill', requireDev, (req, res) => {
   const id = req.body?.skillId || SCROLL_SKILLS[Math.floor(Math.random() * SCROLL_SKILLS.length)].id;
   const sk = SCROLL_SKILL_BY_ID[id];
   if (!sk) return res.status(400).json({ error: 'สกิลไม่พบ (ดู id ใน server/data.js)' });
   dryRun(res, (c) => {
-    if (getSkillRow(c.id, sk.id)) {
-      return { message: `📖 ลองเล่น: เรียนรู้ ${sk.name} อยู่แล้ว (ไม่บันทึก)` };
+    const row = getSkillRow(c.id, sk.id);
+    if (row) {
+      const tier = upgradeScrollTier(c.id, sk.id);
+      addLog(c.id, { type: 'skill_upgrade', title: `📖 ยกระดับคัมภีร์ (dev): ${sk.icon} ${sk.name} → ระดับ ${tier}`, detail: `จาก dev panel — พลัง x${(1.1 ** (tier - 1)).toFixed(2)} (ไม่บันทึก)` });
+      return { message: `📖 ลองเล่น: ยกระดับคัมภีร์ ${sk.name} เป็นระดับ ${tier} (ไม่บันทึก)` };
     }
     learnSkill(c.id, sk.id, 'scroll');
     addLog(c.id, { type: 'skill_learn', title: `📖 เรียนรู้สกิล (dev): ${sk.icon} ${sk.name}`, detail: `จาก dev panel — ใช้สู้บอสได้เลย! (${sk.mp} MP)` });

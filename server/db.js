@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS character_skill (
   level INTEGER DEFAULT 1,
   xp INTEGER DEFAULT 0,
   source TEXT DEFAULT 'class',
+  tier INTEGER DEFAULT 1,
   PRIMARY KEY (character_id, skill_id)
 );
 
@@ -177,6 +178,7 @@ CREATE TABLE IF NOT EXISTS character_recipe (
   character_id INTEGER NOT NULL,
   recipe_id TEXT NOT NULL,
   learned_at TEXT DEFAULT (datetime('now','localtime')),
+  tier INTEGER DEFAULT 1,
   PRIMARY KEY (character_id, recipe_id)
 );
 
@@ -240,6 +242,10 @@ ensureColumn('progress', 'gift_opens', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'hard_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'marathon_cycles', 'INTEGER DEFAULT 0');
 ensureColumn('progress', 'survival_cycles', 'INTEGER DEFAULT 0');
+// ระดับคัมภีร์ (tier) — สกิลจากคัมภีร์ ใช้คัมภีร์ซ้ำ → +1 ระดับ (สกิลแรงขึ้น x1.1/ระดับ แยกจากเลเวลสกิล) · สกิลคลาส = 1 เสมอ
+ensureColumn('character_skill', 'tier', 'INTEGER DEFAULT 1');
+// ระดับสูตรคราฟต์ (tier) — สูตรจากแบบแปลน ใช้แบบแปลนซ้ำ → +1 ระดับ (คราฟต์ได้ของเพิ่มขึ้น)
+ensureColumn('character_recipe', 'tier', 'INTEGER DEFAULT 1');
 ensureColumn('settings', 'active_character_id', 'INTEGER');
 // reset_epoch — "โลกเวอร์ชัน" ของข้อมูลเกม: เปลี่ยนทุกครั้งที่ล้างข้อมูล (reset / ลบ DB / restore)
 // client เก็บ epoch ไว้กับ timer ที่พักค้างใน localStorage — ถ้าไม่ตรงกับ server แปลว่า session นั้น
@@ -328,6 +334,12 @@ seedItems();
 for (const i of ITEMS) {
   if (i.handed === 2) db.prepare('UPDATE item SET handed = 2 WHERE id = ?').run(i.id);
 }
+// กัน DB เก่า: อัปเดตชื่อ/คำอธิบายคัมภีร์ (scroll) + แบบแปลน (blueprint) — ระบบยกระดับ tier (ซ้ำใช้ได้แล้ว)
+for (const i of ITEMS) {
+  if (i.type === 'scroll' || i.type === 'blueprint') {
+    db.prepare('UPDATE item SET name = ?, desc = ? WHERE id = ?').run(i.name, i.desc, i.id);
+  }
+}
 
 // seed settings
 db.prepare(`INSERT OR IGNORE INTO settings (id, work_min, short_break_min, long_break_min, sessions_per_cycle, event_every_sec)
@@ -406,7 +418,7 @@ export const rotateEpoch = () => {
 export const getInventory = (charId) => db.prepare(`
   SELECT inv.item_id, inv.qty, item.name, item.icon, item.type, item.price, item.heal_pct, item.mana_pct,
          item.hp_bonus, item.mp_bonus, item.atk_bonus, item.def_bonus, item.spd_bonus, item.crit_bonus, item.desc,
-         item.use_xp, item.use_gold, item.exclusive, item.handed, item.learn_skill
+         item.use_xp, item.use_gold, item.exclusive, item.handed, item.learn_skill, item.learn_recipe
   FROM inventory inv JOIN item ON item.id = inv.item_id
   WHERE inv.character_id = ? AND inv.qty > 0
   ORDER BY item.type, item.id`).all(charId).map((r) => {
@@ -425,11 +437,13 @@ export function addLog(charId, { type, title, detail, xp = 0, gold = 0, focusSec
 }
 
 // ----- สกิลของตัวละคร (เลเวล/XP ของสกิล — คลาส + สกิลจากคัมภีร์) -----
+// tier = ระดับคัมภีร์ (เฉพาะสกิลจากคัมภีร์) — ใช้คัมภีร์ซ้ำของสกิลที่เรียนแล้ว → +1 ระดับ (สกิลแรงขึ้น x1.1/ระดับ)
+// แยกกับ level (เลเวลสกิลจาก XP — สะสมเมื่อใช้สู้บอส/event) — ทั้งคู่คูณรวมกันตอนคำนวณพลัง
 export const getSkillRows = (charId) =>
-  db.prepare('SELECT skill_id, level, xp, source FROM character_skill WHERE character_id = ?').all(charId);
+  db.prepare('SELECT skill_id, level, xp, source, tier FROM character_skill WHERE character_id = ?').all(charId);
 
 export const getSkillRow = (charId, skillId) =>
-  db.prepare('SELECT skill_id, level, xp, source FROM character_skill WHERE character_id = ? AND skill_id = ?').get(charId, skillId);
+  db.prepare('SELECT skill_id, level, xp, source, tier FROM character_skill WHERE character_id = ? AND skill_id = ?').get(charId, skillId);
 
 // upsert: บันทึกเลเวล/XP ของสกิล (คลาสเริ่ม level 1 ไม่มีแถว — มีแถวเมื่อเริ่มสะสม XP)
 export const upsertSkillRow = (charId, skillId, level, xp, source = 'class') => {
@@ -444,12 +458,36 @@ export const learnSkill = (charId, skillId, source = 'scroll') =>
     .run(charId, skillId, source).changes;
 
 // ----- สูตรคราฟต์ที่เรียนรู้แล้ว (จากแบบแปลน blueprint) -----
+// tier = ระดับสูตร (เฉพาะสูตรที่เรียนจากแบบแปลน) — ใช้แบบแปลนซ้ำของสูตรที่เรียนแล้ว → +1 ระดับ (คราฟต์ได้ของเพิ่มขึ้น)
+// (ยังไม่มีคอลัมน์ level/XP — ระดับสูตรคือ tier ตัวเดียวที่อัปจากแบบแปลนซ้ำ)
 export const getLearnedRecipes = (charId) =>
   db.prepare('SELECT recipe_id FROM character_recipe WHERE character_id = ?').all(charId).map((r) => r.recipe_id);
+
+export const getRecipeRow = (charId, recipeId) =>
+  db.prepare('SELECT recipe_id, tier FROM character_recipe WHERE character_id = ? AND recipe_id = ?').get(charId, recipeId);
+
+export const getRecipeRows = (charId) =>
+  db.prepare('SELECT recipe_id, tier FROM character_recipe WHERE character_id = ?').all(charId);
 
 // เรียนรู้สูตรจากแบบแปลน — ถ้าอยู่แล้วไม่ทำอะไร (คืน 0) / ใหม่คืน 1
 export const learnRecipe = (charId, recipeId) =>
   db.prepare('INSERT OR IGNORE INTO character_recipe (character_id, recipe_id) VALUES (?, ?)').run(charId, recipeId).changes;
+
+// ยกระดับสูตรคราฟต์จากแบบแปลนซ้ำ — คืนระดับใหม่ (0 = ยังไม่เรียนสูตร)
+export const upgradeRecipeTier = (charId, recipeId) => {
+  const row = getRecipeRow(charId, recipeId);
+  if (!row) return 0;
+  db.prepare('UPDATE character_recipe SET tier = tier + 1 WHERE character_id = ? AND recipe_id = ?').run(charId, recipeId);
+  return row.tier + 1;
+};
+
+// ยกระดับคัมภีร์สกิล (ระดับคัมภีร์) จากคัมภีร์ซ้ำ — คืนระดับใหม่ (0 = ยังไม่เรียนสกิล)
+export const upgradeScrollTier = (charId, skillId) => {
+  const row = getSkillRow(charId, skillId);
+  if (!row) return 0;
+  db.prepare('UPDATE character_skill SET tier = tier + 1 WHERE character_id = ? AND skill_id = ?').run(charId, skillId);
+  return row.tier + 1;
+};
 
 // ----- ถ้วยรางวัล (ห้องเก็บถ้วย — ชนะบอสครั้งแรกของบอสนั้น) -----
 export const addTrophy = (charId, bossKey, icon) =>

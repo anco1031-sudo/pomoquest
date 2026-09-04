@@ -168,9 +168,12 @@ function SkillList({ skills }) {
         <div className="skill-card" key={s.id}>
           <div className="skill-card-top">
             <span className="skill-card-name">{s.icon} {s.name}</span>
-            <span className="skill-card-level">Lv.{s.level}{s.source === 'scroll' ? ' 📜' : ''}</span>
+            <span className="skill-card-right">
+              <span className="skill-card-level">Lv.{s.level}{s.source === 'scroll' ? ' 📜' : ''}</span>
+              {s.tier > 1 ? <span className="scroll-tier-chip" title="ระดับคัมภีร์ — ใช้คัมภีร์ซ้ำเพื่อยกระดับ (พลัง x1.1/ระดับ แยกจากเลเวลสกิล)">📜 ระดับ {s.tier}</span> : null}
+            </span>
           </div>
-          <div className="skill-card-desc">{s.desc} · <b className="skill-mp">{s.mp} MP</b></div>
+          <div className="skill-card-desc">{s.desc} · <b className="skill-mp">{s.mp} MP</b>{s.tier > 1 ? <span className="skill-tier-note"> · 📜 พลังรวม x{(1.1 ** (s.tier - 1)).toFixed(2)}</span> : null}</div>
           <div className="skill-xp-row">
             {s.level >= s.maxLevel ? (
               <span className="skill-maxed">⭐ เลเวลสูงสุดแล้ว</span>
@@ -420,7 +423,7 @@ export default function CharacterSheet() {
 
       <Panel title={`⚡ สกิล (${(character.skills || []).length})`}>
         <SkillList skills={character.skills} />
-        <p className="hint">💡 สกิลสะสม XP ทุกครั้งที่ใช้สู้บอส — เลเวลยิ่งสูง ยิ่งแรง (+10%/เลเวล) · คัมภีร์หายาก 📜 เรียนสกิลเพิ่มได้จากกล่องสมบัติ</p>
+        <p className="hint">💡 สกิลสะสม XP ทุกครั้งที่ใช้สู้บอส — เลเวลยิ่งสูง ยิ่งแรง (+10%/เลเวล) · คัมภีร์หายาก 📜 เรียนสกิลเพิ่มได้จากกล่องสมบัติ — ใช้คัมภีร์ซ้ำของสกิลที่เรียนแล้ว = ยกระดับคัมภีร์ (พลัง x1.1/ระดับ แยกจากเลเวลสกิล)</p>
       </Panel>
 
       <PetStable />
@@ -491,9 +494,13 @@ export default function CharacterSheet() {
                       {i.useGift ? '🎁 เปิด' : i.usePetBag ? '👜 เก็บสัตว์' : 'ใช้'}
                     </button>
                   ) : i.type === 'scroll' ? (
-                    <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📖 เรียนรู้</button>
+                    <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>
+                      {(character.skills || []).some((s) => s.id === i.learn_skill) ? '📖 ยกระดับ' : '📖 เรียนรู้'}
+                    </button>
                   ) : i.type === 'blueprint' ? (
-                    <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>📋 เรียนรู้สูตร</button>
+                    <button className="btn btn-sm btn-skill" onClick={() => useItem(i)}>
+                      {character.learnedRecipes?.[i.learn_recipe] ? `📋 ยกระดับ (ระดับ ${character.learnedRecipes[i.learn_recipe] + 1})` : '📋 เรียนรู้สูตร'}
+                    </button>
                   ) : i.type === 'junk' ? (
                     <span className="junk-note">ขายได้ที่แคมป์</span>
                   ) : (

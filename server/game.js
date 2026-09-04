@@ -1,5 +1,5 @@
 import { CLASSES, CLASS_PERKS, ITEMS, ITEM_BY_ID, CITIES, BOSSES, ALT_BOSSES, altBossAt, BOSS_SKILLS, BOSS_LOADOUTS, BOSS_ULTS, MONSTERS, CITY_MONSTERS, EVENT_POOL, QUESTS, COMMON_LOOT, RARE_JUNK, SKILLS, SCROLL_SKILLS, SCROLL_SKILL_BY_ID, SCROLL_ITEMS, RANKS, FESTIVALS, STORY_QUESTS, WANDERING_BOSSES, GOLDEN_DRAGON_BOSS, RECIPES, RECIPE_BY_ID, BLUEPRINT_ITEMS, MYSTERY_BOX_ID, PETS, PET_BY_ID, PET_EGG_ID, PET_RARITY_ROLL, PET_BAG_ID, petXpToNext } from './data.js';
-import { today, getSkillRows, getSkillRow, upsertSkillRow, getLearnedRecipes, getPets, getActivePet, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
+import { today, getSkillRows, getSkillRow, upsertSkillRow, getLearnedRecipes, getRecipeRows, getPets, getActivePet, getProgress, grantPetXp, setPetTrapShield, getInventory, addItem, bagSlots, bagSlotsUsed, updateCharacter, addPet, setActivePet, addLog } from './db.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -65,7 +65,8 @@ const mulberry32 = (a) => () => {
 // ----- ตลาดมืด (black market) — เจอสุ่ม ~25% ต่อค่ายพัก (deterministic จาก visit — refresh แล้วเหมือนเดิม) -----
 // เลือก "สำรวจเมืองเดิมต่อ" หลังชนะบอส → โอกาสเจอตลาดมืดเพิ่มขึ้น (+10% ต่อรอบ สูงสุด +35%)
 // รับซื้อของขวัญ (junk) แพงกว่าปกติ +25% · ขาย: คัมภีร์สกิล (ลด 15%), ของหายาก (ลด 25%), ของเถื่อนเก็งกำไร (ลด 45%), ของพิเศษ exclusive (ลด 10%)
-// คัมภีร์ไม่การันตี — มีโอกาส ~45% ต่อตลาดมืด (BM_SCROLL_CHANCE) · ไม่เจอ → แบบแปลน 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้วไม่ขายคัมภีร์อีก / เรียนสูตรคราฟต์ครบ 4 สูตรแล้วไม่ขายแบบแปลนอีก (กันช่องตาย)
+// คัมภีร์ไม่การันตี — มีโอกาส ~45% ต่อตลาดมืด (BM_SCROLL_CHANCE) · ไม่เจอ → แบบแปลน 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้วไม่ขายคัมภีร์อีก / เรียนสูตรคราฟต์ครบ 4 สูตรแล้วไม่ขายแบบแปลนอีก
+// (อัปเกรดคัมภีร์/สูตรได้จากของซ้ำที่ดรอป/กล่องลึกลับเท่านั้น — ตลาดมืดไม่ปั่นยกระดับ)
 // junk (ของหายาก/ขยะ) ขายราคาเต็ม — ตลาดมืดรับซื้อ junk +25% (BM_JUNK_MULT) อยู่แล้ว ถ้าลดราคาขายด้วย = ซื้อลดแล้วขายคืนกำไร (ปั่นทอง)
 export const BM_OPEN_CHANCE = 0.25;
 export const BM_JUNK_MULT = 1.25;
@@ -80,8 +81,9 @@ export function bmStockFor(visit, c = null) {
   const rng = seededRng(`bm-stock-${visit}`);
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   // ช่องคัมภีร์ — ไม่การันตีแล้ว: มีโอกาส ~45% ที่ตลาดมืดจะเอาคัมภีร์มาขาย (เทียบกล่องสมบัติ ~0.36% ต่อกล่อง ยังคุ้มกว่าเยอะ)
-  // ไม่เจอคัมภีร์ → สุ่มเป็นแบบแปลนสูตรคราฟต์ 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้ว → ไม่ขายคัมภีร์อีกเลย (กันช่องตาย — เรียนซ้ำไม่ได้)
+  // ไม่เจอคัมภีร์ → สุ่มเป็นแบบแปลนสูตรคราฟต์ 📋 / ของหายากแทน · เรียนคัมภีร์ครบ 6 เล่มแล้ว → ไม่ขายคัมภีร์อีกเลย
   // แบบแปลนก็เหมือนกัน: เรียนสูตรคราฟต์ครบ 4 สูตรแล้ว → ไม่ขายแบบแปลนอีก (ช่องนั้นเป็นของหายากแทน)
+  // (สุ่มจาก 6 เล่ม/4 สูตร — อาจซ้ำกับที่เรียนแล้วก็ได้ → ใช้ยกระดับ tier · เรียนครบแล้ว = ปิดช่อง กันปั่นยกระดับไม่อั้น)
   const learnedSkills = new Set((c?.id ? getSkillRows(c.id) : []).map((s) => s.skill_id));
   const allScrollsLearned = SCROLL_ITEMS.every((id) => learnedSkills.has(ITEM_BY_ID[id].learn_skill));
   const learnedRecipes = new Set(c?.id ? getLearnedRecipes(c.id) : []);
@@ -270,18 +272,21 @@ export function equipBlockReason(c, item) {
 export const SKILL_MAX_LEVEL = 5;
 export const skillXpToNext = (level) => 30 * level; // 1→2 ต้อง 30, 2→3 ต้อง 60 …
 
-// คำนวณพลังของสกิลตามเลเวล — คืนสกิลพร้อมค่าที่ scale แล้ว + ข้อมูล XP/เลเวล
-export function skillPower(skill, level = 1, xp = 0, source = 'class') {
+// คำนวณพลังของสกิลตามเลเวล + ระดับคัมภีร์ — คืนสกิลพร้อมค่าที่ scale แล้ว + ข้อมูล XP/เลเวล/ระดับคัมภีร์
+// level = เลเวลสกิล (XP จากใช้สู้บอส/event) · tier = ระดับคัมภีร์ (เฉพาะสกิลจากคัมภีร์ — ใช้คัมภีร์ซ้ำ → +1)
+// คูณรวมกัน: เลเวล +10%/เลเวล (ทบต้น) · คัมภีร์ x1.1/ระดับ (ทบต้น ไม่จำกัด) — แยกมิติกันทั้งคู่
+export function skillPower(skill, level = 1, xp = 0, source = 'class', tier = 1) {
   const s = (level - 1) * 0.1; // +10% ต่อเลเวล
-  const out = { ...skill, level, xp, xpNext: skillXpToNext(level), maxLevel: SKILL_MAX_LEVEL, source };
-  if (skill.dmg != null) out.dmg = +(skill.dmg * (1 + s)).toFixed(2);
-  if (skill.healPct != null) out.healPct = +(skill.healPct * (1 + s)).toFixed(3);
-  if (skill.freeze != null) out.freeze = +(skill.freeze + (level - 1) * 0.02).toFixed(2);
-  if (skill.poison != null) out.poison = +(skill.poison + (level - 1) * 0.01).toFixed(3);
-  if (skill.buffAtk != null) out.buffAtk = +(skill.buffAtk + (level - 1) * 0.05).toFixed(2);
-  if (skill.mpHeal != null) out.mpHeal = Math.round(skill.mpHeal * (1 + s));
-  if (skill.shield != null) out.shield = +(skill.shield + (level - 1) * 0.05).toFixed(2);
-  if (skill.hits != null) out.hits = skill.hits + Math.floor((level - 1) / 2); // +1 ครั้งทุก 2 เลเวล
+  const tm = Math.pow(1.1, (tier || 1) - 1); // ระดับคัมภีร์ x1.1/ระดับ (ทบต้น) — tier 1 = x1
+  const out = { ...skill, level, xp, xpNext: skillXpToNext(level), maxLevel: SKILL_MAX_LEVEL, source, tier: tier || 1 };
+  if (skill.dmg != null) out.dmg = +(skill.dmg * (1 + s) * tm).toFixed(2);
+  if (skill.healPct != null) out.healPct = +(skill.healPct * (1 + s) * tm).toFixed(3);
+  if (skill.freeze != null) out.freeze = +((skill.freeze + (level - 1) * 0.02) * tm).toFixed(2);
+  if (skill.poison != null) out.poison = +((skill.poison + (level - 1) * 0.01) * tm).toFixed(3);
+  if (skill.buffAtk != null) out.buffAtk = +((skill.buffAtk + (level - 1) * 0.05) * tm).toFixed(2);
+  if (skill.mpHeal != null) out.mpHeal = Math.round(skill.mpHeal * (1 + s) * tm);
+  if (skill.shield != null) out.shield = +((skill.shield + (level - 1) * 0.05) * tm).toFixed(2);
+  if (skill.hits != null) out.hits = skill.hits + Math.floor((level - 1) / 2); // +1 ครั้งทุก 2 เลเวล (จำนวนครั้งไม่ทบกับคัมภีร์ — แรงขึ้นผ่าน dmg ต่อครั้ง)
   return out;
 }
 
@@ -332,7 +337,7 @@ export function getCharacterSkills(c) {
   });
   const scrollSkills = rows
     .filter((r) => SCROLL_SKILL_BY_ID[r.skill_id])
-    .map((r) => skillPower(SCROLL_SKILL_BY_ID[r.skill_id], r.level, r.xp, 'scroll'));
+    .map((r) => skillPower(SCROLL_SKILL_BY_ID[r.skill_id], r.level, r.xp, 'scroll', r.tier || 1));
   return [...classSkills, ...scrollSkills];
 }
 
@@ -382,7 +387,9 @@ export function serializeCharacter(c) {
     hatchPending: !!c.hatch_pending,
     // จุดเด่น/จุดด้อยคลาสตามช่วงเวลา ☀️/🌙 — โชว์สถานะปัจจุบันบนแผ่นตัวละคร
     classPerk: classPerks(c),
-    skills: getCharacterSkills(c), // สกิลคลาส + สกิลจากคัมภีร์ พร้อมเลเวล/XP — ใช้ตอนสู้บอส
+    skills: getCharacterSkills(c), // สกิลคลาส + สกิลจากคัมภีร์ พร้อมเลเวล/XP/ระดับคัมภีร์ — ใช้ตอนสู้บอส
+    // สูตรคราฟต์ที่เรียนแล้ว พร้อมระดับสูตร (tier) — client ใช้แสดง/ปุ่มยกระดับแบบแปลนซ้ำ
+    learnedRecipes: Object.fromEntries(getRecipeRows(c.id).map((r) => [r.recipe_id, r.tier || 1])),
     equipment: {
       weapon: itemOf(c.weapon_id),
       offhand: itemOf(c.offhand_id),

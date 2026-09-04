@@ -329,7 +329,10 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                     <div className="craft-top">
                       <span className="inv-icon">{rc.icon}</span>
                       <div className="inv-info">
-                        <div className="inv-name">{rc.name}</div>
+                        <div className="inv-name">
+                          {rc.name}
+                          {rc.tier > 1 ? <span className="scroll-tier-chip" title="ระดับสูตร — ใช้แบบแปลนซ้ำเพื่อยกระดับ (คราฟต์ได้ของเพิ่มขึ้น)">ระดับ {rc.tier}</span> : null}
+                        </div>
                         <div className="inv-desc">{rc.desc}</div>
                         <div className="craft-mats">
                           {rc.materials.map((m) => (
@@ -348,7 +351,7 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
               })}
             </div>
           )}
-          <p className="hint">วัสดุคือของขวัญ (junk) ที่ล่ามาได้ — คราฟต์ไม่เสียทอง · สูตรใหม่หาได้จากแบบแปลน 📋 (สมบัติ / บอสเร่ร่อน)</p>
+          <p className="hint">วัสดุคือของขวัญ (junk) ที่ล่ามาได้ — คราฟต์ไม่เสียทอง · สูตรใหม่หาได้จากแบบแปลน 📋 (สมบัติ / บอสเร่ร่อน) — ใช้แบบแปลนซ้ำของสูตรที่เรียนแล้ว = ยกระดับสูตร (คราฟต์ได้ของเพิ่มขึ้น)</p>
         </div>
       )}
 
@@ -424,9 +427,9 @@ export default function CampScreen({ remain, total, running, breakOver = false, 
                         {i.useGift ? '🎁 เปิด' : i.usePetBag ? '👜 เก็บสัตว์' : 'ใช้'}
                       </button>
                     ) : i.type === 'scroll' ? (
-                      <span className="junk-note">📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)</span>
+                      <span className="junk-note">{(character.skills || []).some((s) => s.id === i.learn_skill) ? '📖 คัมภีร์ซ้ำ — ใช้ยกระดับ (แท็บตัวละคร)' : '📖 ใช้เรียนรู้สกิล (แท็บตัวละคร)'}</span>
                     ) : i.type === 'blueprint' ? (
-                      <span className="junk-note">📋 ใช้เรียนรู้สูตร (แท็บตัวละคร)</span>
+                      <span className="junk-note">{character.learnedRecipes?.[i.learn_recipe] ? '📋 แบบแปลนซ้ำ — ใช้ยกระดับสูตร (แท็บตัวละคร)' : '📋 ใช้เรียนรู้สูตร (แท็บตัวละคร)'}</span>
                     ) : i.type === 'junk' ? null : (
                       <button className="btn btn-sm" onClick={() => equipItem(i)}>สวม</button>
                     )}

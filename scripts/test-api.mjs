@@ -337,22 +337,43 @@ try {
       expect('box api: ได้ของ 1 ชิ้นเข้าสู่กระเป๋า', sumQty(r.json.inventory) === qtyBefore + 1, `before=${qtyBefore} after=${sumQty(r.json.inventory)}`);
     }
 
-    // คราฟต์: เรียนรู้จากแบบแปลน (เหมือนสกิลจากคัมภีร์) → คราฟต์ต้องมีวัสดุ
-    addItem(cid, 210, 1); // แบบแปลน: ยาบำบัดใหญ่
+    // คราฟต์: เรียนรู้จากแบบแปลน (เหมือนสกิลจากคัมภีร์) → คราฟต์ต้องมีวัสดุ · แบบแปลนซ้ำ → ยกระดับสูตร (tier +1)
+    addItem(cid, 210, 2); // แบบแปลน: ยาบำบัดใหญ่ x2
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 210 } });
     expect('craft: ใช้แบบแปลนเรียนรู้สูตรได้', r.status === 200 && (r.json.message || '').includes('เรียนรู้สูตร'), r.json.error || r.json.message);
     r = await api('/inventory/use', { method: 'POST', body: { itemId: 210 } });
-    expect('craft: แบบแปลนใช้ซ้ำไม่ได้ (เรียนรู้แล้ว)', r.status === 400);
+    expect('craft: แบบแปลนซ้ำ → ยกระดับสูตรเป็นระดับ 2 (คราฟต์ได้ของ x2)', r.status === 200 && (r.json.message || '').includes('ระดับ 2') && (r.json.message || '').includes('x2'), r.json.error || r.json.message);
+    expect('craft: ระดับสูตรถูกบันทึก (tier=2)', (db.prepare('SELECT tier FROM character_recipe WHERE character_id = ? AND recipe_id = ?').get(cid, 'rc_potion_big')?.tier || 0) === 2);
+    r = await api('/camp?visit=craft-tier-test');
+    expect('craft: หน้า /camp โชว์ระดับสูตร 2 + ผลผลิต x2', r.status === 200 && r.json.recipes?.find((x) => x.id === 'rc_potion_big')?.tier === 2 && r.json.recipes?.find((x) => x.id === 'rc_potion_big')?.result?.qty === 2, JSON.stringify(r.json.recipes?.find((x) => x.id === 'rc_potion_big')));
     r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_potion_big' } });
     expect('craft: ไม่มีวัสดุ → คราฟต์ไม่ได้', r.status === 400 && (r.json.error || '').includes('วัสดุไม่พอ'), r.json.error || '');
     addItem(cid, 122, 2); addItem(cid, 123, 2); // ขนหมาป่า x2 + เจลสไลม์ x2
     r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_potion_big' } });
-    expect('craft: มีวัสดุ → คราฟต์ ยาบำบัดใหญ่ ได้', r.status === 200 && r.json.inventory?.some((i) => i.item_id === 2) && (r.json.message || '').includes('ยาบำบัดใหญ่'), r.json.error || r.json.message);
+    expect('craft: มีวัสดุ → คราฟต์ ยาบำบัดใหญ่ x2 (สูตรระดับ 2) ได้', r.status === 200 && (r.json.inventory?.find((i) => i.item_id === 2)?.qty || 0) === 2 && (r.json.message || '').includes('x2'), r.json.error || r.json.message);
     const q122 = db.prepare('SELECT qty FROM inventory WHERE character_id = ? AND item_id = 122').get(cid)?.qty || 0;
     const q123 = db.prepare('SELECT qty FROM inventory WHERE character_id = ? AND item_id = 123').get(cid)?.qty || 0;
     expect('craft: วัสดุถูกใช้ไป (ขนหมาป่า/เจลสไลม์ หมด)', q122 === 0 && q123 === 0, `122=${q122} 123=${q123}`);
     r = await api('/craft', { method: 'POST', body: { recipeId: 'rc_dragon_armor' } });
     expect('craft: สูตรที่ยังไม่เรียน → คราฟต์ไม่ได้', r.status === 400 && (r.json.error || '').includes('แบบแปลน'), r.json.error || '');
+
+    // คัมภีร์สกิล: ใช้เรียนรู้สกิล · ซ้ำ → ยกระดับคัมภีร์ tier (พลัง x1.1/ระดับ แยกจากเลเวลสกิล)
+    db.prepare('DELETE FROM character_skill WHERE character_id = ? AND skill_id = ?').run(cid, 'sc_fireball');
+    db.prepare('DELETE FROM inventory WHERE character_id = ? AND item_id = 110').run(cid); // ล้างคัมภีร์ 110 ที่อาจค้างจากตลาดมืด
+    addItem(cid, 110, 1); // คัมภีร์: ลูกไฟใหญ่
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 110 } });
+    expect('scroll: ใช้คัมภีร์เรียนรู้สกิลได้ (tier=1)', r.status === 200 && (r.json.message || '').includes('เรียนรู้สกิล') && (r.json.character?.skills?.find((s) => s.id === 'sc_fireball')?.tier || 0) === 1, r.json.error || r.json.message);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 110 } });
+    expect('scroll: ใช้คัมภีร์เล่มเดียวซ้ำ → ไม่มีของ (ใช้ไปแล้ว)', r.status === 400);
+    // ทดสอบยกระดับ tier: ใช้คัมภีร์อีกเล่มของสกิลที่เรียนแล้ว
+    addItem(cid, 110, 1);
+    r = await api('/inventory/use', { method: 'POST', body: { itemId: 110 } });
+    expect('scroll: คัมภีร์ซ้ำ → ยกระดับเป็นคัมภีร์ระดับ 2', r.status === 200 && (r.json.message || '').includes('ระดับ 2'), r.json.error || r.json.message);
+    const skRow = db.prepare('SELECT tier FROM character_skill WHERE character_id = ? AND skill_id = ?').get(cid, 'sc_fireball');
+    expect('scroll: tier ถูกบันทึกใน DB (tier=2)', skRow?.tier === 2, JSON.stringify(skRow));
+    const skInState = (await api('/state')).json.character?.skills?.find((s) => s.id === 'sc_fireball');
+    expect('scroll: พลังสกิล scale ตาม tier (x1.1 → dmg 2.42)', !!skInState && skInState.tier === 2 && Math.abs(skInState.dmg - 2.2 * 1.1) < 0.01, JSON.stringify(skInState && { tier: skInState.tier, dmg: skInState.dmg }));
+    db.prepare('DELETE FROM character_skill WHERE character_id = ? AND skill_id = ?').run(cid, 'sc_fireball'); // คืนสภาพ — เทสต์อื่นไม่เห็นสกิลคัมภีร์
 
     // ถ้วยรางวัล: ชนะบอสครั้งแรกของบอสนั้น → เก็บถ้วย (ซ้ำไม่เพิ่ม)
     db.prepare("INSERT OR IGNORE INTO trophy (character_id, boss_key, icon) VALUES (?, 'หัวหน้าโจรป่า', '🏴')").run(cid);
